@@ -1,0 +1,243 @@
+import { describe, expect, it } from 'vitest';
+import {
+  addDays,
+  buildIcs,
+  cancelWarningAt,
+  classifyReservations,
+  confirmCard,
+  defaultFee,
+  findCancelRule,
+  googleCalendarUrl,
+  jstDateTime,
+  labelDate,
+  makePracticeId,
+  nextStatus,
+  normalizeReservation,
+  parsePostback,
+  perPersonFee,
+  practiceListMessage,
+  recruitMessages,
+  toJstDate,
+  yen,
+  type Practice,
+  type Settings,
+} from '../src';
+
+const practice = (over: Partial<Practice> = {}): Practice => ({
+  id: 'worcle-20261021-1900-A',
+  date: '2026-10-21',
+  start: '19:00',
+  end: '21:00',
+  studio: 'worcle',
+  room: 'A',
+  fee: 6000,
+  booker: 'U1',
+  max: null,
+  min: null,
+  memo: '',
+  status: '募集中',
+  groups: ['G1'],
+  joinKey: 'k',
+  feeOverride: null,
+  warned: false,
+  createdAt: '2026-10-01T00:00:00.000Z',
+  ...over,
+});
+
+const settings: Settings = {
+  fees: [
+    { studio: 'worcle', room: 'A', fee: 3300 },
+    { studio: 'worcle', room: '', fee: 2500 },
+    { studio: 'BUZZ', room: '', fee: 4000 },
+  ],
+  cancelRules: [
+    { studio: 'worcle', daysBefore: 4, time: '10:00' },
+    { studio: 'BUZZ', daysBefore: 1, time: '10:00' },
+  ],
+  minDefault: 3,
+  roundUnit: 10,
+  groups: [{ id: 'G1', name: 'チームA' }],
+};
+
+describe('日付', () => {
+  it('日本時間で扱う', () => {
+    expect(toJstDate(new Date('2026-10-20T15:30:00Z'))).toBe('2026-10-21');
+    expect(jstDateTime('2026-10-21', '19:00').toISOString()).toBe('2026-10-21T10:00:00.000Z');
+    expect(addDays('2026-03-01', -1)).toBe('2026-02-28');
+    expect(labelDate('2026-10-21')).toBe('10/21(水)');
+  });
+});
+
+describe('練習ID', () => {
+  it('スタジオ＋日付＋開始時刻＋部屋', () => {
+    expect(makePracticeId({ studio: 'BUZZ 横浜東口', date: '2026-10-21', start: '19:00', room: 'Studio 3' })).toBe(
+      'BUZZ横浜東口-20261021-1900-Studio3',
+    );
+  });
+});
+
+describe('normalizeReservation', () => {
+  it('時刻や料金を整える', () => {
+    expect(normalizeReservation({ date: '2026-10-21', start: '9:00', end: '11:00', studio: 'worcle', room: 'A', fee: '¥3,300' })).toEqual({
+      date: '2026-10-21',
+      start: '09:00',
+      end: '11:00',
+      studio: 'worcle',
+      room: 'A',
+      fee: 3300,
+    });
+  });
+  it('必須項目が欠けたら null', () => {
+    expect(normalizeReservation({ date: '2026-10-21', start: '19:00', end: null, studio: 'worcle' })).toBeNull();
+    expect(normalizeReservation({ date: '2026-02-30', start: '19:00', end: '21:00', studio: 'worcle' })).toBeNull();
+    expect(normalizeReservation({ date: '2026-10-21', start: '21:00', end: '19:00', studio: 'worcle' })).toBeNull();
+  });
+  it('料金が読めなければ null', () => {
+    expect(normalizeReservation({ date: '2026-10-21', start: '19:00', end: '21:00', studio: 'worcle', fee: null })?.fee).toBeNull();
+  });
+});
+
+describe('設定', () => {
+  it('標準料金は部屋の一致を優先', () => {
+    expect(defaultFee(settings, 'worcle', 'A')).toBe(3300);
+    expect(defaultFee(settings, 'worcle', 'B')).toBe(2500);
+    expect(defaultFee(settings, 'BUZZ横浜東口', 'Ast')).toBe(4000);
+    expect(defaultFee(settings, 'other', '')).toBe(0);
+  });
+  it('キャンセル期限は前方一致', () => {
+    expect(findCancelRule(settings.cancelRules, 'BUZZ横浜東口')?.daysBefore).toBe(1);
+    expect(findCancelRule(settings.cancelRules, 'その他')).toBeNull();
+  });
+  it('警告時刻', () => {
+    expect(cancelWarningAt('2026-10-21', { studio: 'worcle', daysBefore: 4, time: '10:00' }).toISOString()).toBe(
+      '2026-10-17T01:00:00.000Z',
+    );
+  });
+});
+
+describe('割り勘', () => {
+  it('10円単位で切り上げ', () => {
+    expect(perPersonFee(6000, 7, 10, null)).toBe(860);
+    expect(perPersonFee(6000, 3, 10, null)).toBe(2000);
+    expect(perPersonFee(6000, 7, 100, null)).toBe(900);
+  });
+  it('調整額を優先、0人は null', () => {
+    expect(perPersonFee(6000, 7, 10, 800)).toBe(800);
+    expect(perPersonFee(6000, 0, 10, null)).toBeNull();
+  });
+  it('金額表示', () => {
+    expect(yen(1234567)).toBe('¥1,234,567');
+  });
+});
+
+describe('状態', () => {
+  it('上限で満員、減れば募集中に戻る', () => {
+    expect(nextStatus(practice({ max: 3 }), 3)).toBe('満員');
+    expect(nextStatus(practice({ max: 3, status: '満員' }), 2)).toBe('募集中');
+    expect(nextStatus(practice({ status: '中止' }), 0)).toBe('中止');
+  });
+});
+
+describe('classifyReservations', () => {
+  it('新規・延長・登録済みを判定', () => {
+    const existing = [practice()];
+    const items = classifyReservations(existing, [
+      { date: '2026-10-21', start: '19:00', end: '21:00', studio: 'worcle', room: 'A', fee: 6000 },
+      { date: '2026-10-21', start: '21:00', end: '22:00', studio: 'worcle', room: 'A', fee: 3000 },
+      { date: '2026-10-22', start: '19:00', end: '21:00', studio: 'worcle', room: 'A', fee: 6000 },
+    ]);
+    expect(items.map((i) => i.kind)).toEqual(['duplicate', 'extension', 'new']);
+    expect(items[1].targetId).toBe('worcle-20261021-1900-A');
+  });
+  it('中止した練習は登録済みとみなさない', () => {
+    const items = classifyReservations([practice({ status: '中止' })], [
+      { date: '2026-10-21', start: '19:00', end: '21:00', studio: 'worcle', room: 'A', fee: 6000 },
+    ]);
+    expect(items[0].kind).toBe('new');
+  });
+});
+
+describe('カレンダー', () => {
+  it('Googleカレンダーのリンク', () => {
+    const url = googleCalendarUrl(practice(), 'https://example.com');
+    expect(url).toContain('dates=20261021T100000Z%2F20261021T120000Z');
+  });
+  it('ICS', () => {
+    const ics = buildIcs(practice({ memo: '通し, 確認' }), 'https://example.com', new Date('2026-10-01T00:00:00Z'));
+    expect(ics).toContain('DTSTART:20261021T100000Z');
+    expect(ics).toContain('DESCRIPTION:通し\\, 確認\\nhttps://example.com');
+    expect(ics.endsWith('\r\n')).toBe(true);
+  });
+});
+
+describe('Flex Message', () => {
+  const appUrl = 'https://liff.line.me/123-abc';
+
+  it('募集カードは12枚ごとに1メッセージ', () => {
+    const items = Array.from({ length: 13 }, (_, i) => ({
+      practice: practice({ id: `p${i}`, date: addDays('2026-10-21', i) }),
+      bookerName: 'おおゆち',
+    }));
+    const msgs = recruitMessages(items, appUrl);
+    expect(msgs).toHaveLength(2);
+    const json = JSON.stringify(msgs[0]);
+    expect(json).toContain('"displayText":"10/21 行きます"');
+    expect(json).toContain('a=rsvp&p=p0&v=1');
+    expect(json).toContain(`${appUrl}?p=p0&cal=1`);
+  });
+
+  it('確認カード: 送り先がなければ「この内容で募集」を出さない', () => {
+    const base = {
+      id: 'd1',
+      booker: 'U1',
+      items: [{ reservation: { date: '2026-10-22', start: '19:00', end: '21:00', studio: 'worcle', room: 'A', fee: 3300 }, kind: 'new' as const }],
+      incomplete: [],
+      createdAt: '',
+    };
+    const withGroup = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'] }, groups: settings.groups, practices: [], appUrl }));
+    expect(withGroup).toContain('この内容で募集');
+    expect(withGroup).toContain('チームA');
+    const noGroup = JSON.stringify(confirmCard({ draft: { ...base, groups: [] }, groups: settings.groups, practices: [], appUrl }));
+    expect(noGroup).not.toContain('"label":"この内容で募集"');
+    expect(noGroup).toContain(`${appUrl}?draft=d1`);
+  });
+
+  it('確認カード: 延長の表示', () => {
+    const json = JSON.stringify(
+      confirmCard({
+        draft: {
+          id: 'd1',
+          booker: 'U1',
+          items: [
+            {
+              reservation: { date: '2026-10-21', start: '21:00', end: '22:00', studio: 'worcle', room: 'A', fee: 3000 },
+              kind: 'extension',
+              targetId: 'worcle-20261021-1900-A',
+            },
+          ],
+          incomplete: [],
+          groups: ['G1'],
+          createdAt: '',
+        },
+        groups: settings.groups,
+        practices: [practice()],
+        appUrl,
+      }),
+    );
+    expect(json).toContain('10/21 19:00〜21:00の練習の延長として更新');
+  });
+
+  it('練習一覧', () => {
+    expect(practiceListMessage([], appUrl).type).toBe('text');
+    const msg = practiceListMessage([{ practice: practice({ status: '満員' }), going: 5 }], appUrl);
+    expect(JSON.stringify(msg)).toContain('5人 満員');
+  });
+
+  it('postbackの往復', () => {
+    expect(parsePostback('a=rsvp&p=BUZZ%E6%A8%AA%E6%B5%9C-20261021-1900-A&v=1')).toEqual({
+      a: 'rsvp',
+      p: 'BUZZ横浜-20261021-1900-A',
+      v: '1',
+    });
+  });
+});
