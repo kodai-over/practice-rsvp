@@ -94,8 +94,7 @@ export function AdminPage() {
                 <option>管理者</option>
               </select>
             </div>
-            {m.role !== '一般' &&
-              me.groups.map((g) => (
+            {me.groups.map((g) => (
                 <label class="check">
                   <input
                     type="checkbox"
@@ -107,7 +106,7 @@ export function AdminPage() {
                   />
                   {g.name}に募集
                 </label>
-              ))}
+            ))}
           </section>
         ))
       )}

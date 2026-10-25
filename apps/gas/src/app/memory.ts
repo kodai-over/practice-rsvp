@@ -1,5 +1,5 @@
 /** インメモリの Store / Kv。テストと、LINE内アプリのモック表示で使う */
-import type { Attendance, Member, Practice, Settings } from '@pb/shared';
+import type { Attendance, Feedback, Member, Practice, Settings } from '@pb/shared';
 import type { Kv, Store } from './ports';
 import { rowsToSettings, settingsToRows } from './schema';
 
@@ -10,6 +10,7 @@ export class MemoryStore implements Store {
   a: Attendance[] = [];
   m: Member[] = [];
   s: Settings = { fees: [], cancelRules: [], minDefault: 3, roundUnit: 10, groups: [] };
+  f: Feedback[] = [];
 
   practices() {
     return clone(this.p);
@@ -50,6 +51,17 @@ export class MemoryStore implements Store {
   }
   saveSettings(s: Settings) {
     this.s = clone(s);
+  }
+  feedback() {
+    return clone(this.f);
+  }
+  saveFeedback(f: Feedback) {
+    const i = this.f.findIndex((x) => x.id === f.id);
+    if (i >= 0) this.f[i] = clone(f);
+    else this.f.push(clone(f));
+  }
+  deleteFeedback(id: string) {
+    this.f = this.f.filter((x) => x.id !== id);
   }
 }
 

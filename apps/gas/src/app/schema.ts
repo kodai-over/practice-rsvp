@@ -2,7 +2,7 @@
  * スプレッドシートの4シートの列と、行⇄データの変換。
  * 列は見出し名で引くので、管理者が列を並べ替えても動く。
  */
-import type { Attendance, Member, Practice, Settings } from '@pb/shared';
+import type { Attendance, Feedback, Member, Practice, Settings } from '@pb/shared';
 
 export type Row = Record<string, string>;
 
@@ -25,6 +25,10 @@ export const SHEETS = {
   settings: {
     name: '設定',
     headers: ['種別', 'キー1', 'キー2', '値'],
+  },
+  feedback: {
+    name: '要望',
+    headers: ['要望ID', '投稿者', '投稿者名', '内容', '状態', '管理者コメント', '投稿日時'],
   },
 } as const;
 
@@ -118,6 +122,30 @@ export function memberToRow(m: Member): Row {
     表示名: m.name,
     権限: m.role,
     ふだんの送り先グループ: m.defaultGroups.join(','),
+  };
+}
+
+export function rowToFeedback(r: Row): Feedback {
+  return {
+    id: r['要望ID'],
+    userId: r['投稿者'] ?? '',
+    name: r['投稿者名'] ?? '',
+    text: r['内容'] ?? '',
+    status: (r['状態'] || '未対応') as Feedback['status'],
+    reply: r['管理者コメント'] ?? '',
+    createdAt: r['投稿日時'] ?? '',
+  };
+}
+
+export function feedbackToRow(f: Feedback): Row {
+  return {
+    要望ID: f.id,
+    投稿者: f.userId,
+    投稿者名: f.name,
+    内容: f.text,
+    状態: f.status,
+    管理者コメント: f.reply,
+    投稿日時: f.createdAt,
   };
 }
 

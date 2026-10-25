@@ -40,14 +40,40 @@ const KIND_LABEL: Record<string, string> = {
   incomplete: '読み取れなかった項目を入力してください',
 };
 
+/** 画像を描画できる形で読み込む。createImageBitmap が使えない・失敗する端末では <img> で読む */
+async function loadImage(file: File): Promise<{ img: CanvasImageSource; width: number; height: number }> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bmp = await createImageBitmap(file);
+      return { img: bmp, width: bmp.width, height: bmp.height };
+    } catch {
+      /* 下の方法で読み直す */
+    }
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return { img, width: img.naturalWidth, height: img.naturalHeight };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /** スクショを縮小して base64 に（送るデータを小さくする） */
 async function shrink(file: File): Promise<{ mimeType: string; data: string }> {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+  let loaded;
+  try {
+    loaded = await loadImage(file);
+  } catch {
+    throw new Error(`画像を読み込めませんでした（${file.type || '形式不明'}）。スクショ（PNG/JPEG）を選んでください`);
+  }
+  const scale = Math.min(1, 2000 / Math.max(loaded.width, loaded.height));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bmp.width * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  canvas.width = Math.round(loaded.width * scale);
+  canvas.height = Math.round(loaded.height * scale);
+  canvas.getContext('2d')!.drawImage(loaded.img, 0, 0, canvas.width, canvas.height);
   const url = canvas.toDataURL('image/jpeg', 0.85);
   return { mimeType: 'image/jpeg', data: url.slice(url.indexOf(',') + 1) };
 }
@@ -55,9 +81,15 @@ async function shrink(file: File): Promise<{ mimeType: string; data: string }> {
 export function RegisterPage({ draftId }: { draftId: string | null }) {
   const { me, toast } = useApp();
   const [rows, setRows] = useState<FormRow[]>(() => [emptyRow({ date: addDays(toJstDate(new Date()), 7) })]);
-  const [groups, setGroups] = useState<string[]>(me.member.defaultGroups);
+  const [groups, setGroups] = useState<string[]>(() => {
+    // ふだんの送り先。未設定でグループが1つしかなければ、そのグループ
+    const ids = me.groups.map((g) => g.id);
+    const mine = me.member.defaultGroups.filter((g) => ids.includes(g));
+    return mine.length ? mine : ids.length === 1 ? ids : [];
+  });
   const [loading, setLoading] = useState(!!draftId);
   const [run, busy] = useRunner();
+  const [pasted, setPasted] = useState('');
   const studios = [...new Set(me.settings.fees.map((f) => f.studio))];
 
   useEffect(() => {
@@ -77,16 +109,29 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
 
   const update = (key: number, k: keyof FormRow, value: string) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, [k]: value, kind: r.kind === 'incomplete' ? 'incomplete' : undefined } : r)));
 
+  /** スクショか文章から読み取って、入力欄を置き換える */
+  const parse = async (params: { images?: { mimeType: string; data: string }[]; text?: string }) => {
+    const res = await run(() => api('parseReservations', params));
+    if (!res) return false;
+    const next = [...res.items.map((i) => fromReservation(i.reservation, i.kind)), ...res.incomplete.map((r) => fromReservation(r, 'incomplete'))];
+    const past = res.pastCount ? `（過去の予約${res.pastCount}件は除きました）` : '';
+    if (next.length === 0) {
+      toast(`登録できる今後の予約を読み取れませんでした${past}。手で入力してください`, true);
+      return false;
+    }
+    setRows(next);
+    toast(`${next.length}件を読み取りました${past}。内容を確かめてください`);
+    return true;
+  };
+
   const onFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const res = await run(async () => api('parseScreenshot', { images: await Promise.all([...files].slice(0, 5).map(shrink)) }));
-    if (!res) return;
-    const next = [...res.items.map((i) => fromReservation(i.reservation, i.kind)), ...res.incomplete.map((r) => fromReservation(r, 'incomplete'))];
-    if (next.length === 0) toast('予約内容を読み取れませんでした。手で入力してください', true);
-    else {
-      setRows(next);
-      toast(`${next.length}件を読み取りました。内容を確かめてください`);
-    }
+    const images = await run(() => Promise.all([...files].slice(0, 5).map(shrink)));
+    if (images) await parse({ images });
+  };
+
+  const onText = async () => {
+    if (await parse({ text: pasted })) setPasted('');
   };
 
   const submit = async () => {
@@ -122,8 +167,23 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
       <label class="dropzone">
         <input type="file" accept="image/*" multiple onChange={(e) => onFiles(e.currentTarget.files)} disabled={busy} />
         {busy ? '読み取り中…' : '📷 予約画面のスクショを選ぶと自動で入力します'}
-        <div class="muted" style={{ marginTop: 4 }}>電話番号などが写る部分は切り取ってから選んでください</div>
+        <div class="muted" style={{ marginTop: 4 }}>予約一覧のように複数の予約が写っていてもOK。電話番号などが写る部分は切り取ってください</div>
       </label>
+
+      <details class="card" style={{ marginTop: 12 }}>
+        <summary class="muted">予約完了メールなどの文章から読み取る</summary>
+        <textarea
+          rows={5}
+          style={{ marginTop: 8 }}
+          maxLength={5000}
+          placeholder="予約内容の文章を貼り付けてください"
+          value={pasted}
+          onInput={(e) => setPasted(e.currentTarget.value)}
+        />
+        <button class="btn block" style={{ marginTop: 8 }} disabled={busy || !pasted.trim()} onClick={onText}>
+          読み取る
+        </button>
+      </details>
 
       {rows.map((r, i) => {
         const std = r.studio ? defaultFee(me.settings, r.studio, r.room) : 0;

@@ -6,6 +6,7 @@ import type {
   Draft,
   DraftItem,
   FeeRule,
+  FeedbackStatus,
   Group,
   Member,
   Practice,
@@ -39,6 +40,17 @@ export interface PracticeView {
   googleCalendarUrl: string;
 }
 
+export interface FeedbackView {
+  id: string;
+  name: string;
+  text: string;
+  status: FeedbackStatus;
+  reply: string;
+  createdAt: string;
+  mine: boolean;
+  canDelete: boolean;
+}
+
 export interface MeView {
   member: Member;
   groups: Group[];
@@ -54,6 +66,7 @@ export interface NewPracticeInput extends Reservation {
 export interface ParseResult {
   items: DraftItem[];
   incomplete: Partial<Reservation>[];
+  pastCount: number;
 }
 
 export interface CreateResult {
@@ -72,7 +85,8 @@ export interface ApiActions {
   addGuest: { params: { id: string; name: string }; result: PracticeView };
   removeAttendance: { params: { id: string; participant: string }; result: PracticeView };
   appendMemo: { params: { id: string; text: string }; result: PracticeView };
-  parseScreenshot: { params: { images: { mimeType: string; data: string }[] }; result: ParseResult };
+  /** スクショ（images）か予約内容の文章（text）から予約を読み取る */
+  parseReservations: { params: { images?: { mimeType: string; data: string }[]; text?: string }; result: ParseResult };
   getDraft: { params: { id: string }; result: Draft | null };
   classify: { params: { reservations: Reservation[] }; result: DraftItem[] };
   createPractices: { params: { items: NewPracticeInput[]; groups: string[]; draftId?: string }; result: CreateResult };
@@ -82,6 +96,10 @@ export interface ApiActions {
   listMembers: { params: Record<string, never>; result: Member[] };
   updateMember: { params: { userId: string; patch: Partial<Pick<Member, 'name' | 'role' | 'defaultGroups'>> }; result: Member };
   renameGroup: { params: { id: string; name: string }; result: Group[] };
+  listFeedback: { params: Record<string, never>; result: FeedbackView[] };
+  postFeedback: { params: { text: string }; result: FeedbackView[] };
+  updateFeedback: { params: { id: string; status?: FeedbackStatus; reply?: string }; result: FeedbackView[] };
+  deleteFeedback: { params: { id: string }; result: FeedbackView[] };
   updateSettings: {
     params: { fees: FeeRule[]; cancelRules: CancelRule[]; minDefault: number; roundUnit: number };
     result: Settings;

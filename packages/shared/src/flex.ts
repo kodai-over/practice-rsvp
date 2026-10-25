@@ -78,6 +78,12 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
       ],
     };
   });
+  if (draft.pastCount > 0) {
+    itemRows.push(text(`過去の日付の予約${draft.pastCount}件は除きました。`, { size: 'xs', color: GRAY }));
+  }
+  if (draft.items.length === 0 && draft.incomplete.length === 0) {
+    itemRows.push(text('登録できる今後の予約はありませんでした。', { size: 'sm' }));
+  }
   if (draft.incomplete.length > 0) {
     itemRows.push(
       text(`読み取れなかった項目がある予約が${draft.incomplete.length}件あります。「修正して募集」から入力してください。`, {

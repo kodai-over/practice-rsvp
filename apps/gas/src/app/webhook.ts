@@ -3,6 +3,7 @@ import {
   confirmCard,
   goingList,
   labelDate,
+  looksLikeReservation,
   parsePostback,
   practiceListMessage,
   shortDate,
@@ -10,12 +11,13 @@ import {
   type LineMessage,
   type NewPracticeInput,
 } from '@pb/shared';
-import { UserError, type Ctx } from './ports';
+import { UserError, type Ctx, type RawReservation } from './ports';
 import {
   buildDraft,
   createPractices,
   ensureMember,
   loadDraft,
+  readReservations,
   recordAnswer,
   removeDraft,
   saveDraft,
@@ -84,42 +86,65 @@ function safeReply(ctx: Ctx, ev: LineEvent, messages: LineMessage[]): boolean {
 // ---------------------------------------------------------------- テキスト
 
 function onText(ctx: Ctx, ev: LineEvent): void {
-  if ((ev.message?.text ?? '').trim() !== '練習') return;
-  const groupId = ev.source.type === 'user' ? undefined : chatId(ev.source);
-  const practices = upcoming(ctx, groupId);
-  const att = ctx.store.attendance();
-  const items = practices.map((practice) => ({ practice, going: goingList(att, practice.id).length }));
-  safeReply(ctx, ev, [practiceListMessage(items, ctx.config.appUrl)]);
+  const text = (ev.message?.text ?? '').trim();
+  if (text === '練習') {
+    const groupId = ev.source.type === 'user' ? undefined : chatId(ev.source);
+    const practices = upcoming(ctx, groupId);
+    const att = ctx.store.attendance();
+    const items = practices.map((practice) => ({ practice, going: goingList(att, practice.id).length }));
+    safeReply(ctx, ev, [practiceListMessage(items, ctx.config.appUrl)]);
+    return;
+  }
+  // グループでの会話には反応しない。個別トークで予約内容らしい文章が来たら読み取る
+  if (ev.source.type !== 'user' || !ev.source.userId) return;
+  if (looksLikeReservation(text)) {
+    registerFrom(ctx, ev, ev.source.userId, { text });
+    return;
+  }
+  safeReply(ctx, ev, [
+    textMsg(
+      '予約画面のスクショか、予約内容の文章（予約完了メールなど）を送ると、練習を登録できます。\n「練習」と送ると、今後の練習の一覧を返します。\n' +
+        ctx.config.appUrl,
+    ),
+  ]);
 }
 
-// ---------------------------------------------------------------- スクショ
+// ---------------------------------------------------------------- スクショ・文章からの登録
 
 function onImage(ctx: Ctx, ev: LineEvent): void {
   if (ev.source.type !== 'user' || !ev.source.userId || !ev.message) return;
   const userId = ev.source.userId;
-  const member = ctx.store.getMember(userId);
-  if (!canRegister(member)) {
-    safeReply(ctx, ev, [textMsg('予約者として登録されていません。管理者に登録を依頼してください。')]);
-    return;
-  }
   const messageIds = collectImageSet(ctx, userId, ev.message);
   if (!messageIds) return; // 複数枚送信のうち、まだ全部届いていない
+  registerFrom(ctx, ev, userId, { messageIds });
+}
 
-  let raws: ReturnType<Ctx['reader']['read']>;
+/** スクショか文章から予約を読み取り、確認カードを返す */
+function registerFrom(ctx: Ctx, ev: LineEvent, userId: string, src: { messageIds?: string[]; text?: string }): void {
+  const member = ensureMember(ctx, userId);
+  if (!canRegister(member)) {
+    safeReply(ctx, ev, [textMsg('練習を登録できません。管理者に確認してください。')]);
+    return;
+  }
+  const what = src.text ? '予約内容' : 'スクショ';
+  let raws: RawReservation[];
   try {
-    const images = messageIds.map((id) => ctx.line.content(id));
-    raws = ctx.reader.read(images, toJstDate(ctx.now()));
+    const images = (src.messageIds ?? []).map((id) => ctx.line.content(id));
+    raws = readReservations(ctx, { images, text: src.text });
   } catch (e) {
     ctx.log('read error', e);
-    raws = [];
-  }
-  if (raws.length === 0) {
     sendToUser(ctx, ev, userId, [
-      textMsg('予約内容を読み取れませんでした。予約完了画面のスクショを送るか、アプリの「練習を登録」から入力してください。\n' + ctx.config.appUrl),
+      textMsg(`${what}の読み取りでエラーが起きました。時間をおいてもう一度送るか、アプリの「＋ 登録」から入力してください。\n${ctx.config.appUrl}`),
     ]);
     return;
   }
-  const draft = buildDraft(ctx, member!, raws);
+  if (raws.length === 0) {
+    sendToUser(ctx, ev, userId, [
+      textMsg(`${what}から予約を読み取れませんでした。予約完了画面や予約一覧を送るか、アプリの「＋ 登録」から入力してください。\n${ctx.config.appUrl}`),
+    ]);
+    return;
+  }
+  const draft = buildDraft(ctx, member, raws);
   saveDraft(ctx, draft);
   const card = confirmCard({ draft, groups: ctx.store.settings().groups, practices: ctx.store.practices(), appUrl: ctx.config.appUrl });
   sendToUser(ctx, ev, userId, [card]);

@@ -1,4 +1,6 @@
 import {
+  FEEDBACK_STATUSES,
+  canDeleteFeedback,
   canEditPractice,
   canRegister,
   canRemoveAttendance,
@@ -17,14 +19,16 @@ import {
   type ApiActions,
   type Attendance,
   type AttendeeView,
+  type Feedback,
+  type FeedbackView,
   type Member,
   type Practice,
   type PracticeView,
   type Role,
   type Settings,
 } from '@pb/shared';
-import { UserError, type Ctx } from './ports';
-import { buildDraft, createPractices, ensureMember, loadDraft, recordAnswer, refreshStatus, removeDraft } from './practices';
+import { UserError, type Ctx, type RawReservation } from './ports';
+import { buildDraft, createPractices, ensureMember, loadDraft, readReservations, recordAnswer, refreshStatus, removeDraft } from './practices';
 
 type Handler<A extends ApiAction> = (ctx: Ctx, me: Member, params: ApiActions[A]['params']) => ApiActions[A]['result'];
 
@@ -72,6 +76,24 @@ export function practiceView(ctx: Ctx, p: Practice, me: Member | null, att?: Att
     icsUrl: appLink(ctx.config.gasUrl, { action: 'ics', id: p.id }),
     googleCalendarUrl: googleCalendarUrl(p, detailUrl),
   };
+}
+
+/** 要望の一覧。新しい順。名前は今の表示名で出す */
+function feedbackList(ctx: Ctx, me: Member): FeedbackView[] {
+  const byId = new Map(ctx.store.members().map((m) => [m.userId, m]));
+  return ctx.store
+    .feedback()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((f: Feedback) => ({
+      id: f.id,
+      name: byId.get(f.userId)?.name ?? f.name,
+      text: f.text,
+      status: f.status,
+      reply: f.reply,
+      createdAt: f.createdAt,
+      mine: f.userId === me.userId,
+      canDelete: canDeleteFeedback(me, f),
+    }));
 }
 
 function getPracticeOrThrow(ctx: Ctx, id: string): Practice {
@@ -160,13 +182,21 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     return view(ctx, id, me);
   },
 
-  parseScreenshot(ctx, me, { images }) {
-    if (!canRegister(me)) throw new UserError('予約者として登録されていません');
-    if (!Array.isArray(images) || images.length === 0) throw new UserError('画像を選んでください');
-    if (images.length > 5) throw new UserError('画像は5枚までにしてください');
-    const raws = ctx.reader.read(images, toJstDate(ctx.now()));
+  parseReservations(ctx, me, { images, text }) {
+    if (!canRegister(me)) throw new UserError('練習を登録できません');
+    const imgs = Array.isArray(images) ? images : [];
+    const t = typeof text === 'string' ? text.trim().slice(0, 5000) : '';
+    if (imgs.length === 0 && !t) throw new UserError('スクショを選ぶか、予約内容の文章を貼り付けてください');
+    if (imgs.length > 5) throw new UserError('画像は5枚までにしてください');
+    let raws: RawReservation[];
+    try {
+      raws = readReservations(ctx, { images: imgs, text: t || undefined });
+    } catch (e) {
+      ctx.log('read error', e);
+      throw new UserError(`予約内容を読み取れませんでした（${e instanceof Error ? e.message : String(e)}）。手で入力してください。`);
+    }
     const d = buildDraft(ctx, me, raws);
-    return { items: d.items, incomplete: d.incomplete };
+    return { items: d.items, incomplete: d.incomplete, pastCount: d.pastCount };
   },
 
   getDraft(ctx, me, { id }) {
@@ -271,6 +301,40 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       ctx.store.saveSettings(s);
       return s.groups;
     });
+  },
+
+  listFeedback(ctx, me) {
+    return feedbackList(ctx, me);
+  },
+
+  postFeedback(ctx, me, { text }) {
+    const t = typeof text === 'string' ? text.trim().slice(0, 1000) : '';
+    if (!t) throw new UserError('要望を入力してください');
+    ctx.withLock(() =>
+      ctx.store.saveFeedback({ id: ctx.uuid(), userId: me.userId, name: me.name, text: t, status: '未対応', reply: '', createdAt: ctx.now().toISOString() }),
+    );
+    return feedbackList(ctx, me);
+  },
+
+  updateFeedback(ctx, me, { id, status, reply }) {
+    requireAdmin(me);
+    ctx.withLock(() => {
+      const f = ctx.store.feedback().find((x) => x.id === id);
+      if (!f) throw new UserError('要望が見つかりません');
+      if (status !== undefined && !FEEDBACK_STATUSES.includes(status)) throw new UserError('状態が不正です');
+      ctx.store.saveFeedback({ ...f, status: status ?? f.status, reply: reply !== undefined ? String(reply).trim().slice(0, 1000) : f.reply });
+    });
+    return feedbackList(ctx, me);
+  },
+
+  deleteFeedback(ctx, me, { id }) {
+    ctx.withLock(() => {
+      const f = ctx.store.feedback().find((x) => x.id === id);
+      if (!f) return;
+      if (!canDeleteFeedback(me, f)) throw new UserError('投稿した本人か管理者だけが消せます');
+      ctx.store.deleteFeedback(id);
+    });
+    return feedbackList(ctx, me);
   },
 
   updateSettings(ctx, me, params) {

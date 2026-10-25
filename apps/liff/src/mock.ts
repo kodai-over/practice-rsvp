@@ -69,6 +69,11 @@ att(store.p[0].id, 'U4', 'みお', '行かない');
 att(store.p[1].id, 'U2', 'さくら', '行く');
 att(store.p[1].id, 'U3', 'けんた', '行く');
 
+store.f = [
+  { id: 'f1', userId: 'U3', name: 'けんた', text: '練習の前日にリマインドがほしい', status: '検討中', reply: '通知数と相談して検討します', createdAt: new Date(Date.now() - 86400000).toISOString() },
+  { id: 'f2', userId: 'U4', name: 'みお', text: 'スタジオの地図リンクを載せてほしい', status: '未対応', reply: '', createdAt: new Date().toISOString() },
+];
+
 let seq = 0;
 const ctx: Ctx = {
   store,
@@ -84,8 +89,11 @@ const ctx: Ctx = {
     content: () => ({ mimeType: 'image/jpeg', data: '' }),
   },
   reader: {
+    // 予約一覧のスクショ（過去の予約・続けて取った予約・延長・読めない行を含む）を読んだ想定
     read: () => [
-      { date: addDays(today, 12), start: '19:00', end: '21:00', studio: 'worcle横浜', room: 'A', fee: 6600 },
+      { date: addDays(today, -3), start: '19:00', end: '20:30', studio: 'worcle横浜', room: '301', fee: 2400 },
+      { date: addDays(today, 12), start: '19:00', end: '20:30', studio: 'worcle横浜', room: '301', fee: 2400 },
+      { date: addDays(today, 12), start: '20:30', end: '21:00', studio: 'worcle横浜', room: '301', fee: 800 },
       { date: addDays(today, 2), start: '21:00', end: '22:00', studio: 'worcle横浜', room: 'A', fee: 3300 },
       { date: addDays(today, 14), start: null, end: null, studio: 'worcle横浜', room: 'C', fee: null },
     ],

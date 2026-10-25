@@ -20,7 +20,7 @@ import {
   type Via,
   makePracticeId,
 } from '@pb/shared';
-import { UserError, type Ctx } from './ports';
+import { UserError, type Ctx, type RawReservation, type ReaderInput } from './ports';
 
 // ---------------------------------------------------------------- メンバー
 
@@ -50,27 +50,59 @@ export function ensureMember(ctx: Ctx, userId: string, opts: { groupId?: string;
 
 const DRAFT_TTL = 6 * 60 * 60;
 
-export function buildDraft(ctx: Ctx, booker: Member, raws: Partial<Record<keyof Reservation, unknown>>[]): Draft {
+/** スクショか文章から予約を読み取る。これまでに登録されたスタジオ名を手がかりとして渡す */
+export function readReservations(ctx: Ctx, input: ReaderInput): RawReservation[] {
   const settings = ctx.store.settings();
+  const studios = [
+    ...new Set([
+      ...ctx.store.practices().map((p) => p.studio),
+      ...settings.fees.map((f) => f.studio),
+      ...settings.cancelRules.map((r) => r.studio),
+    ]),
+  ].filter(Boolean);
+  return ctx.reader.read(input, { today: toJstDate(ctx.now()), studios });
+}
+
+/**
+ * 読み取った予約から下書きを作る。
+ * 今日より前の予約は除き、同じ部屋で続く予約は1件にまとめ（classifyReservations）、料金が読めなければ標準料金を入れる。
+ */
+export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Draft {
+  const settings = ctx.store.settings();
+  const today = toJstDate(ctx.now());
   const complete: Reservation[] = [];
   const incomplete: Partial<Reservation>[] = [];
+  let pastCount = 0;
   for (const raw of raws) {
     const r = normalizeReservation(raw);
-    if (r) complete.push({ ...r, fee: r.fee ?? (defaultFee(settings, r.studio, r.room) || null) });
+    if (r && r.date < today) pastCount++;
+    else if (r) complete.push(r);
     else incomplete.push(pickPartial(raw));
   }
-  const groupIds = new Set(settings.groups.map((g) => g.id));
+  // 続いている予約をまとめてから、料金が読めなかったものに標準料金を入れる
+  const items = classifyReservations(ctx.store.practices(), complete).map((i) => ({
+    ...i,
+    reservation: { ...i.reservation, fee: i.reservation.fee ?? (defaultFee(settings, i.reservation.studio, i.reservation.room) || null) },
+  }));
   return {
     id: ctx.uuid(),
     booker: booker.userId,
-    items: classifyReservations(ctx.store.practices(), complete),
+    items,
     incomplete,
-    groups: booker.defaultGroups.filter((g) => groupIds.has(g)),
+    pastCount,
+    groups: defaultGroupsFor(booker, settings.groups.map((g) => g.id)),
     createdAt: ctx.now().toISOString(),
   };
 }
 
-function pickPartial(raw: Partial<Record<keyof Reservation, unknown>>): Partial<Reservation> {
+/** ふだんの送り先。未設定でグループが1つしかなければ、そのグループにする */
+export function defaultGroupsFor(m: Member, groupIds: string[]): string[] {
+  const mine = m.defaultGroups.filter((g) => groupIds.includes(g));
+  if (mine.length > 0) return mine;
+  return groupIds.length === 1 ? groupIds : [];
+}
+
+function pickPartial(raw: RawReservation): Partial<Reservation> {
   const out: Partial<Reservation> = {};
   for (const k of ['date', 'start', 'end', 'studio', 'room'] as const) {
     if (typeof raw[k] === 'string' && raw[k]) out[k] = raw[k] as string;
@@ -99,7 +131,7 @@ export function removeDraft(ctx: Ctx, id: string): void {
  * 同じ練習IDは登録済みとして飛ばし、直後に続く予約は既存の練習の延長として更新する（募集は出さない）。
  */
 export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInput[], groups: string[]): CreateResult {
-  if (!canRegister(booker)) throw new UserError('予約者として登録されていません');
+  if (!canRegister(booker)) throw new UserError('練習を登録できません');
   const settings = ctx.store.settings();
   const validGroups = groups.filter((g) => settings.groups.some((s) => s.id === g));
   const result: CreateResult = { created: [], extended: [], skipped: [] };

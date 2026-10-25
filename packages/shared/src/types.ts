@@ -94,6 +94,22 @@ export interface Draft {
   items: DraftItem[];
   /** 必須項目が読み取れなかった予約（アプリで入力してもらう） */
   incomplete: Partial<Reservation>[];
+  /** 今日より前の日付で、登録しなかった予約の件数 */
+  pastCount: number;
   groups: string[];
+  createdAt: string;
+}
+
+export type FeedbackStatus = '未対応' | '検討中' | '対応済み' | '見送り';
+export const FEEDBACK_STATUSES: FeedbackStatus[] = ['未対応', '検討中', '対応済み', '見送り'];
+
+/** 改善要望。投稿者の名前はみんなに公開する */
+export interface Feedback {
+  id: string;
+  userId: string;
+  name: string;
+  text: string;
+  status: FeedbackStatus;
+  reply: string;
   createdAt: string;
 }

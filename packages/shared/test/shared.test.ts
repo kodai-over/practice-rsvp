@@ -10,6 +10,7 @@ import {
   googleCalendarUrl,
   jstDateTime,
   labelDate,
+  looksLikeReservation,
   makePracticeId,
   nextStatus,
   normalizeReservation,
@@ -157,6 +158,39 @@ describe('classifyReservations', () => {
   });
 });
 
+describe('classifyReservations: 同じ登録内で続く予約', () => {
+  const base = { studio: '横浜', room: '301' };
+  it('予約一覧の形（19:00-20:30 と 20:30-21:00）は1件にまとめ、料金は合計', () => {
+    const items = classifyReservations([], [
+      { ...base, date: '2026-10-21', start: '19:30', end: '21:00', room: '202', fee: 3300 },
+      { ...base, date: '2026-10-14', start: '20:30', end: '21:00', fee: 800 },
+      { ...base, date: '2026-10-14', start: '19:00', end: '20:30', fee: 2400 },
+    ]);
+    expect(items).toEqual([
+      { kind: 'new', reservation: { ...base, date: '2026-10-14', start: '19:00', end: '21:00', fee: 3200 } },
+      { kind: 'new', reservation: { ...base, date: '2026-10-21', start: '19:30', end: '21:00', room: '202', fee: 3300 } },
+    ]);
+  });
+  it('既存の練習に続く予約が2つあれば、1つの延長にまとめる', () => {
+    const existing = practice({ studio: '横浜', room: '301', date: '2026-10-14', start: '19:00', end: '20:00', id: makePracticeId({ studio: '横浜', room: '301', date: '2026-10-14', start: '19:00' }) });
+    const items = classifyReservations([existing], [
+      { ...base, date: '2026-10-14', start: '20:00', end: '21:00', fee: 1000 },
+      { ...base, date: '2026-10-14', start: '21:00', end: '22:00', fee: null },
+    ]);
+    expect(items).toEqual([{ kind: 'extension', targetId: existing.id, reservation: { ...base, date: '2026-10-14', start: '20:00', end: '22:00', fee: null } }]);
+  });
+});
+
+describe('looksLikeReservation', () => {
+  it('日付と時刻の両方があれば予約内容とみなす', () => {
+    expect(looksLikeReservation('2026-10-21 19:30〜21:00 横浜 202 ¥3,300')).toBe(true);
+    expect(looksLikeReservation('10月21日（水）１９：３０〜２１：００')).toBe(true);
+    expect(looksLikeReservation('10/28 19:30-21:00')).toBe(true);
+    expect(looksLikeReservation('こんにちは')).toBe(false);
+    expect(looksLikeReservation('19:30に集合で')).toBe(false);
+  });
+});
+
 describe('カレンダー', () => {
   it('Googleカレンダーのリンク', () => {
     const url = googleCalendarUrl(practice(), 'https://example.com');
@@ -192,6 +226,7 @@ describe('Flex Message', () => {
       booker: 'U1',
       items: [{ reservation: { date: '2026-10-22', start: '19:00', end: '21:00', studio: 'worcle', room: 'A', fee: 3300 }, kind: 'new' as const }],
       incomplete: [],
+      pastCount: 0,
       createdAt: '',
     };
     const withGroup = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'] }, groups: settings.groups, practices: [], appUrl }));
@@ -216,6 +251,7 @@ describe('Flex Message', () => {
             },
           ],
           incomplete: [],
+          pastCount: 0,
           groups: ['G1'],
           createdAt: '',
         },

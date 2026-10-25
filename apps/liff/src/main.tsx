@@ -4,6 +4,7 @@ import type { MeView } from '@pb/shared';
 import { api } from './api';
 import { initLiff } from './liff';
 import { DetailPage } from './pages/Detail';
+import { FeedbackPage } from './pages/Feedback';
 import { ListPage } from './pages/List';
 import { RegisterPage } from './pages/Register';
 import { AdminPage, SettingsPage } from './pages/Settings';
@@ -16,6 +17,7 @@ function Router() {
   if (path[0] === 'register') return <RegisterPage draftId={query.get('draft')} />;
   if (path[0] === 'settings') return <SettingsPage />;
   if (path[0] === 'admin') return <AdminPage />;
+  if (path[0] === 'feedback') return <FeedbackPage />;
   return <ListPage />;
 }
 

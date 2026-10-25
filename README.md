@@ -36,10 +36,10 @@ npm run dev:mock -w @pb/liff   # LINE・Googleの準備なしで画面を確認
 
 | 仕様 | 場所 |
 | --- | --- |
-| スクショ読み取り（Geminiへの指示文） | `apps/gas/src/app/prompt.ts` |
-| 確認カード・募集・出欠ボタン・「練習」への応答 | `apps/gas/src/app/webhook.ts` |
+| スクショ・文章の読み取り（Geminiへの指示文） | `apps/gas/src/app/prompt.ts` |
+| 確認カード・募集・出欠ボタン・「練習」への応答・トークの文章からの登録 | `apps/gas/src/app/webhook.ts` |
 | 登録（重複・延長の判定）、出欠の記録、満員の判定 | `apps/gas/src/app/practices.ts` |
-| LINE内アプリ向けAPIと権限チェック | `apps/gas/src/app/api.ts` |
+| LINE内アプリ向けAPIと権限チェック、改善要望 | `apps/gas/src/app/api.ts` |
 | 参加リンク | `apps/gas/src/app/join.ts`、`apps/liff/src/join.tsx` |
 | キャンセル期限前警告・終了処理 | `apps/gas/src/app/triggers.ts` |
 | シートの列 | `apps/gas/src/app/schema.ts` |

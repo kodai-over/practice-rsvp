@@ -1,7 +1,7 @@
 /**
  * 業務ロジックが使う外部依存。GAS上では src/gas/ の実装を、テストではインメモリの実装を差し込む。
  */
-import type { Attendance, Group, LineMessage, Member, Practice, Reservation, Settings } from '@pb/shared';
+import type { Attendance, Feedback, Group, LineMessage, Member, Practice, Reservation, Settings } from '@pb/shared';
 
 export interface Store {
   practices(): Practice[];
@@ -15,6 +15,9 @@ export interface Store {
   saveMember(m: Member): void;
   settings(): Settings;
   saveSettings(s: Settings): void;
+  feedback(): Feedback[];
+  saveFeedback(f: Feedback): void;
+  deleteFeedback(id: string): void;
 }
 
 export interface LineApi {
@@ -33,9 +36,24 @@ export interface Image {
   data: string;
 }
 
+export type RawReservation = Partial<Record<keyof Reservation, unknown>>;
+
+/** 読み取る材料。スクショ（複数可）か、予約内容の文章 */
+export interface ReaderInput {
+  images: Image[];
+  text?: string;
+}
+
+export interface ReaderHints {
+  /** 今日の日付（年の補完に使う） */
+  today: string;
+  /** これまでに登録されたスタジオ名（店舗名だけの画面から正式な名前を当てるのに使う） */
+  studios: string[];
+}
+
 export interface ScreenshotReader {
   /** 読み取った予約。読めない項目は null / 欠落のまま返す */
-  read(images: Image[], today: string): Partial<Record<keyof Reservation, unknown>>[];
+  read(input: ReaderInput, hints: ReaderHints): RawReservation[];
 }
 
 export interface Kv {

@@ -7,7 +7,7 @@ import { route } from './app/router';
 import { INITIAL_SETTINGS, SHEETS, settingsToRows } from './app/schema';
 import { hourlyJob as runHourly } from './app/triggers';
 import { makeVerifiers } from './gas/auth';
-import { GeminiReader } from './gas/gemini';
+import { DEFAULT_GEMINI_MODEL, GeminiReader } from './gas/gemini';
 import { LineClient } from './gas/lineClient';
 import { SheetStore } from './gas/sheetStore';
 
@@ -41,7 +41,7 @@ function makeCtx(): Ctx {
   return {
     store,
     line: new LineClient(p.LINE_CHANNEL_ACCESS_TOKEN),
-    reader: new GeminiReader(p.GEMINI_API_KEY, p.GEMINI_MODEL || 'gemini-2.5-flash'),
+    reader: new GeminiReader(p.GEMINI_API_KEY, p.GEMINI_MODEL || DEFAULT_GEMINI_MODEL),
     kv,
     withLock(fn) {
       if (lockDepth > 0) return fn();

@@ -52,10 +52,13 @@ export function ListPage() {
       <TopBar title="練習">
         {canRegister(me.member) && (
           <button class="btn primary small" onClick={() => go('/register')}>
-            ＋ 練習を登録
+            ＋ 登録
           </button>
         )}
-        <button class="icon-btn" onClick={() => go('/settings')} aria-label="設定">
+        <button class="icon-btn" onClick={() => go('/feedback')}>
+          要望
+        </button>
+        <button class="icon-btn" onClick={() => go('/settings')}>
           設定
         </button>
       </TopBar>

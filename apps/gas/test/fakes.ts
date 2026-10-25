@@ -1,6 +1,6 @@
 import type { LineMessage } from '@pb/shared';
 import { MemoryKv, MemoryStore } from '../src/app/memory';
-import type { Ctx, Image, LineApi, ScreenshotReader } from '../src/app/ports';
+import type { Ctx, Image, LineApi, ReaderHints, ReaderInput, ScreenshotReader } from '../src/app/ports';
 
 export class FakeLine implements LineApi {
   replies: { token: string; messages: LineMessage[] }[] = [];
@@ -33,10 +33,10 @@ export class FakeLine implements LineApi {
 }
 
 export class FakeReader implements ScreenshotReader {
-  calls: Image[][] = [];
+  calls: { input: ReaderInput; hints: ReaderHints }[] = [];
   result: Record<string, unknown>[] = [];
-  read(images: Image[]) {
-    this.calls.push(images);
+  read(input: ReaderInput, hints: ReaderHints) {
+    this.calls.push({ input, hints });
     return this.result;
   }
 }

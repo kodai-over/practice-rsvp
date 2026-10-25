@@ -1,11 +1,13 @@
-import type { Attendance, Member, Practice, Settings } from '@pb/shared';
+import type { Attendance, Feedback, Member, Practice, Settings } from '@pb/shared';
 import type { Store } from '../app/ports';
 import {
   SHEETS,
   attendanceToRow,
+  feedbackToRow,
   memberToRow,
   practiceToRow,
   rowToAttendance,
+  rowToFeedback,
   rowToMember,
   rowToPractice,
   rowsToSettings,
@@ -31,12 +33,18 @@ class Table {
   constructor(
     private readonly ss: GoogleAppsScript.Spreadsheet.Spreadsheet,
     private readonly name: string,
+    private readonly headers: readonly string[],
   ) {}
 
+  /** シートがなければ見出し付きで作る（後から追加したシートも setupSheets なしで使えるように） */
   private sheet() {
     const sh = this.ss.getSheetByName(this.name);
-    if (!sh) throw new Error(`シート「${this.name}」がありません。setupSheets を実行してください。`);
-    return sh;
+    if (sh) return sh;
+    const created = this.ss.insertSheet(this.name);
+    created.getRange(1, 1, created.getMaxRows(), this.headers.length).setNumberFormat('@');
+    created.getRange(1, 1, 1, this.headers.length).setValues([[...this.headers]]).setFontWeight('bold');
+    created.setFrozenRows(1);
+    return created;
   }
 
   invalidate() {
@@ -95,10 +103,11 @@ export class SheetStore implements Store {
 
   constructor(ss: GoogleAppsScript.Spreadsheet.Spreadsheet) {
     this.t = {
-      practices: new Table(ss, SHEETS.practices.name),
-      attendance: new Table(ss, SHEETS.attendance.name),
-      members: new Table(ss, SHEETS.members.name),
-      settings: new Table(ss, SHEETS.settings.name),
+      practices: new Table(ss, SHEETS.practices.name, SHEETS.practices.headers),
+      attendance: new Table(ss, SHEETS.attendance.name, SHEETS.attendance.headers),
+      members: new Table(ss, SHEETS.members.name, SHEETS.members.headers),
+      settings: new Table(ss, SHEETS.settings.name, SHEETS.settings.headers),
+      feedback: new Table(ss, SHEETS.feedback.name, SHEETS.feedback.headers),
     };
   }
 
@@ -154,5 +163,17 @@ export class SheetStore implements Store {
 
   saveSettings(s: Settings) {
     this.t.settings.replaceAll(settingsToRows(s));
+  }
+
+  feedback(): Feedback[] {
+    return this.t.feedback.rows().filter((r) => r['要望ID']).map(rowToFeedback);
+  }
+
+  saveFeedback(f: Feedback) {
+    this.t.feedback.upsert((r) => r['要望ID'] === f.id, feedbackToRow(f));
+  }
+
+  deleteFeedback(id: string) {
+    this.t.feedback.delete((r) => r['要望ID'] === id);
   }
 }

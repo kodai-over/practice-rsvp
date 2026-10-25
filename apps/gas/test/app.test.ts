@@ -42,6 +42,10 @@ const postback = (userId: string, data: string, groupId?: string): LineEvent => 
 
 const reservation = { date: '2026-10-21', start: '19:00', end: '21:00', studio: 'worcle横浜', room: 'A', fee: 6000 };
 const PID = 'worcle横浜-20261021-1900-A';
+const baseP = {
+  id: 'old-1', date: '2026-09-01', start: '19:00', end: '21:00', studio: 'x', room: 'A', fee: 0, booker: BOOKER, max: null, min: null,
+  memo: '', status: '終了', groups: [], joinKey: 'k', feeOverride: null, warned: true, createdAt: '',
+};
 
 describe('スクショから募集まで', () => {
   let t: ReturnType<typeof setup>;
@@ -49,10 +53,33 @@ describe('スクショから募集まで', () => {
     t = setup();
   });
 
-  it('予約者でなければ断る', () => {
+  it('一般メンバー（未登録の人も）スクショから登録できる。送り先はグループが1つならそこ', () => {
+    t.reader.result = [reservation];
+    t.line.profiles['Ustranger'] = 'はじめて';
     handleWebhook(t.ctx, { events: [imageEvent('Ustranger')] });
-    expect(t.line.lastReplyText()).toContain('予約者として登録されていません');
-    expect(t.reader.calls).toHaveLength(0);
+    expect(t.store.m.find((m) => m.userId === 'Ustranger')).toMatchObject({ name: 'はじめて', role: '一般' });
+    const card = t.line.lastReplyText();
+    expect(card).toContain('予約内容の確認');
+    expect(card).toContain('チームA');
+    expect(card).toContain('この内容で募集');
+  });
+
+  it('グループが複数で送り先未設定なら、送り先を選んでもらう', () => {
+    t.store.s.groups.push({ id: 'C2', name: 'チームB' });
+    t.reader.result = [reservation];
+    handleWebhook(t.ctx, { events: [imageEvent('Ustranger')] });
+    expect(t.line.lastReplyText()).toContain('未設定');
+  });
+
+  it('読み取りで例外が起きたら、エラーだと伝える', () => {
+    t.reader.read = () => {
+      throw new Error('Gemini 404: model not found');
+    };
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
+    expect(t.line.lastReplyText()).toContain('読み取りでエラーが起きました');
+    expect(() => handleApi(t.ctx, { userId: BOOKER }, 'parseReservations', { images: [{ mimeType: 'image/jpeg', data: 'x' }] })).toThrow(
+      'Gemini 404: model not found',
+    );
   });
 
   it('確認カード → この内容で募集 → グループに募集が1メッセージで流れる', () => {
@@ -109,7 +136,61 @@ describe('スクショから募集まで', () => {
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm2', { id: 's', index: 2, total: 2 })] });
     expect(t.reader.calls).toHaveLength(0);
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm1', { id: 's', index: 1, total: 2 })] });
-    expect(t.reader.calls[0].map((i) => i.data)).toEqual(['m1', 'm2']);
+    expect(t.reader.calls[0].input.images.map((i) => i.data)).toEqual(['m1', 'm2']);
+  });
+
+  it('予約一覧のスクショ: 過去の予約は除き、同じ部屋で続く予約は1件にまとめる', () => {
+    t.clock.now = new Date('2026-10-14T00:00:00Z'); // 10/14 9:00
+    t.reader.result = [
+      { date: '2026-10-13', start: '19:00', end: '21:00', studio: '横浜', room: '301', fee: 3200 },
+      { date: '2026-10-14', start: '19:00', end: '20:30', studio: '横浜', room: '301', fee: 2400 },
+      { date: '2026-10-14', start: '20:30', end: '21:00', studio: '横浜', room: '301', fee: 800 },
+      { date: '2026-10-21', start: '19:30', end: '21:00', studio: '横浜', room: '202', fee: 3300 },
+    ];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
+    const card = t.line.lastReplyText();
+    expect(card).toContain('10/14(水) 19:00〜21:00');
+    expect(card).toContain('¥3,200');
+    expect(card).toContain('10/21(水) 19:30〜21:00');
+    expect(card).toContain('過去の日付の予約1件は除きました');
+    expect(card).not.toContain('20:30');
+  });
+
+  it('これまでのスタジオ名を読み取りの手がかりとして渡す', () => {
+    t.store.p.push({ ...JSON.parse(JSON.stringify(baseP)), studio: 'worcle横浜' });
+    t.reader.result = [reservation];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
+    expect(t.reader.calls[0].hints.studios).toEqual(expect.arrayContaining(['worcle横浜', 'worcle']));
+    expect(t.reader.calls[0].hints.today).toBe('2026-10-10');
+  });
+
+  it('個別トークの文章から予約を読み取る／関係ない文章には使い方を返す／グループでは反応しない', () => {
+    const text = (s: string, group = false): LineEvent => ({
+      type: 'message',
+      replyToken: 'rt',
+      source: group ? { type: 'group', groupId: G1, userId: BOOKER } : { type: 'user', userId: BOOKER },
+      message: { id: 'x', type: 'text', text: s },
+    });
+    t.reader.result = [reservation];
+    handleWebhook(t.ctx, { events: [text('2026-10-21(水) 19:00〜21:00 横浜 A ¥6,000')] });
+    expect(t.reader.calls[0].input).toEqual({ images: [], text: '2026-10-21(水) 19:00〜21:00 横浜 A ¥6,000' });
+    expect(t.line.lastReplyText()).toContain('予約内容の確認');
+
+    handleWebhook(t.ctx, { events: [text('こんにちは')] });
+    expect(t.line.lastReplyText()).toContain('予約内容の文章');
+    expect(t.reader.calls).toHaveLength(1);
+
+    const before = t.line.replies.length;
+    handleWebhook(t.ctx, { events: [text('10/21 19:00からでいい？', true)] });
+    expect(t.line.replies).toHaveLength(before);
+    expect(t.reader.calls).toHaveLength(1);
+  });
+
+  it('アプリ: 文章を貼り付けて読み取る', () => {
+    t.reader.result = [reservation];
+    const r = handleApi(t.ctx, { userId: BOOKER }, 'parseReservations', { text: '10/21 19:00-21:00' }) as any;
+    expect(r).toMatchObject({ pastCount: 0, items: [{ kind: 'new' }] });
+    expect(() => handleApi(t.ctx, { userId: BOOKER }, 'parseReservations', {})).toThrow('スクショを選ぶか');
   });
 
   it('応答が間に合わなければプッシュで確認カードを送る', () => {
@@ -197,13 +278,32 @@ describe('出欠', () => {
     expect(t.store.a).toHaveLength(1);
   });
 
-  it('アプリから手動登録（送り先なしは拒否、一般メンバーは拒否）', () => {
+  it('アプリから手動登録（送り先なしは拒否、一般メンバーも登録でき予約者になる）', () => {
     const item = { ...reservation, date: '2026-10-30', fee: null, max: 8, min: null, memo: 'ショーケースの通し' };
     expect(() => handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [] })).toThrow('送り先');
-    expect(() => handleApi(t.ctx, { userId: 'U9', name: 'x' }, 'createPractices', { items: [item], groups: [G1] })).toThrow('予約者');
-    const res = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [G1] }) as any;
+    const res = handleApi(t.ctx, { userId: 'U9', name: 'きゅう' }, 'createPractices', { items: [item], groups: [G1] }) as any;
     expect(res.created).toHaveLength(1);
-    expect(t.store.getPractice(res.created[0])).toMatchObject({ fee: 3000, max: 8, memo: 'ショーケースの通し' });
+    expect(t.store.getPractice(res.created[0])).toMatchObject({ fee: 3000, max: 8, memo: 'ショーケースの通し', booker: 'U9' });
+    // 登録した本人は修正・中止ができ、他の一般メンバーはできない
+    expect((handleApi(t.ctx, { userId: 'U9' }, 'getPractice', { id: res.created[0] }) as any).canEdit).toBe(true);
+    expect((handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'getPractice', { id: res.created[0] }) as any).canEdit).toBe(false);
+  });
+});
+
+describe('改善要望', () => {
+  it('誰でも投稿でき、名前つきで全員に見える。状態とコメントは管理者だけ', () => {
+    const t = setup();
+    handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'postFeedback', { text: '  前日にリマインドがほしい  ' });
+    const list = handleApi(t.ctx, { userId: BOOKER }, 'listFeedback', {}) as any[];
+    expect(list).toMatchObject([{ name: 'いち', text: '前日にリマインドがほしい', status: '未対応', mine: false, canDelete: false }]);
+    expect(() => handleApi(t.ctx, { userId: 'U1' }, 'postFeedback', { text: ' ' })).toThrow('入力');
+
+    expect(() => handleApi(t.ctx, { userId: 'U1' }, 'updateFeedback', { id: list[0].id, status: '対応済み' })).toThrow('管理者');
+    const updated = handleApi(t.ctx, { userId: ADMIN }, 'updateFeedback', { id: list[0].id, status: '検討中', reply: '検討します' }) as any[];
+    expect(updated[0]).toMatchObject({ status: '検討中', reply: '検討します', canDelete: true });
+
+    expect(() => handleApi(t.ctx, { userId: BOOKER }, 'deleteFeedback', { id: list[0].id })).toThrow('本人か管理者');
+    expect(handleApi(t.ctx, { userId: 'U1' }, 'deleteFeedback', { id: list[0].id })).toEqual([]);
   });
 });
 

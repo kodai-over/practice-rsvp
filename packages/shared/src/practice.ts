@@ -62,16 +62,57 @@ export function findExtensionTarget(practices: Practice[], r: Reservation): Prac
   );
 }
 
-/** 予約を「新規／延長／登録済み」に分類する */
+/** LINEのトークで送られた文章が予約内容らしいか（日付と時刻の両方を含む） */
+export function looksLikeReservation(text: string): boolean {
+  const t = text.replace(/[０-９：／]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  const hasTime = /\d{1,2}:\d{2}/.test(t);
+  const hasDate = /\d{4}[-/年]\s*\d{1,2}[-/月]\s*\d{1,2}|\d{1,2}\s*[/月]\s*\d{1,2}/.test(t);
+  return hasTime && hasDate;
+}
+
+/**
+ * 予約を「新規／延長／登録済み」に分類する。日時順に見ていき、
+ * - 同じ練習IDがあれば登録済み
+ * - 既存の練習のすぐ後に続けば、その練習の延長
+ * - 同じ登録内の予約のすぐ後に続けば（予約一覧の 19:00-20:30 と 20:30-21:00 など）、その予約にまとめる（料金は合計、どちらか不明なら不明）
+ */
 export function classifyReservations(practices: Practice[], reservations: Reservation[]): DraftItem[] {
-  const ids = new Set(practices.filter((p) => p.status !== '中止').map((p) => p.id));
-  return reservations.map((reservation) => {
-    const id = makePracticeId(reservation);
-    if (ids.has(id)) return { reservation, kind: 'duplicate', targetId: id };
-    const ext = findExtensionTarget(practices, reservation);
-    if (ext) return { reservation, kind: 'extension', targetId: ext.id };
-    return { reservation, kind: 'new' };
-  });
+  const items: DraftItem[] = [];
+  // 判定に使う練習。itemIndex があるものは、この登録で作る（または延長する）items の行
+  const running: { p: Practice; itemIndex?: number }[] = practices.filter((p) => p.status !== '中止').map((p) => ({ p: { ...p } }));
+  const sorted = [...reservations].sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  for (const r of sorted) {
+    const id = makePracticeId(r);
+    if (running.some((x) => x.p.id === id)) {
+      items.push({ reservation: r, kind: 'duplicate', targetId: id });
+      continue;
+    }
+    const prev = running.find(
+      (x) => isActive(x.p) && x.p.date === r.date && x.p.studio === r.studio && x.p.room === r.room && x.p.end === r.start,
+    );
+    if (prev && prev.itemIndex != null) {
+      const item = items[prev.itemIndex];
+      item.reservation = {
+        ...item.reservation,
+        end: r.end,
+        fee: item.reservation.fee != null && r.fee != null ? item.reservation.fee + r.fee : null,
+      };
+      prev.p.end = r.end;
+      continue;
+    }
+    if (prev) {
+      items.push({ reservation: { ...r }, kind: 'extension', targetId: prev.p.id });
+      prev.p.end = r.end;
+      prev.itemIndex = items.length - 1;
+      continue;
+    }
+    items.push({ reservation: { ...r }, kind: 'new' });
+    running.push({
+      p: { ...r, id, fee: r.fee ?? 0, booker: '', max: null, min: null, memo: '', status: '募集中', groups: [], joinKey: '', feeOverride: null, warned: false, createdAt: '' },
+      itemIndex: items.length - 1,
+    });
+  }
+  return items;
 }
 
 export function goingList(attendance: Attendance[], practiceId: string): Attendance[] {
