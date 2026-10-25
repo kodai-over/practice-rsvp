@@ -51,15 +51,8 @@ export function SettingsPage() {
         )}
       </div>
 
-      <ul class="menu" style={{ marginTop: 24 }}>
-        <li>
-          <button class="menu-row" onClick={() => go('/feedback')}>
-            <Icon name="chat" size={20} />
-            <span class="grow">要望を送る</span>
-            <Icon name="chevron" size={18} />
-          </button>
-        </li>
-        {isAdmin(me.member) && (
+      {isAdmin(me.member) && (
+        <ul class="menu" style={{ marginTop: 24 }}>
           <li>
             <button class="menu-row" onClick={() => go('/admin')}>
               <Icon name="gear" size={20} />
@@ -68,8 +61,8 @@ export function SettingsPage() {
               <Icon name="chevron" size={18} />
             </button>
           </li>
-        )}
-      </ul>
+        </ul>
+      )}
     </>
   );
 }

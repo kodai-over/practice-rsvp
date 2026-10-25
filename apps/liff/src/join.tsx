@@ -56,7 +56,7 @@ function JoinPage() {
     }
   };
 
-  if (error) return <div class="empty"><div class="empty-mark">—</div>{error}</div>;
+  if (error) return <div class="empty">{error}</div>;
   if (!v) return <Spinner />;
   const closed = v.status === '中止';
 
@@ -66,7 +66,6 @@ function JoinPage() {
         <h1>出欠</h1>
       </header>
       <Pass
-        id={v.id}
         date={v.date}
         status={v.status}
         fields={[

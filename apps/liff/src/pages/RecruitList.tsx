@@ -3,7 +3,7 @@ import { labelDate } from '@pb/shared';
 import { api } from '../api';
 import { Icon, Spinner, Stub, TopBar, go, place, useApp, useRunner } from '../ui';
 
-/** メニューの「募集する」。自分が登録した（管理者はすべての）練習から、募集を送る練習を選ぶ */
+/** 「募集」。受付中の練習から、募集・ゲスト追加・参加リンクの練習を選ぶ（グループへの募集は予約者と管理者だけ） */
 export function RecruitListPage() {
   const { me, practices, setPractices } = useApp();
   const [run] = useRunner();
@@ -17,7 +17,7 @@ export function RecruitListPage() {
     });
   }, []);
 
-  const list = practices == null && !fresh ? null : (practices ?? []).filter((v) => v.canEdit && (v.practice.status === '募集中' || v.practice.status === '満員'));
+  const list = practices == null && !fresh ? null : (practices ?? []).filter((v) => (v.practice.status === '募集中' || v.practice.status === '満員'));
 
   return (
     <>
@@ -26,7 +26,6 @@ export function RecruitListPage() {
         <Spinner />
       ) : list.length === 0 ? (
         <div class="empty">
-          <div class="empty-mark">—</div>
           募集できる練習なし
           <button class="btn primary" onClick={() => go('/register')}>
             <Icon name="plus" size={18} />
@@ -36,7 +35,7 @@ export function RecruitListPage() {
       ) : (
         list.map((v) => {
           const p = v.practice;
-          const open = () => go(`/p/${encodeURIComponent(p.id)}?recruit=1`);
+          const open = () => go(`/recruit/${encodeURIComponent(p.id)}`);
           const sent = v.groupNames.length > 0;
           return (
             <article class="ticket" data-answer={sent ? 'sent' : 'none'}>
