@@ -16,7 +16,7 @@ export function RecruitDetailPage({ id }: { id: string }) {
       <TopBar back>{loading && <Syncing />}</TopBar>
       <PracticePass v={v} />
 
-      {v.canEdit && (v.practice.status === '募集中' || v.practice.status === '満員') && (
+      {(v.practice.status === '募集中' || v.practice.status === '満員') && (
         <RecruitForm v={v} busy={busy} onSend={(groups) => update(() => api('recruitPractice', { id, groups }), 'グループに募集を送りました')} />
       )}
 
@@ -67,47 +67,55 @@ function GuestForm({ onAdd, busy }: { onAdd: (name: string) => Promise<unknown>;
   );
 }
 
+/** グループへの募集。いつも出し、グループがない・送れない人にはその旨を一行だけ出す */
 function RecruitForm({ v, onSend, busy }: { v: PracticeView; onSend: (groups: string[]) => Promise<unknown>; busy: boolean }) {
   const { me } = useApp();
   const [picked, setPicked] = useState<string[]>([]);
-  if (me.groups.length === 0) return null;
   const sent = (gid: string) => v.practice.groups.includes(gid);
+  const canSend = v.canEdit && me.groups.some((g) => !sent(g.id));
   return (
     <section>
       <div class="sec-head">
         <Icon name="send" size={18} />
-        募集
+        グループに募集
       </div>
-      <div class="toggles">
-        {me.groups.map((g) =>
-          sent(g.id) ? (
-            <button class="toggle" disabled aria-label={`${g.name}（募集済み）`}>
-              <Icon name="check" size={16} />
-              {g.name}
-            </button>
-          ) : (
+      {me.groups.length === 0 ? (
+        <p class="note">Botをグループに招待すると送れます</p>
+      ) : (
+        <>
+          <div class="toggles">
+            {me.groups.map((g) =>
+              sent(g.id) || !v.canEdit ? (
+                <button class="toggle" disabled aria-label={`${g.name}（${sent(g.id) ? '募集済み' : '未募集'}）`}>
+                  {sent(g.id) && <Icon name="check" size={16} />}
+                  {g.name}
+                </button>
+              ) : (
+                <button
+                  class="toggle"
+                  aria-pressed={picked.includes(g.id)}
+                  onClick={() => setPicked(picked.includes(g.id) ? picked.filter((x) => x !== g.id) : [...picked, g.id])}
+                >
+                  {g.name}
+                </button>
+              ),
+            )}
+          </div>
+          {!v.canEdit && <p class="note">送れるのは登録した人と管理者です</p>}
+          {canSend && (
             <button
-              class="toggle"
-              aria-pressed={picked.includes(g.id)}
-              onClick={() => setPicked(picked.includes(g.id) ? picked.filter((x) => x !== g.id) : [...picked, g.id])}
+              class="btn primary block"
+              style={{ marginTop: 12 }}
+              disabled={busy || picked.length === 0}
+              onClick={async () => {
+                if (await onSend(picked)) setPicked([]);
+              }}
             >
-              {g.name}
+              <Icon name="send" size={18} />
+              {picked.length > 0 ? `${picked.length}グループに募集を送る` : '募集を送る'}
             </button>
-          ),
-        )}
-      </div>
-      {me.groups.some((g) => !sent(g.id)) && (
-        <button
-          class="btn primary block"
-          style={{ marginTop: 12 }}
-          disabled={busy || picked.length === 0}
-          onClick={async () => {
-            if (await onSend(picked)) setPicked([]);
-          }}
-        >
-          <Icon name="send" size={18} />
-          {picked.length > 0 ? `${picked.length}グループに募集を送る` : '募集を送る'}
-        </button>
+          )}
+        </>
       )}
     </section>
   );
