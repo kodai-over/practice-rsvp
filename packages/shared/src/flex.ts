@@ -169,7 +169,6 @@ function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appU
   const d = shortDate(p.date);
   return {
     type: 'bubble',
-    size: 'kilo',
     body: {
       type: 'box',
       layout: 'vertical',
@@ -203,6 +202,12 @@ function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appU
               color: GREEN,
               height: 'sm',
               action: { type: 'postback', label: '行く', data: encodePostback({ a: 'rsvp', p: p.id, v: '1' }), displayText: `${d} 行きます` },
+            },
+            {
+              type: 'button',
+              style: 'secondary',
+              height: 'sm',
+              action: { type: 'postback', label: '保留', data: encodePostback({ a: 'rsvp', p: p.id, v: '2' }), displayText: `${d} 保留にします` },
             },
             {
               type: 'button',

@@ -17,7 +17,7 @@ function readTab(): Tab {
 }
 
 export function ListPage({ initialTab }: { initialTab?: string | null }) {
-  const { me, practices: list, practicesAt, setPractices } = useApp();
+  const { me, practices: list, practicesAt, setPractices, updatePractice } = useApp();
   const [tab, setTab] = useState<Tab>(() => (initialTab === 'mine' || initialTab === 'todo' || initialTab === 'all' ? initialTab : readTab()));
   const [run, busy] = useRunner();
 
@@ -35,16 +35,20 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
     }
   };
 
+  // 押した瞬間に色を変え、サーバーの結果が来たら人数なども含めて差し替える（失敗したら元に戻す）
   const answer = async (id: string, a: Answer) => {
+    const before = (list ?? []).find((x) => x.practice.id === id);
+    if (before) updatePractice({ ...before, myAnswer: a });
     const v = await run(() => api('rsvp', { id, answer: a }));
-    if (v) setPractices((list ?? []).map((x) => (x.practice.id === id ? v : x)));
+    if (v) updatePractice(v);
+    else if (before) updatePractice(before);
   };
 
   const active = (list ?? []).filter((v) => v.practice.status !== '中止');
   const groups: Record<Tab, PracticeView[]> = {
     all: list ?? [],
     mine: active.filter((v) => v.myAnswer === '行く'),
-    todo: active.filter((v) => v.myAnswer == null),
+    todo: active.filter((v) => v.myAnswer == null || v.myAnswer === '保留'),
   };
   const shown = groups[tab];
 
@@ -68,7 +72,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
           [
             ['all', 'すべて'],
             ['mine', '自分が行く'],
-            ['todo', '未回答'],
+            ['todo', '未回答・保留'],
           ] as const
         ).map(([k, label]) => (
           <button role="tab" aria-selected={tab === k} onClick={() => selectTab(k)}>
@@ -81,9 +85,9 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
       {list == null ? (
         <Spinner />
       ) : shown.length === 0 ? (
-        <div class="empty">{tab === 'todo' ? '未回答の練習はありません' : tab === 'mine' ? '行く予定の練習はありません' : '今後の練習はまだありません'}</div>
+        <div class="empty">{tab === 'todo' ? '未回答・保留の練習はありません' : tab === 'mine' ? '行く予定の練習はありません' : '今後の練習はまだありません'}</div>
       ) : (
-        shown.map((v) => <PracticeCard key={v.practice.id} v={v} busy={busy} onAnswer={(a) => answer(v.practice.id, a)} />)
+        shown.map((v) => <PracticeCard key={v.practice.id} v={v} busy={false} onAnswer={(a) => answer(v.practice.id, a)} />)
       )}
     </>
   );
@@ -101,6 +105,7 @@ function PracticeCard({ v, onAnswer, busy }: { v: PracticeView; onAnswer: (a: An
             {p.start}〜{p.end}
             <StatusBadge v={v} />
             {v.myAnswer == null && p.status !== '中止' && <span class="badge todo">未回答</span>}
+            {v.myAnswer === '保留' && p.status !== '中止' && <span class="badge todo">保留</span>}
           </div>
           <div class="place">
             {place(p)}

@@ -6,7 +6,7 @@ import { Spinner, TopBar, useApp, useRunner } from '../ui';
 const STATUS_CLASS: Record<FeedbackStatus, string> = {
   未対応: 'todo',
   検討中: 'mine',
-  対応済み: 'mine',
+  改善済み: 'mine',
   見送り: 'cancel',
 };
 

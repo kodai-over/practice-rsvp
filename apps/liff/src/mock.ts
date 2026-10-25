@@ -61,7 +61,7 @@ store.p = [
   mk(5, '13:00', '16:00', 'BUZZ横浜東口', 'Bst', 5400, 'U2', { max: 3, groups: ['G1', 'G2'] }),
   mk(9, '20:00', '22:00', '市民センター', '和室', 1200, 'Ume'),
 ];
-const att = (practiceId: string, participant: string, name: string, answer: '行く' | '行かない', kind: 'メンバー' | 'ゲスト' = 'メンバー', addedBy = participant) =>
+const att = (practiceId: string, participant: string, name: string, answer: '行く' | '保留' | '行かない', kind: 'メンバー' | 'ゲスト' = 'メンバー', addedBy = participant) =>
   store.saveAttendance({ practiceId, participant, name, kind, via: kind === 'ゲスト' ? 'アプリ' : 'ボタン', addedBy, answer, updatedAt: new Date().toISOString() });
 att(store.p[0].id, 'Ume', 'おおゆち', '行く');
 att(store.p[0].id, 'U3', 'けんた', '行く');
@@ -69,9 +69,10 @@ att(store.p[0].id, 'guest:1', 'りな', '行く', 'ゲスト', 'U3');
 att(store.p[0].id, 'U4', 'みお', '行かない');
 att(store.p[1].id, 'U2', 'さくら', '行く');
 att(store.p[1].id, 'U3', 'けんた', '行く');
+att(store.p[0].id, 'U2', 'さくら', '保留');
 
 store.f = [
-  { id: 'f1', userId: 'U3', name: 'けんた', text: '練習の前日にリマインドがほしい', status: '検討中', reply: '通知数と相談して検討します', createdAt: new Date(Date.now() - 86400000).toISOString() },
+  { id: 'f1', userId: 'U3', name: 'けんた', text: '練習の前日にリマインドがほしい', status: '改善済み', reply: '前日にアプリの「自分が行く」で確認できるようにしました', createdAt: new Date(Date.now() - 86400000).toISOString() },
   { id: 'f2', userId: 'U4', name: 'みお', text: 'スタジオの地図リンクを載せてほしい', status: '未対応', reply: '', createdAt: new Date().toISOString() },
 ];
 
@@ -88,6 +89,7 @@ const ctx: Ctx = {
     groupMemberProfile: () => null,
     groupSummary: () => null,
     content: () => ({ mimeType: 'image/jpeg', data: '' }),
+    showLoading: () => {},
   },
   reader: {
     // 予約一覧のスクショ（過去の予約・続けて取った予約・延長・読めない行を含む）を読んだ想定
@@ -107,7 +109,8 @@ const ctx: Ctx = {
 };
 
 export async function mockRoute(body: Record<string, unknown>) {
-  await new Promise((r) => setTimeout(r, 150));
+  // 読み取りは本番でも時間がかかるので、モックでも待たせて表示を確かめられるようにする
+  await new Promise((r) => setTimeout(r, body.action === 'parseReservations' ? 2000 : 150));
   const user = new URLSearchParams(location.search).get('as') ?? 'Ume';
   return route(ctx, JSON.stringify({ ...body, idToken: 'mock' }), { relay: () => false, idToken: () => ({ userId: user, name: 'ゲストユーザー' }) });
 }

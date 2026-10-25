@@ -48,7 +48,7 @@ function JoinPage() {
       save(NAME_KEY, name.trim());
       save(pidKey, r.participant);
       setV(r);
-      toast(a === '行く' ? '「行く」で登録しました' : '「行かない」で登録しました');
+      toast(`「${a}」で登録しました`);
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), true);
     } finally {
@@ -98,6 +98,9 @@ function JoinPage() {
           <div class="rsvp">
             <button class="yes" aria-pressed={v.myAnswer === '行く'} disabled={busy || (v.status === '満員' && v.myAnswer !== '行く')} onClick={() => answer('行く')}>
               行く
+            </button>
+            <button class="maybe" aria-pressed={v.myAnswer === '保留'} disabled={busy} onClick={() => answer('保留')}>
+              保留
             </button>
             <button class="no" aria-pressed={v.myAnswer === '行かない'} disabled={busy} onClick={() => answer('行かない')}>
               行かない

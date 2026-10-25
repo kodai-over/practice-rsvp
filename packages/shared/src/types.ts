@@ -2,7 +2,9 @@ export type PracticeStatus = '募集中' | '満員' | '中止' | '終了';
 export type Role = '管理者' | '予約者' | '一般';
 export type AttendeeKind = 'メンバー' | 'ゲスト';
 export type Via = 'ボタン' | 'アプリ' | '参加リンク';
-export type Answer = '行く' | '行かない';
+export type Answer = '行く' | '保留' | '行かない';
+export const ANSWERS: Answer[] = ['行く', '保留', '行かない'];
+export const isAnswer = (v: unknown): v is Answer => ANSWERS.includes(v as Answer);
 
 /** 日付は 'YYYY-MM-DD'、時刻は 'HH:mm'（いずれも日本時間） */
 export interface Practice {
@@ -114,8 +116,8 @@ export interface Draft {
   createdAt: string;
 }
 
-export type FeedbackStatus = '未対応' | '検討中' | '対応済み' | '見送り';
-export const FEEDBACK_STATUSES: FeedbackStatus[] = ['未対応', '検討中', '対応済み', '見送り'];
+export type FeedbackStatus = '未対応' | '検討中' | '改善済み' | '見送り';
+export const FEEDBACK_STATUSES: FeedbackStatus[] = ['未対応', '検討中', '改善済み', '見送り'];
 
 /** 改善要望。投稿者の名前はみんなに公開する */
 export interface Feedback {

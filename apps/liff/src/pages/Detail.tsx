@@ -6,7 +6,7 @@ import { openExternal } from '../liff';
 import { RsvpButtons, Spinner, StatusBadge, TopBar, go, place, useApp, useRunner } from '../ui';
 
 export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'recruit' | null }) {
-  const { me, reloadPractices } = useApp();
+  const { me, updatePractice, setPractices } = useApp();
   const [v, setV] = useState<PracticeView | null>(null);
   const [run, busy] = useRunner();
   const calRef = useRef<HTMLDivElement>(null);
@@ -28,7 +28,7 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
     const r = await run(fn, done);
     if (r) {
       setV(r);
-      reloadPractices(); // 一覧に戻ったときに最新にする
+      updatePractice(r); // 一覧にもすぐ反映する
     }
     return r;
   };
@@ -69,6 +69,7 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
       </section>
 
       <Attendees title={`行く（${v.goingCount}人）`} list={v.going} onRemove={(a) => update(() => api('removeAttendance', { id, participant: a.participant }), '取り消しました')} />
+      {v.maybe.length > 0 && <Attendees title={`保留（${v.maybe.length}人）`} list={v.maybe} onRemove={(a) => update(() => api('removeAttendance', { id, participant: a.participant }), '取り消しました')} />}
       {v.notGoing.length > 0 && <Attendees title={`行かない（${v.notGoing.length}人）`} list={v.notGoing} onRemove={(a) => update(() => api('removeAttendance', { id, participant: a.participant }), '取り消しました')} />}
 
       {p.status !== '中止' && <GuestForm onAdd={(name) => update(() => api('addGuest', { id, name }), `${name}さんを追加しました`)} busy={busy} />}
@@ -94,7 +95,20 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
 
       {v.joinUrl && <JoinLink url={v.joinUrl} />}
 
-      {v.canEdit && <EditForm v={v} busy={busy} onSave={(patch) => update(() => api('updatePractice', { id, patch }), '保存しました')} onCancel={() => update(() => api('cancelPractice', { id }), '中止にしました')} />}
+      {v.canEdit && (
+        <EditForm
+          v={v}
+          busy={busy}
+          onSave={(patch) => update(() => api('updatePractice', { id, patch }), '保存しました')} onCancel={() => update(() => api('cancelPractice', { id }), '中止にしました')}
+          onDelete={async () => {
+            const list = await run(() => api('deletePractice', { id }), '削除しました');
+            if (list) {
+              setPractices(list, true);
+              go('/');
+            }
+          }}
+        />
+      )}
     </>
   );
 }
@@ -246,7 +260,19 @@ function JoinLink({ url }: { url: string }) {
   );
 }
 
-function EditForm({ v, onSave, onCancel, busy }: { v: PracticeView; onSave: (p: PracticePatch) => Promise<unknown>; onCancel: () => Promise<unknown>; busy: boolean }) {
+function EditForm({
+  v,
+  onSave,
+  onCancel,
+  onDelete,
+  busy,
+}: {
+  v: PracticeView;
+  onSave: (p: PracticePatch) => Promise<unknown>;
+  onCancel: () => Promise<unknown>;
+  onDelete: () => Promise<unknown>;
+  busy: boolean;
+}) {
   const { me } = useApp();
   const p = v.practice;
   const [f, setF] = useState({
@@ -325,6 +351,16 @@ function EditForm({ v, onSave, onCancel, busy }: { v: PracticeView; onSave: (p: 
             }}
           >
             中止にする
+          </button>
+        )}
+        {p.groups.length === 0 && (
+          <button
+            class="btn danger block"
+            style={{ marginTop: 8 }}
+            disabled={busy}
+            onClick={() => confirm('この練習を削除しますか？（登録ミスの取り消し用。出欠も消えます）') && onDelete()}
+          >
+            削除する（まだ募集していない練習のみ）
           </button>
         )}
       </section>

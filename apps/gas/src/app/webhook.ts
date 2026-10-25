@@ -8,6 +8,7 @@ import {
   practiceListMessage,
   shortDate,
   toJstDate,
+  type Answer,
   type LineMessage,
   type NewPracticeInput,
 } from '@pb/shared';
@@ -127,6 +128,12 @@ function registerFrom(ctx: Ctx, ev: LineEvent, userId: string, src: { messageIds
     return;
   }
   const what = src.text ? '予約内容' : 'スクショ';
+  // 読み取りには数秒〜数十秒かかるので、トークに「入力中…」を出しておく
+  try {
+    ctx.line.showLoading(userId, 60);
+  } catch (e) {
+    ctx.log('loading animation failed', e);
+  }
   let raws: RawReservation[];
   try {
     const images = (src.messageIds ?? []).map((id) => ctx.line.content(id));
@@ -183,7 +190,7 @@ function onPostback(ctx: Ctx, ev: LineEvent): void {
   const data = parsePostback(ev.postback.data);
   switch (data.a) {
     case 'rsvp':
-      return onRsvp(ctx, ev, userId, data.p, data.v === '1');
+      return onRsvp(ctx, ev, userId, data.p, data.v === '1' ? '行く' : data.v === '2' ? '保留' : '行かない');
     case 'confirm':
       return onConfirm(ctx, ev, userId, data.d, data.r === '1');
     case 'discard': {
@@ -195,14 +202,14 @@ function onPostback(ctx: Ctx, ev: LineEvent): void {
   }
 }
 
-function onRsvp(ctx: Ctx, ev: LineEvent, userId: string, practiceId: string, going: boolean): void {
+function onRsvp(ctx: Ctx, ev: LineEvent, userId: string, practiceId: string, answer: Answer): void {
   const groupId = ev.source.groupId;
   const member = ensureMember(ctx, userId, { groupId });
   const res = recordAnswer(
     ctx,
     practiceId,
     { participant: userId, name: member.name, kind: 'メンバー', via: 'ボタン', addedBy: userId },
-    going ? '行く' : '行かない',
+    answer,
   );
   // 記録できたときは本人の発言（displayText）が出るので返信しない
   if (!res.ok) {
@@ -273,7 +280,7 @@ function onJoin(ctx: Ctx, ev: LineEvent): void {
     }
   });
   safeReply(ctx, ev, [
-    textMsg('練習の募集をお手伝いするBotです。募集メッセージの「行く／行かない」で出欠を出せます。「練習」と送ると今後の練習の一覧を返します。'),
+    textMsg('練習の募集をお手伝いするBotです。募集メッセージの「行く／保留／行かない」で出欠を出せます。「練習」と送ると今後の練習の一覧を返します。'),
   ]);
 }
 

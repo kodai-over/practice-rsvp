@@ -131,7 +131,8 @@ export function rowToFeedback(r: Row): Feedback {
     userId: r['投稿者'] ?? '',
     name: r['投稿者名'] ?? '',
     text: r['内容'] ?? '',
-    status: (r['状態'] || '未対応') as Feedback['status'],
+    // 以前の「対応済み」は「改善済み」として扱う
+    status: (r['状態'] === '対応済み' ? '改善済み' : r['状態'] || '未対応') as Feedback['status'],
     reply: r['管理者コメント'] ?? '',
     createdAt: r['投稿日時'] ?? '',
   };

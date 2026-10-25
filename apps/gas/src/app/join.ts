@@ -1,5 +1,5 @@
 /** 参加リンク（LINEを使わない人の出欠）。合言葉が合う練習への出欠登録だけができる */
-import { goingList, perPersonFee, roomInfo, toJstDate, type Answer, type JoinActions, type JoinView, type Practice } from '@pb/shared';
+import { goingList, isAnswer, perPersonFee, roomInfo, toJstDate, type Answer, type JoinActions, type JoinView, type Practice } from '@pb/shared';
 import { UserError, type Ctx } from './ports';
 import { recordAnswer } from './practices';
 
@@ -39,7 +39,7 @@ export function handleJoin(ctx: Ctx, action: string, params: Record<string, unkn
   if (action === 'answer') {
     const { id, key, name, answer, participant } = params as JoinActions['answer']['params'];
     const p = openPractice(ctx, id, key);
-    if (answer !== '行く' && answer !== '行かない') throw new UserError('回答が不正です');
+    if (!isAnswer(answer)) throw new UserError('回答が不正です');
     const n = typeof name === 'string' ? name.trim().slice(0, 30) : '';
     if (!n) throw new UserError('名前を入力してください');
     // 同じ端末からの回答し直しは、前回の登録を更新する

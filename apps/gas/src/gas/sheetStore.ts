@@ -68,33 +68,44 @@ class Table {
     return this.load().rows;
   }
 
-  /** match に一致する行を更新、なければ末尾に追加。row に無い列は今の値を残す */
+  /**
+   * match に一致する行を更新、なければ末尾に追加。row に無い列は今の値を残す。
+   * 書いた内容は手元の控えにも反映し、シート全体を読み直さない（登録を速くするため）
+   */
   upsert(match: (r: Row) => boolean, row: Row) {
-    const { headers, rows } = this.load();
-    const idx = rows.findIndex(match);
-    const base = idx >= 0 ? rows[idx] : {};
-    const merged = { ...base, ...row };
-    const line = headers.map((h) => merged[h] ?? '');
+    const cache = this.load();
+    const idx = cache.rows.findIndex(match);
+    const merged: Row = { ...(idx >= 0 ? cache.rows[idx] : {}), ...row };
+    const line = cache.headers.map((h) => merged[h] ?? '');
     const sh = this.sheet();
-    if (idx >= 0) sh.getRange(idx + 2, 1, 1, headers.length).setValues([line]);
-    else sh.appendRow(line);
-    this.invalidate();
+    if (idx >= 0) {
+      sh.getRange(idx + 2, 1, 1, cache.headers.length).setValues([line]);
+      cache.rows[idx] = merged;
+    } else {
+      sh.appendRow(line);
+      cache.rows.push(merged);
+    }
   }
 
   delete(match: (r: Row) => boolean) {
-    const rows = this.load().rows;
+    const cache = this.load();
     const sh = this.sheet();
-    for (let i = rows.length - 1; i >= 0; i--) if (match(rows[i])) sh.deleteRow(i + 2);
-    this.invalidate();
+    for (let i = cache.rows.length - 1; i >= 0; i--) {
+      if (match(cache.rows[i])) {
+        sh.deleteRow(i + 2);
+        cache.rows.splice(i, 1);
+      }
+    }
   }
 
   replaceAll(rows: Row[]) {
-    const { headers } = this.load();
+    const cache = this.load();
     const sh = this.sheet();
     const last = sh.getLastRow();
-    if (last > 1) sh.getRange(2, 1, last - 1, headers.length).clearContent();
-    if (rows.length) sh.getRange(2, 1, rows.length, headers.length).setValues(rows.map((r) => headers.map((h) => r[h] ?? '')));
-    this.invalidate();
+    if (last > 1) sh.getRange(2, 1, last - 1, cache.headers.length).clearContent();
+    if (rows.length) sh.getRange(2, 1, rows.length, cache.headers.length).setValues(rows.map((r) => cache.headers.map((h) => r[h] ?? '')));
+    // 消したあとの空行は読み直しで出ないので、控えも書いた行だけにする
+    cache.rows = rows.map((r) => Object.fromEntries(cache.headers.map((h) => [h, r[h] ?? ''])));
   }
 }
 
@@ -127,6 +138,11 @@ export class SheetStore implements Store {
 
   savePractice(p: Practice, bookerName?: string) {
     this.t.practices.upsert((r) => r['練習ID'] === p.id, practiceToRow(p, bookerName));
+  }
+
+  deletePractice(id: string) {
+    this.t.attendance.delete((r) => r['練習ID'] === id);
+    this.t.practices.delete((r) => r['練習ID'] === id);
   }
 
   attendance(practiceId?: string): Attendance[] {

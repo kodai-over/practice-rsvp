@@ -7,6 +7,8 @@ export interface Store {
   practices(): Practice[];
   getPractice(id: string): Practice | null;
   savePractice(p: Practice, bookerName?: string): void;
+  /** 練習と、その出欠をまとめて消す */
+  deletePractice(id: string): void;
   attendance(practiceId?: string): Attendance[];
   saveAttendance(a: Attendance): void;
   deleteAttendance(practiceId: string, participant: string): void;
@@ -28,6 +30,8 @@ export interface LineApi {
   groupMemberProfile(groupId: string, userId: string): { displayName: string } | null;
   groupSummary(groupId: string): { groupName: string } | null;
   content(messageId: string): Image;
+  /** 個別トークに「入力中…」の表示を出す（読み取りに時間がかかるとき） */
+  showLoading(userId: string, seconds: number): void;
 }
 
 export interface Image {

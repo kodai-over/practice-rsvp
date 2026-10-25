@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { addDays, defaultFee, labelDate, toJstDate, yen, type DraftItemKind, type NewPracticeInput, type Reservation } from '@pb/shared';
 import { api } from '../api';
 import { RoomInfo, RoomSelect, StudioSelect } from '../components/StudioRoom';
-import { Spinner, TopBar, go, useApp, useRunner } from '../ui';
+import { BusyOverlay, Spinner, TopBar, go, useApp, useRunner } from '../ui';
 
 interface FormRow {
   key: number;
@@ -80,7 +80,8 @@ async function shrink(file: File): Promise<{ mimeType: string; data: string }> {
 }
 
 export function RegisterPage({ draftId }: { draftId: string | null }) {
-  const { me, toast, reloadPractices } = useApp();
+  const { me, toast, setPractices } = useApp();
+  const [phase, setPhase] = useState<null | 'reading' | 'saving'>(null);
   const [rows, setRows] = useState<FormRow[]>(() => [emptyRow({ date: addDays(toJstDate(new Date()), 7) })]);
   // 登録がメイン。グループへの募集は、選んだときだけ
   const [groups, setGroups] = useState<string[]>([]);
@@ -106,7 +107,9 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
 
   /** スクショか文章から読み取って、入力欄を置き換える */
   const parse = async (params: { images?: { mimeType: string; data: string }[]; text?: string }) => {
+    setPhase('reading');
     const res = await run(() => api('parseReservations', params));
+    setPhase(null);
     if (!res) return false;
     const next = [...res.items.map((i) => fromReservation(i.reservation, i.kind)), ...res.incomplete.map((r) => fromReservation(r, 'incomplete'))];
     const past = res.pastCount ? `（過去の予約${res.pastCount}件は除きました）` : '';
@@ -121,8 +124,10 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
 
   const onFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    setPhase('reading');
     const images = await run(() => Promise.all([...files].slice(0, 5).map(shrink)));
     if (images) await parse({ images });
+    else setPhase(null);
   };
 
   const onText = async () => {
@@ -144,9 +149,11 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         memo: r.memo,
       }));
     if (items.length === 0) return toast('登録する練習がありません', true);
+    setPhase('saving');
     const res = await run(() => api('createPractices', { items, groups, draftId: draftId ?? undefined }));
+    setPhase(null);
     if (!res) return;
-    reloadPractices();
+    if (res.practices) setPractices(res.practices, true); // 一覧を取り直さずにすぐ反映
     const parts = [
       res.created.length && (groups.length ? `${res.created.length}件を登録して募集しました` : `${res.created.length}件を登録しました`),
       res.extended.length && `${res.extended.length}件を延長しました`,
@@ -159,6 +166,8 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
   return (
     <>
       <TopBar title="練習を登録" back />
+      {phase === 'reading' && <BusyOverlay message="予約内容を読み取っています…" note="10〜30秒ほどかかることがあります" />}
+      {phase === 'saving' && <BusyOverlay message={groups.length ? '登録して募集を送っています…' : '登録しています…'} />}
 
       <label class="dropzone">
         <input type="file" accept="image/*" multiple onChange={(e) => onFiles(e.currentTarget.files)} disabled={busy} />

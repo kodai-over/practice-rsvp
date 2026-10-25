@@ -79,14 +79,20 @@ function App() {
     });
   }, []);
 
-  const setPractices = (list: PracticeView[]) => setPracticesState((cur) => ({ list, at: cur?.at || Date.now() }));
+  const setPractices = (list: PracticeView[], fresh = false) => setPracticesState((cur) => ({ list, at: fresh ? Date.now() : cur?.at || Date.now() }));
+  const updatePractice = (v: PracticeView) =>
+    setPracticesState((cur) => {
+      if (!cur) return cur;
+      const has = cur.list.some((x) => x.practice.id === v.practice.id);
+      return { ...cur, list: has ? cur.list.map((x) => (x.practice.id === v.practice.id ? v : x)) : [...cur.list, v] };
+    });
 
   return (
     <div class="app">
       {error ? (
         <div class="empty">{error}</div>
       ) : me ? (
-        <AppContext.Provider value={{ me, setMe, toast, practices: practices?.list ?? null, practicesAt: practices?.at ?? 0, setPractices, reloadPractices: () => setPracticesState((cur) => (cur ? { ...cur, at: 1 } : cur)) }}>
+        <AppContext.Provider value={{ me, setMe, toast, practices: practices?.list ?? null, practicesAt: practices?.at ?? 0, setPractices, updatePractice }}>
           <Router />
         </AppContext.Provider>
       ) : (

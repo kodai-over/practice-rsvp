@@ -23,6 +23,10 @@ export class MemoryStore implements Store {
     if (i >= 0) this.p[i] = clone(p);
     else this.p.push(clone(p));
   }
+  deletePractice(id: string) {
+    this.p = this.p.filter((x) => x.id !== id);
+    this.a = this.a.filter((x) => x.practiceId !== id);
+  }
   attendance(practiceId?: string) {
     return clone(this.a.filter((x) => !practiceId || x.practiceId === practiceId));
   }

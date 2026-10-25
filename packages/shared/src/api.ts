@@ -31,6 +31,8 @@ export interface PracticeView {
   bookerName: string;
   groupNames: string[];
   going: AttendeeView[];
+  /** 保留（まだ決めていない） */
+  maybe: AttendeeView[];
   notGoing: AttendeeView[];
   goingCount: number;
   perPerson: number | null;
@@ -74,6 +76,8 @@ export interface CreateResult {
   created: string[];
   extended: string[];
   skipped: string[];
+  /** 登録後の練習一覧（アプリが取り直さずに表示を更新できるように） */
+  practices?: PracticeView[];
 }
 
 export type PracticePatch = Partial<Pick<Practice, 'start' | 'end' | 'room' | 'fee' | 'max' | 'min' | 'memo' | 'feeOverride'>>;
@@ -100,6 +104,8 @@ export interface ApiActions {
   createPractices: { params: { items: NewPracticeInput[]; groups: string[]; draftId?: string }; result: CreateResult };
   updatePractice: { params: { id: string; patch: PracticePatch }; result: PracticeView };
   cancelPractice: { params: { id: string }; result: PracticeView };
+  /** 登録ミスの取り消し。まだ募集を流していない練習だけ消せる。結果は消したあとの一覧 */
+  deletePractice: { params: { id: string }; result: PracticeView[] };
   /** 登録済みの練習の募集を、まだ送っていないグループに流す */
   recruitPractice: { params: { id: string; groups: string[] }; result: PracticeView };
   setDisplayName: { params: { name: string }; result: Member };

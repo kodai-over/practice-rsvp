@@ -239,6 +239,46 @@ describe('出欠', () => {
     const draftId = [...t.kv.data.keys()][0].replace('draft:', '');
     handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}&r=1`)] });
     t.line.replies = [];
+    // 登録者の自動「行く」は別のテストで確かめるので、ここでは出欠を空にしておく
+    t.store.a = [];
+  });
+
+  it('登録した人は自動で「行く」になる', () => {
+    const t2 = setup();
+    t2.reader.result = [reservation];
+    handleWebhook(t2.ctx, { events: [imageEvent(BOOKER)] });
+    handleWebhook(t2.ctx, { events: [postback(BOOKER, `a=confirm&d=${[...t2.kv.data.keys()][0].replace('draft:', '')}`)] });
+    expect(t2.store.a).toMatchObject([{ practiceId: PID, participant: BOOKER, answer: '行く', kind: 'メンバー' }]);
+    expect(t2.line.loadings).toEqual([BOOKER]); // 読み取り中は「入力中…」を出す
+  });
+
+  it('「保留」も選べる。人数（割り勘・上限）には数えない', () => {
+    t.store.p[0].max = 1;
+    handleWebhook(t.ctx, { events: [postback('U1', `a=rsvp&p=${encodeURIComponent(PID)}&v=2`, G1)] });
+    expect(t.store.a).toMatchObject([{ participant: 'U1', answer: '保留' }]);
+    const v = handleApi(t.ctx, { userId: 'U2', name: 'に' }, 'rsvp', { id: PID, answer: '行く' }) as any;
+    expect(v.goingCount).toBe(1);
+    expect(v.maybe.map((a: any) => a.participant)).toEqual(['U1']);
+    expect(t.store.p[0].status).toBe('満員');
+    expect(() => handleApi(t.ctx, { userId: 'U2' }, 'rsvp', { id: PID, answer: 'たぶん' })).toThrow('回答が不正');
+  });
+
+  it('まだ募集していない練習は、登録した本人と管理者だけ削除できる', () => {
+    const item = { ...reservation, date: '2026-10-30', max: null, min: null, memo: '' };
+    const { created } = handleApi(t.ctx, { userId: 'U9', name: 'きゅう' }, 'createPractices', { items: [item], groups: [] }) as any;
+    expect(() => handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'deletePractice', { id: created[0] })).toThrow('予約者か管理者');
+    const list = handleApi(t.ctx, { userId: 'U9' }, 'deletePractice', { id: created[0] }) as any[];
+    expect(list.map((v) => v.practice.id)).not.toContain(created[0]);
+    expect(t.store.a.filter((a) => a.practiceId === created[0])).toEqual([]);
+    // 募集を流した練習は削除できない（中止で知らせる）
+    expect(() => handleApi(t.ctx, { userId: BOOKER }, 'deletePractice', { id: PID })).toThrow('中止');
+  });
+
+  it('アプリから登録すると、取り直さなくてよいよう登録後の一覧も返す', () => {
+    const item = { ...reservation, date: '2026-10-31', max: null, min: null, memo: '' };
+    const res = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [] }) as any;
+    expect(res.practices.map((v: any) => v.practice.id)).toContain(res.created[0]);
+    expect(res.practices.find((v: any) => v.practice.id === res.created[0]).myAnswer).toBe('行く');
   });
 
   it('ボタンで記録し、知らない人はメンバー登録。成功時は返信しない', () => {
@@ -373,7 +413,7 @@ describe('キャンセル期限前警告と終了', () => {
     hourlyJob(t.ctx);
     expect(t.line.pushes).toHaveLength(1);
     expect(t.line.pushes[0].to).toBe(BOOKER);
-    expect(JSON.stringify(t.line.pushes[0])).toContain('現在0人です（最低人数3人）');
+    expect(JSON.stringify(t.line.pushes[0])).toContain('現在1人です（最低人数3人）'); // 登録者が自動で「行く」
     hourlyJob(t.ctx);
     expect(t.line.pushes).toHaveLength(1);
 

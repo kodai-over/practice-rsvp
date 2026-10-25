@@ -179,6 +179,17 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
     }
     for (const p of created) {
       ctx.store.savePractice(p, booker.name);
+      // 登録した人は自動で「行く」にする
+      ctx.store.saveAttendance({
+        practiceId: p.id,
+        participant: booker.userId,
+        name: booker.name,
+        kind: 'メンバー',
+        via: 'アプリ',
+        addedBy: booker.userId,
+        answer: '行く',
+        updatedAt: ctx.now().toISOString(),
+      });
       result.created.push(p.id);
     }
   });

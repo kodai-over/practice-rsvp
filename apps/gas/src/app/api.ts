@@ -9,6 +9,7 @@ import {
   googleCalendarUrl,
   isActive,
   isAdmin,
+  isAnswer,
   minutes,
   normalizeTime,
   perPersonFee,
@@ -60,6 +61,7 @@ export function practiceView(ctx: Ctx, p: Practice, me: Member | null, att?: Att
     canRemove: canRemoveAttendance(me, p, a),
   });
   const going = mine.filter((a) => a.answer === '行く').map(toView);
+  const maybe = mine.filter((a) => a.answer === '保留').map(toView);
   const notGoing = mine.filter((a) => a.answer === '行かない').map(toView);
   const canEdit = canEditPractice(me, p);
   const { joinKey, ...rest } = p;
@@ -69,6 +71,7 @@ export function practiceView(ctx: Ctx, p: Practice, me: Member | null, att?: Att
     bookerName: byId.get(p.booker)?.name ?? '（不明）',
     groupNames: p.groups.map((g) => settings!.groups.find((x) => x.id === g)?.name ?? '（退出したグループ）'),
     going,
+    maybe,
     notGoing,
     goingCount: going.length,
     perPerson: perPersonFee(p.fee, going.length, settings.roundUnit, p.feeOverride),
@@ -151,7 +154,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
   },
 
   rsvp(ctx, me, { id, answer }) {
-    if (answer !== '行く' && answer !== '行かない') throw new UserError('回答が不正です');
+    if (!isAnswer(answer)) throw new UserError('回答が不正です');
     const res = recordAnswer(ctx, id, { participant: me.userId, name: me.name, kind: 'メンバー', via: 'アプリ', addedBy: me.userId }, answer);
     if (!res.ok) throw new UserError(res.reason);
     return view(ctx, id, me);
@@ -221,7 +224,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
   createPractices(ctx, me, { items, groups, draftId }) {
     const result = createPractices(ctx, me, items ?? [], groups ?? []);
     if (draftId) removeDraft(ctx, draftId);
-    return result;
+    return { ...result, practices: handlers.listPractices(ctx, me, {}) };
   },
 
   updatePractice(ctx, me, { id, patch }) {
@@ -264,6 +267,16 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       }
     }
     return view(ctx, id, me);
+  },
+
+  deletePractice(ctx, me, { id }) {
+    ctx.withLock(() => {
+      const p = getPracticeOrThrow(ctx, id);
+      requireEditable(me, p);
+      if (p.groups.length > 0) throw new UserError('募集を流した練習は削除できません。「中止にする」でグループに知らせてください');
+      ctx.store.deletePractice(id);
+    });
+    return handlers.listPractices(ctx, me, {});
   },
 
   recruitPractice(ctx, me, { id, groups }) {

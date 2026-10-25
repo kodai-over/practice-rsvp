@@ -35,9 +35,10 @@ interface AppState {
   /** 練習の一覧。起動時にまとめて取ったもの（前回の表示のときは practicesAt が 0） */
   practices: PracticeView[] | null;
   practicesAt: number;
-  setPractices(list: PracticeView[]): void;
-  /** 次に一覧を開いたときに取り直させる */
-  reloadPractices(): void;
+  /** 一覧を置き換える。fresh なら「今取った最新」として扱う（一覧に戻っても取り直さない） */
+  setPractices(list: PracticeView[], fresh?: boolean): void;
+  /** 1件だけ差し替える（出欠や修正の結果をすぐ一覧に反映する） */
+  updatePractice(v: PracticeView): void;
 }
 
 export const AppContext = createContext<AppState>(null as unknown as AppState);
@@ -126,9 +127,33 @@ export function RsvpButtons({ v, onAnswer, busy }: { v: PracticeView; onAnswer: 
       <button class="yes" aria-pressed={v.myAnswer === '行く'} disabled={busy || closed || full} onClick={() => onAnswer('行く')}>
         {full ? '満員' : '行く'}
       </button>
+      <button class="maybe" aria-pressed={v.myAnswer === '保留'} disabled={busy || closed} onClick={() => onAnswer('保留')}>
+        保留
+      </button>
       <button class="no" aria-pressed={v.myAnswer === '行かない'} disabled={busy || closed} onClick={() => onAnswer('行かない')}>
         行かない
       </button>
+    </div>
+  );
+}
+
+/** 時間のかかる処理の間、画面を覆って操作できないようにし、経過秒数を見せる */
+export function BusyOverlay({ message, note }: { message: string; note?: string }) {
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSec((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div class="overlay" role="alertdialog" aria-busy="true" aria-label={message}>
+      <div class="overlay-box">
+        <div class="spinner" style={{ margin: '4px auto 12px' }} />
+        <strong>{message}</strong>
+        <div class="muted" style={{ marginTop: 6 }}>
+          {sec}秒経過{note ? `・${note}` : ''}
+        </div>
+        <div class="muted">終わるまでこのままお待ちください</div>
+      </div>
     </div>
   );
 }

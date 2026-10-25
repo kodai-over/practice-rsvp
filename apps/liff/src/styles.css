@@ -148,6 +148,10 @@ a {
 .practice[data-answer='行く'] {
   border-left-color: var(--green);
 }
+.practice[data-answer='保留'] {
+  border-left-color: var(--amber);
+  border-left-style: dashed;
+}
 .practice[data-answer='行かない'] {
   border-left-color: var(--line);
 }
@@ -272,6 +276,11 @@ a {
   background: var(--green);
   border-color: var(--green);
   color: #fff;
+}
+.rsvp button.maybe[aria-pressed='true'] {
+  background: var(--amber-soft);
+  border-color: var(--amber);
+  color: var(--amber);
 }
 .rsvp button.no[aria-pressed='true'] {
   background: var(--chip);
@@ -492,6 +501,25 @@ textarea:focus {
 }
 .toast.error {
   background: var(--red);
+}
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 45%);
+}
+.overlay-box {
+  width: 100%;
+  max-width: 300px;
+  padding: 20px 16px;
+  border-radius: var(--radius);
+  background: var(--card);
+  text-align: center;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
 }
 .spinner {
   width: 28px;

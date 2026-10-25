@@ -47,6 +47,12 @@ export class LineClient implements LineApi {
     return this.json<{ groupName: string }>(`${API}/group/${groupId}/summary`);
   }
 
+  showLoading(userId: string, seconds: number) {
+    // 送信数には数えられない。5〜60秒、5秒刻み
+    const s = Math.min(60, Math.max(5, Math.round(seconds / 5) * 5));
+    this.fetch('post', `${API}/chat/loading/start`, { chatId: userId, loadingSeconds: s });
+  }
+
   content(messageId: string): Image {
     const res = this.fetch('get', `${DATA_API}/message/${messageId}/content`);
     if (!res) throw new Error('画像を取得できませんでした');

@@ -24,6 +24,10 @@ export class FakeLine implements LineApi {
   groupSummary(groupId: string) {
     return { groupName: `名前-${groupId}` };
   }
+  loadings: string[] = [];
+  showLoading(userId: string) {
+    this.loadings.push(userId);
+  }
   content(messageId: string): Image {
     return { mimeType: 'image/jpeg', data: messageId };
   }
