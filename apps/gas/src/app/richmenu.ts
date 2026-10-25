@@ -5,9 +5,9 @@ export const RICH_MENU_SIZE = { width: 2500, height: 843 };
 
 /** 各ボタンで開くアプリの画面（LIFF の ?view=） */
 export const RICH_MENU_VIEWS = [
-  { view: 'register', label: '練習を登録' },
-  { view: 'recruit', label: '募集する' },
-  { view: 'mine', label: '予定を見る' },
+  { view: 'register', label: '登録' },
+  { view: 'recruit', label: '募集' },
+  { view: 'mine', label: '予定' },
   { view: 'feedback', label: '要望' },
 ] as const;
 
