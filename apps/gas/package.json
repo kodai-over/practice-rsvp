@@ -1,0 +1,10 @@
+{
+  "name": "@pb/gas",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "push": "node build.mjs && clasp push -f",
+    "deploy": "node build.mjs && clasp push -f && clasp redeploy \"$GAS_DEPLOYMENT_ID\" -d update"
+  }
+}
