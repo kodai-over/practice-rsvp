@@ -1,21 +1,18 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { ComponentChildren } from 'preact';
-import { roomInfo, yen, type Answer, type AttendeeView, type PracticePatch, type PracticeView } from '@pb/shared';
+import { roomInfo, yen, type Answer, type PracticePatch, type PracticeView } from '@pb/shared';
 import { api } from '../api';
 import { RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';
-import { Avatar, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, go, useApp, useRunner } from '../ui';
+import { Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, go, useApp, useRunner } from '../ui';
 
-export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'recruit' | null }) {
-  const { me, toast, practices, updatePractice, setPractices } = useApp();
+/** 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる） */
+export function usePractice(id: string) {
+  const { toast, practices, updatePractice } = useApp();
   const fromList = () => practices?.find((x) => x.practice.id === id) ?? null;
   const [v, setV] = useState<PracticeView | null>(fromList);
   const [loading, setLoading] = useState(true);
   const [run, busy] = useRunner();
-  const calRef = useRef<HTMLDivElement>(null);
-  const recruitRef = useRef<HTMLDivElement>(null);
 
-  // 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる）
   useEffect(() => {
     setV(fromList());
     setLoading(true);
@@ -28,14 +25,6 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
       .finally(() => setLoading(false));
   }, [id]);
 
-  useEffect(() => {
-    const target = focus === 'calendar' ? calRef : focus === 'recruit' ? recruitRef : null;
-    if (v && target) target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [v != null, focus]);
-
-  if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty"><div class="empty-mark">—</div>練習が見つかりません</div>}</>;
-
-  const p = v.practice;
   const update = async (fn: () => Promise<PracticeView>, done?: string) => {
     const r = await run(fn, done);
     if (r) {
@@ -44,40 +33,51 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
     }
     return r;
   };
+  return { v, loading, run, busy, update };
+}
 
-  const remove = (a: AttendeeView) => update(() => api('removeAttendance', { id, participant: a.participant }), '取り消しました');
-  const info = roomInfo(me.settings.studios, p.studio, p.room);
+/** 練習のパス。日時・場所・金額・人数 */
+export function PracticePass({ v }: { v: PracticeView }) {
+  const { me } = useApp();
+  const p = v.practice;
+  return (
+    <Pass
+      date={p.date}
+      status={p.status}
+      fields={[
+        { label: 'TIME', value: `${p.start}–${p.end}`, wide: true },
+        { label: 'STUDIO', value: p.studio, jp: true, wide: !p.room },
+        ...(p.room ? [{ label: 'ROOM', value: p.room, note: roomInfo(me.settings.studios, p.studio, p.room), jp: true }] : []),
+        { label: 'PER PERSON', value: v.perPerson != null ? yen(v.perPerson) : '—', note: p.feeOverride ? '調整済み' : null },
+        { label: 'TOTAL', value: yen(p.fee) },
+        { label: 'GOING', value: <>{v.goingCount}{p.max ? <small class="of">/{p.max}</small> : null}</>, note: p.min ? `最低 ${p.min}人` : null },
+        { label: 'HOST', value: v.bookerName, jp: true },
+        ...(p.memo ? [{ label: 'MEMO', value: p.memo, jp: true, wide: true }] : []),
+      ]}
+    />
+  );
+}
+
+/** 練習の画面。出欠・カレンダー・（予約者と管理者は）編集だけ */
+export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null }) {
+  const { setPractices } = useApp();
+  const { v, loading, run, busy, update } = usePractice(id);
+  const calRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (v && focus === 'calendar') calRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [v != null, focus]);
+
+  if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
+  const p = v.practice;
 
   return (
     <>
-      <TopBar back>
-        {loading && <Syncing />}
-      </TopBar>
+      <TopBar back>{loading && <Syncing />}</TopBar>
 
-      <Pass
-        id={p.id}
-        date={p.date}
-        status={p.status}
-        fields={[
-          { label: 'TIME', value: `${p.start}–${p.end}`, wide: true },
-          { label: 'STUDIO', value: p.studio, jp: true, wide: !p.room },
-          ...(p.room ? [{ label: 'ROOM', value: p.room, note: info, jp: true }] : []),
-          { label: 'PER PERSON', value: v.perPerson != null ? yen(v.perPerson) : '—', note: p.feeOverride ? '調整済み' : null },
-          { label: 'TOTAL', value: yen(p.fee) },
-          { label: 'GOING', value: <>{v.goingCount}{p.max ? <small class="of">/{p.max}</small> : null}</>, note: p.min ? `最低 ${p.min}人` : null },
-          { label: 'HOST', value: v.bookerName, jp: true },
-        ]}
-      />
+      <PracticePass v={v} />
 
       <RsvpButtons solo value={v.myAnswer} status={p.status} busy={busy} onAnswer={(a: Answer) => update(() => api('rsvp', { id, answer: a }))} />
-
-      <People mark="○" label="行く" list={v.going} onRemove={remove}>
-        {p.status !== '中止' && <GuestForm onAdd={(name) => update(() => api('addGuest', { id, name }), `${name}さんを追加しました`)} busy={busy} />}
-      </People>
-      {v.maybe.length > 0 && <People mark="△" label="保留" list={v.maybe} onRemove={remove} dim />}
-      {v.notGoing.length > 0 && <People mark="✕" label="行かない" list={v.notGoing} onRemove={remove} dim />}
-
-      <Memo v={v} busy={busy} onAppend={(text) => update(() => api('appendMemo', { id, text }), 'メモを追加しました')} />
 
       <div class="sec-head" ref={calRef}>
         <Icon name="calendar" size={18} />
@@ -91,13 +91,6 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
           iPhone
         </button>
       </div>
-
-      <div ref={recruitRef} />
-      {v.canEdit && (p.status === '募集中' || p.status === '満員') && (
-        <RecruitForm v={v} busy={busy} onSend={(groups) => update(() => api('recruitPractice', { id, groups }), 'グループに募集を送りました')} />
-      )}
-
-      {v.joinUrl && <JoinLink url={v.joinUrl} />}
 
       {v.canEdit && (
         <EditForm
@@ -114,156 +107,6 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
         />
       )}
     </>
-  );
-}
-
-function People({ mark, label, list, onRemove, dim, children }: { mark: string; label: string; list: AttendeeView[]; onRemove: (a: AttendeeView) => void; dim?: boolean; children?: ComponentChildren }) {
-  return (
-    <section class={dim ? 'dim' : undefined}>
-      <div class="sec-head" aria-label={`${label} ${list.length}人`}>
-        <span class="sec-mark" aria-hidden="true">{mark}</span>
-        <span class="n" aria-hidden="true">{list.length}</span>
-      </div>
-      <div class="people">
-        {list.map((a) => (
-          <span
-            class="person"
-            title={a.kind === 'ゲスト' ? `ゲスト${a.addedByName ? `（${a.addedByName}さんが追加）` : a.via === '参加リンク' ? '（参加リンク）' : ''}` : undefined}
-          >
-            <Avatar name={a.name} guest={a.kind === 'ゲスト'} />
-            <span>{a.name}</span>
-            {a.canRemove && (
-              <button class="x" aria-label={`${a.name}さんの出欠を取り消す`} onClick={() => confirm(`${a.name}さんの出欠を取り消しますか？`) && onRemove(a)}>
-                <Icon name="x" size={14} />
-              </button>
-            )}
-          </span>
-        ))}
-        {list.length === 0 && <span class="muted">—</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function GuestForm({ onAdd, busy }: { onAdd: (name: string) => Promise<unknown>; busy: boolean }) {
-  const [name, setName] = useState('');
-  return (
-    <form
-      class="inline-form"
-      style={{ marginTop: 10 }}
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (name.trim() && (await onAdd(name.trim()))) setName('');
-      }}
-    >
-      <input type="text" placeholder="ゲストを追加" aria-label="ゲストの名前" value={name} onInput={(e) => setName(e.currentTarget.value)} maxLength={30} />
-      <button class="round-btn" aria-label="ゲストを追加" disabled={busy || !name.trim()}>
-        <Icon name="plus" />
-      </button>
-    </form>
-  );
-}
-
-function Memo({ v, onAppend, busy }: { v: PracticeView; onAppend: (t: string) => Promise<unknown>; busy: boolean }) {
-  const [text, setText] = useState('');
-  return (
-    <section>
-      <div class="sec-head">
-        <Icon name="note" size={18} />
-        メモ
-      </div>
-      {v.practice.memo && (
-        <div class="card memo" style={{ marginBottom: 10 }}>
-          {v.practice.memo}
-        </div>
-      )}
-      <form
-        class="inline-form"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (text.trim() && (await onAppend(text.trim()))) setText('');
-        }}
-      >
-        <input type="text" placeholder={v.practice.memo ? '追記する' : '例：ショーケースの通し'} aria-label="メモを追記" value={text} onInput={(e) => setText(e.currentTarget.value)} maxLength={300} />
-        <button class="round-btn" aria-label="メモを追記" disabled={busy || !text.trim()}>
-          <Icon name="plus" />
-        </button>
-      </form>
-    </section>
-  );
-}
-
-function RecruitForm({ v, onSend, busy }: { v: PracticeView; onSend: (groups: string[]) => Promise<unknown>; busy: boolean }) {
-  const { me } = useApp();
-  const [picked, setPicked] = useState<string[]>([]);
-  if (me.groups.length === 0) return null;
-  const sent = (gid: string) => v.practice.groups.includes(gid);
-  return (
-    <section>
-      <div class="sec-head">
-        <Icon name="send" size={18} />
-        募集
-      </div>
-      <div class="toggles">
-        {me.groups.map((g) =>
-          sent(g.id) ? (
-            <button class="toggle" disabled aria-label={`${g.name}（募集済み）`}>
-              <Icon name="check" size={16} />
-              {g.name}
-            </button>
-          ) : (
-            <button
-              class="toggle"
-              aria-pressed={picked.includes(g.id)}
-              onClick={() => setPicked(picked.includes(g.id) ? picked.filter((x) => x !== g.id) : [...picked, g.id])}
-            >
-              {g.name}
-            </button>
-          ),
-        )}
-      </div>
-      {me.groups.some((g) => !sent(g.id)) && (
-        <button
-          class="btn primary block"
-          style={{ marginTop: 12 }}
-          disabled={busy || picked.length === 0}
-          onClick={async () => {
-            if (await onSend(picked)) setPicked([]);
-          }}
-        >
-          <Icon name="send" size={18} />
-          {picked.length > 0 ? `${picked.length}グループに募集を送る` : '募集を送る'}
-        </button>
-      )}
-    </section>
-  );
-}
-
-function JoinLink({ url }: { url: string }) {
-  const { toast } = useApp();
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast('参加リンクをコピーしました');
-    } catch {
-      prompt('参加リンク', url);
-    }
-  };
-  return (
-    <section>
-      <div class="sec-head">
-        <Icon name="link" size={18} />
-        参加リンク
-        <span class="muted">LINEなしで出欠</span>
-      </div>
-      <div class="copy-row">
-        <code>{url.replace(/^https?:\/\//, '')}</code>
-        <button class="icon-btn" aria-label="参加リンクをコピー" onClick={copy}>
-          <Icon name="copy" size={20} />
-        </button>
-      </div>
-    </section>
   );
 }
 

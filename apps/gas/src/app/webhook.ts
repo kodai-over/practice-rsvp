@@ -262,7 +262,7 @@ function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string, rec
   }
   if (result.skipped.length) lines.push(`登録済みの予約${result.skipped.length}件は飛ばしました。`);
   if (result.created.length && !targetGroups.length) {
-    lines.push('', 'グループに募集するときは、アプリで練習を開いて「グループに募集」から送れます。', ctx.config.appUrl);
+    lines.push('', 'グループに募集するときは、アプリの「募集」で練習を開くと送れます。', ctx.config.appUrl);
   }
   safeReply(ctx, ev, [textMsg(lines.join('\n') || '登録する予約はありませんでした。')]);
 }

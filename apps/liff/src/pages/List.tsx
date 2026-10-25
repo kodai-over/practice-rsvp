@@ -70,8 +70,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
         <Spinner />
       ) : shown.length === 0 ? (
         <div class="empty">
-          <div class="empty-mark">{tab === 'todo' ? '○' : '—'}</div>
-          <div>{tab === 'todo' ? 'すべて回答済み' : tab === 'mine' ? '行く練習なし' : '練習なし'}</div>
+          <div>{tab === 'todo' ? '未定の練習はありません' : tab === 'mine' ? '行く練習はありません' : '練習はありません'}</div>
           {tab === 'all' && canRegister(me.member) && (
             <button class="btn primary" onClick={() => go('/register')}>
               <Icon name="plus" size={18} />

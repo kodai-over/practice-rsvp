@@ -232,7 +232,7 @@ a {
   position: relative;
   display: grid;
   grid-template-columns: 84px 1fr;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   border-radius: 14px;
   background: var(--paper);
   /* 半券と本体のあいだの切り込み */
@@ -251,7 +251,7 @@ a {
   box-sizing: border-box;
   display: block;
   min-width: 0;
-  padding: 14px 14px 12px 16px;
+  padding: 10px 14px 8px 16px;
   cursor: pointer;
 }
 .ticket-main:focus-visible,
@@ -273,7 +273,7 @@ a {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px 0;
+  padding: 10px 0;
   border-right: 1.5px dashed var(--faint);
   font-family: var(--mono);
   line-height: 1;
@@ -284,8 +284,8 @@ a {
   color: var(--sub);
 }
 .stub .d {
-  margin: 6px 0 7px;
-  font-size: 32px;
+  margin: 4px 0 5px;
+  font-size: 26px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -332,7 +332,7 @@ a {
   align-items: center;
   gap: 8px;
   font-family: var(--mono);
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -348,8 +348,8 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 12px;
-  min-height: 26px;
+  margin-top: 6px;
+  min-height: 22px;
 }
 .count {
   display: inline-flex;
@@ -366,7 +366,11 @@ a {
   font-weight: 400;
 }
 .fee {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
   margin-left: auto;
+  white-space: nowrap;
   font-family: var(--mono);
   font-size: 15px;
   font-weight: 600;
@@ -423,6 +427,9 @@ a {
   display: inline-flex;
 }
 .stack .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
   box-shadow: 0 0 0 2px var(--paper);
 }
 .stack .avatar + .avatar {
@@ -439,7 +446,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 48px;
+  min-height: 38px;
   border: 0;
   background: transparent;
   color: var(--faint);
@@ -451,10 +458,10 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1;
   transition: background 0.2s, color 0.2s, transform 0.2s;
@@ -474,14 +481,14 @@ a {
 /* チケットの外（詳細・参加リンク）では、大きな丸いボタン3つにする */
 .rsvp.solo {
   justify-content: center;
-  gap: 28px;
+  gap: 20px;
   padding: 6px 0 4px;
   border: 0;
 }
 .rsvp.solo button {
   flex: none;
-  width: 76px;
-  height: 76px;
+  width: 52px;
+  height: 52px;
   border: 1.5px solid var(--line);
   border-radius: 50%;
 }
@@ -491,7 +498,7 @@ a {
 .rsvp.solo .mark {
   width: auto;
   height: auto;
-  font-size: 30px;
+  font-size: 19px;
   background: transparent;
 }
 .rsvp.solo button[aria-checked='true'] {
@@ -575,24 +582,6 @@ a {
   font-size: 12px;
   color: var(--sub);
 }
-.pass-foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-.barcode {
-  flex: 1;
-  height: 22px;
-  fill: var(--ink);
-}
-.pass-foot code {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--sub);
-}
-
 /* ---------- 区切りと見出し ---------- */
 .sec-head {
   display: flex;
@@ -892,12 +881,6 @@ details[open] > summary.menu-row .icon:last-child {
   letter-spacing: 0.04em;
   text-align: center;
 }
-.empty-mark {
-  font-family: var(--mono);
-  font-size: 40px;
-  line-height: 1;
-  color: var(--faint);
-}
 .list {
   list-style: none;
   margin: 0;
@@ -1070,25 +1053,24 @@ details > summary {
 /* 登録画面の入口（スクショ・文章） */
 .sources {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 .source {
   position: relative;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 18px;
-  min-height: 112px;
-  padding: 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 0 12px;
   border: 0;
   border-radius: 16px;
   background: var(--paper);
   color: var(--ink);
   font-size: 15px;
   font-weight: 600;
-  text-align: left;
   cursor: pointer;
 }
 .source.primary {
@@ -1104,13 +1086,6 @@ details > summary {
   opacity: 0;
   width: 100%;
   cursor: pointer;
-}
-.source small {
-  display: block;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 400;
-  opacity: 0.6;
 }
 .draft {
   position: relative;
@@ -1207,12 +1182,6 @@ details > summary {
   text-align: center;
   box-shadow: 0 16px 40px rgb(0 0 0 / 14%);
 }
-.overlay-box .sec {
-  margin: 10px 0 4px;
-  font-family: var(--mono);
-  font-size: 28px;
-  font-weight: 600;
-}
 .spinner {
   width: 26px;
   height: 26px;
@@ -1262,4 +1231,52 @@ details > summary {
   font-size: 17px;
   font-weight: 700;
   line-height: 1;
+}
+
+/* 戻る：左上の丸いボタン */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-left: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 14%);
+}
+.back-btn .icon {
+  margin-left: -2px;
+}
+.back-btn:active {
+  transform: scale(0.94);
+}
+
+/* 登録画面：予約を追加（点線の行）と、登録ボタン */
+.add-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 48px;
+  border: 1.5px dashed var(--faint);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--sub);
+  font-size: 14px;
+  font-weight: 600;
+}
+.btn.submit {
+  margin-top: 24px;
+}
+
+.feedback-form textarea {
+  margin-bottom: 12px;
+}
+.feedback-form .muted {
+  margin: 10px 0 0;
+  text-align: center;
 }

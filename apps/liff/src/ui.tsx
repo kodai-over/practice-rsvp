@@ -125,8 +125,8 @@ export function TopBar({ title, back, children }: { title?: string; back?: boole
   return (
     <header class="topbar">
       {back && (
-        <button class="icon-btn" aria-label="戻る" onClick={() => (history.length > 1 ? history.back() : go('/'))}>
-          <Icon name="back" />
+        <button class="back-btn" aria-label="戻る" onClick={() => (history.length > 1 ? history.back() : go('/'))}>
+          <Icon name="back" size={20} />
         </button>
       )}
       <h1>{title}</h1>
@@ -153,6 +153,7 @@ export function Tabs<K extends string>({ items, value, onChange }: { items: { ke
 export function NavBar() {
   const { me } = useApp();
   const { path } = useRoute();
+  // 練習の画面は「練習」、募集の画面（/recruit/:id）は「募集」を光らせる
   const here = path[0] === 'p' ? '' : (path[0] ?? '');
   const items: { to: string; key: string; icon: IconName; label: string }[] = [
     { to: '/', key: '', icon: 'ticket', label: '練習' },
@@ -260,35 +261,12 @@ export function AvatarStack({ names, max = 4 }: { names: { name: string; guest?:
   );
 }
 
-/** 練習IDから作る飾りのバーコード（同じ練習ならいつも同じ模様） */
-export function Barcode({ seed }: { seed: string }) {
-  let h = 2166136261;
-  const bars: number[] = [];
-  for (let i = 0; i < 56; i++) {
-    h ^= seed.charCodeAt(i % Math.max(1, seed.length)) + i;
-    h = Math.imul(h, 16777619) >>> 0;
-    bars.push(1 + (h % 3));
-  }
-  let x = 0;
-  return (
-    <svg class="barcode" viewBox={`0 0 ${bars.reduce((s, b) => s + b + 1.5, 0)} 20`} preserveAspectRatio="none" aria-hidden="true">
-      {bars.map((w, i) => {
-        const r = i % 2 === 0 ? <rect x={x} y="0" width={w} height="20" /> : null;
-        x += w + 1.5;
-        return r;
-      })}
-    </svg>
-  );
-}
-
 /** 練習のパス（詳細・参加リンクの画面の先頭）。fields は [ラベル, 値, 補足?, 横いっぱい?] */
 export function Pass({
-  id,
   date,
   status,
   fields,
 }: {
-  id: string;
   date: string;
   status: string;
   fields: { label: string; value: ComponentChildren; note?: string | null; wide?: boolean; jp?: boolean }[];
@@ -312,27 +290,17 @@ export function Pass({
           </div>
         ))}
       </div>
-      <div class="pass-foot">
-        <Barcode seed={id} />
-        <code>{date.replace(/-/g, '')}</code>
-      </div>
     </section>
   );
 }
 
-/** 時間のかかる処理の間、画面を覆って操作できないようにし、経過秒数を見せる */
+/** 時間のかかる処理の間、画面を覆って操作できないようにする */
 export function BusyOverlay({ message, note }: { message: string; note?: string }) {
-  const [sec, setSec] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setSec((x) => x + 1), 1000);
-    return () => clearInterval(t);
-  }, []);
   return (
     <div class="overlay" role="alertdialog" aria-busy="true" aria-label={message}>
       <div class="overlay-box">
         <div class="spinner" style={{ margin: '4px auto 14px' }} />
         <strong>{message}</strong>
-        <div class="sec">{String(sec).padStart(2, '0')}s</div>
         {note && <div class="muted">{note}</div>}
       </div>
     </div>

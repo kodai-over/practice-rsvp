@@ -6,6 +6,7 @@ import { initLiff } from './liff';
 import { DetailPage } from './pages/Detail';
 import { FeedbackPage } from './pages/Feedback';
 import { ListPage } from './pages/List';
+import { RecruitDetailPage } from './pages/RecruitDetail';
 import { RecruitListPage } from './pages/RecruitList';
 import { RegisterPage } from './pages/Register';
 import { AdminPage, SettingsPage } from './pages/Settings';
@@ -14,7 +15,8 @@ import { AppContext, NavBar, Spinner, useRoute, useToast } from './ui';
 
 function Router() {
   const { path, query } = useRoute();
-  if (path[0] === 'p' && path[1]) return <DetailPage id={path[1]} focus={query.get('cal') === '1' ? 'calendar' : query.get('recruit') === '1' ? 'recruit' : null} />;
+  if (path[0] === 'p' && path[1]) return <DetailPage id={path[1]} focus={query.get('cal') === '1' ? 'calendar' : null} />;
+  if (path[0] === 'recruit' && path[1]) return <RecruitDetailPage id={path[1]} />;
   if (path[0] === 'recruit') return <RecruitListPage />;
   if (path[0] === 'register') return <RegisterPage draftId={query.get('draft')} />;
   if (path[0] === 'settings') return <SettingsPage />;

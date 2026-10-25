@@ -105,7 +105,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
     });
   }, [draftId]);
 
-  if (loading) return <><TopBar title="登録" /><Spinner /></>;
+  if (loading) return <><TopBar title="スタジオ予約登録" /><Spinner /></>;
 
   /** スタジオ代が空欄か自動で入れたものなら、標準料金（曜日・時間帯ごとの料金表）で入れ直す */
   const autoFee = (r: FormRow): FormRow => {
@@ -186,25 +186,19 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
 
   return (
     <>
-      <TopBar title="登録" />
-      {phase === 'reading' && <BusyOverlay message="読み取り中" note="10〜30秒" />}
+      <TopBar title="スタジオ予約登録" />
+      {phase === 'reading' && <BusyOverlay message="読み取り中" />}
       {phase === 'saving' && <BusyOverlay message={groups.length ? '登録して募集中' : '登録中'} />}
 
       <div class="sources">
         <label class="source primary">
           <input type="file" accept="image/*" multiple onChange={(e) => onFiles(e.currentTarget.files)} disabled={busy} aria-label="予約画面のスクショから入力" />
-          <Icon name="camera" size={28} />
-          <span>
-            スクショから
-            <small>MAX 5</small>
-          </span>
+          <Icon name="camera" size={22} />
+          <span>スクショから</span>
         </label>
         <button class="source" aria-expanded={textOpen} onClick={() => setTextOpen(!textOpen)}>
-          <Icon name="text" size={28} />
-          <span>
-            文章から
-            <small>MAIL / TEXT</small>
-          </span>
+          <Icon name="text" size={22} />
+          <span>文章から</span>
         </button>
       </div>
 
@@ -224,7 +218,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
               <span class="grow">{r.date ? labelDate(r.date) : String(i + 1).padStart(2, '0')}</span>
               {r.kind && KIND_TAG[r.kind] && <span class={`tag ${KIND_TAG[r.kind].cls}`}>{KIND_TAG[r.kind].label}</span>}
               {rows.length > 1 && (
-                <button class="icon-btn" aria-label="この日を削除" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
+                <button class="icon-btn" aria-label="この予約を削除" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
                   <Icon name="x" size={18} />
                 </button>
               )}
@@ -286,9 +280,9 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         );
       })}
 
-      <button class="btn ghost block" style={{ marginTop: 4 }} onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), key: undefined, kind: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
+      <button class="add-row" onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), key: undefined, kind: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
         <Icon name="plus" size={18} />
-        日を追加
+        予約を追加
       </button>
 
       {me.groups.length > 0 && (
@@ -308,7 +302,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         </>
       )}
 
-      <button class="btn primary block" style={{ marginTop: 16 }} disabled={busy} onClick={submit}>
+      <button class="btn primary block submit" disabled={busy} onClick={submit}>
         {groups.length ? <><Icon name="send" size={18} />登録して募集</> : <><Icon name="check" size={18} />登録</>}
       </button>
     </>
