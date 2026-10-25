@@ -89,16 +89,6 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
       ) : (
         shown.map((v) => <PracticeCard key={v.practice.id} v={v} busy={false} onAnswer={(a) => answer(v.practice.id, a)} />)
       )}
-
-      <button class="card feedback-link" onClick={() => go('/feedback')}>
-        <span class="grow">
-          <strong>改善要望を送る</strong>
-          <span class="muted">こうなったら便利、ここが使いにくい、など</span>
-        </span>
-        <span class="chevron" aria-hidden="true">
-          ›
-        </span>
-      </button>
     </>
   );
 }

@@ -158,6 +158,17 @@ export function BusyOverlay({ message, note }: { message: string; note?: string 
   );
 }
 
+/** どの画面からでも改善要望を送れる、右下の小さなボタン（要望画面では出さない） */
+export function FeedbackFab() {
+  const { path } = useRoute();
+  if (path[0] === 'feedback') return null;
+  return (
+    <button class="feedback-fab" onClick={() => go('/feedback')} aria-label="改善要望を送る">
+      💬 要望
+    </button>
+  );
+}
+
 export const feeLabel = (v: PracticeView) => (v.perPerson != null ? `1人 ${yen(v.perPerson)}` : `計 ${yen(v.practice.fee)}`);
 
 export const place = (p: { studio: string; room: string }) => `${p.studio}${p.room ? ' ' + p.room : ''}`;
