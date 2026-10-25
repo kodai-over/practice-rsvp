@@ -1,0 +1,27 @@
+{
+  "name": "practice-board",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/shared && tsc -p apps/gas && tsc -p apps/worker && tsc -p apps/liff",
+    "build": "npm run build -w @pb/gas && npm run build -w @pb/liff",
+    "dev:mock": "npm run dev:mock -w @pb/liff"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261024.1",
+    "@google/clasp": "^3.4.1",
+    "@preact/preset-vite": "^2.10.6",
+    "@types/google-apps-script": "^2.0.13",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.152.0"
+  }
+}

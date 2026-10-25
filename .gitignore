@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.wrangler/
+.clasp.json
+.env*
+!.env.example
+.DS_Store
