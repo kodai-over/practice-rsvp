@@ -298,10 +298,6 @@ export function practiceListMessage(items: ListItem[], appUrl: string): LineMess
 
 // ---------------------------------------------------------------- テキスト通知
 
-export function cancelText(p: Practice): string {
-  return `【中止】${practiceSummary(p)} の練習は中止になりました。`;
-}
-
 export function warningText(p: Practice, going: number, min: number, appUrl: string): string {
   return [
     `${practiceSummary(p)} の参加は現在${going}人です（最低人数${min}人）。`,

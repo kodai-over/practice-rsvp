@@ -4,7 +4,6 @@ import {
   canEditPractice,
   canRegister,
   canRemoveAttendance,
-  cancelText,
   classifyReservations,
   googleCalendarUrl,
   isActive,
@@ -100,17 +99,6 @@ function feedbackList(ctx: Ctx, me: Member): FeedbackView[] {
       mine: f.userId === me.userId,
       canDelete: canDeleteFeedback(me, f),
     }));
-}
-
-/** 募集を流した各グループに中止を知らせる */
-function notifyCancel(ctx: Ctx, p: Practice): void {
-  for (const g of p.groups) {
-    try {
-      ctx.line.push(g, [{ type: 'text', text: cancelText(p) }]);
-    } catch (e) {
-      ctx.log('cancel push failed', g, e);
-    }
-  }
 }
 
 const memberNameOf = (ctx: Ctx, userId: string) => ctx.store.getMember(userId)?.name ?? '（不明）';
@@ -259,30 +247,13 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     return view(ctx, id, me);
   },
 
-  cancelPractice(ctx, me, { id }) {
-    let cancelled: Practice | null = null;
-    ctx.withLock(() => {
-      const p = getPracticeOrThrow(ctx, id);
-      requireEditable(me, p);
-      if (p.status === '中止') return;
-      cancelled = { ...p, status: '中止' };
-      ctx.store.savePractice(cancelled);
-    });
-    if (cancelled) notifyCancel(ctx, cancelled);
-    return view(ctx, id, me);
-  },
-
+  /** 練習をやめるときは削除する（中止として残さない）。グループへの通知は送らない */
   deletePractice(ctx, me, { id }) {
-    let deleted: Practice | null = null;
     ctx.withLock(() => {
       const p = getPracticeOrThrow(ctx, id);
       requireEditable(me, p);
       ctx.store.deletePractice(id);
-      deleted = p;
     });
-    // 募集を流していたグループには中止を知らせる（すでに中止を知らせた練習・終わった練習には送らない）
-    const p = deleted as Practice | null;
-    if (p && isActive(p) && p.date >= toJstDate(ctx.now())) notifyCancel(ctx, p);
     return handlers.listPractices(ctx, me, {});
   },
 

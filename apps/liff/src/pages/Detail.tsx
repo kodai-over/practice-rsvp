@@ -104,7 +104,6 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
           v={v}
           busy={busy}
           onSave={(patch) => update(() => api('updatePractice', { id, patch }), '保存しました')}
-          onCancel={() => update(() => api('cancelPractice', { id }), '中止にしました')}
           onDelete={async () => {
             const list = await run(() => api('deletePractice', { id }), '削除しました');
             if (list) {
@@ -271,13 +270,11 @@ function JoinLink({ url }: { url: string }) {
 function EditForm({
   v,
   onSave,
-  onCancel,
   onDelete,
   busy,
 }: {
   v: PracticeView;
   onSave: (p: PracticePatch) => Promise<unknown>;
-  onCancel: () => Promise<unknown>;
   onDelete: () => Promise<unknown>;
   busy: boolean;
 }) {
@@ -351,30 +348,12 @@ function EditForm({
         >
           保存
         </button>
-        {p.status !== '中止' && (
-          <button
-            class="btn danger block"
-            style={{ marginTop: 8 }}
-            disabled={busy}
-            onClick={async () => {
-              if (confirm(v.groupNames.length ? `この練習を中止にして、募集したグループ（${v.groupNames.join('、')}）に知らせますか？` : 'この練習を中止にしますか？')) {
-                if (await onCancel()) go('/');
-              }
-            }}
-          >
-            中止にする
-          </button>
-        )}
         <button
           class="btn danger block"
           style={{ marginTop: 8 }}
           disabled={busy}
           onClick={() => {
-            const notice =
-              v.groupNames.length > 0 && p.status !== '中止'
-                ? `\n募集を流したグループ（${v.groupNames.join('、')}）に中止の連絡が届きます。`
-                : '';
-            if (confirm(`この練習を削除しますか？出欠も消えます。${notice}`)) onDelete();
+            if (confirm('この練習を削除しますか？出欠も消えます。グループへの連絡は送られないので、必要ならグループで伝えてください。')) onDelete();
           }}
         >
           削除する

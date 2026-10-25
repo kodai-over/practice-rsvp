@@ -298,23 +298,14 @@ describe('出欠', () => {
     expect(t.line.pushes.filter((p) => JSON.stringify(p).includes('【中止】'))).toEqual([]);
   });
 
-  it('募集を流した練習を削除すると、各グループに中止を知らせる（中止済みなら二重に送らない）', () => {
+  it('募集を流した練習も削除でき、グループには何も送らない', () => {
     t.store.s.groups.push({ id: 'C2', name: 'チームB' });
     handleApi(t.ctx, { userId: BOOKER }, 'recruitPractice', { id: PID, groups: ['C2'] });
     const pushes = t.line.pushes.length;
     const list = handleApi(t.ctx, { userId: ADMIN }, 'deletePractice', { id: PID }) as any[];
     expect(list.map((v) => v.practice.id)).not.toContain(PID);
-    const sent = t.line.pushes.slice(pushes);
-    expect(sent.map((p) => p.to)).toEqual([G1, 'C2']);
-    expect(JSON.stringify(sent[0])).toContain('【中止】10/21(水) 19:00〜21:00');
-
-    // 中止にしてから削除した場合は、中止のときに知らせているので削除では送らない
-    const item = { ...reservation, date: '2026-10-30', max: null, min: null, memo: '' };
-    const { created } = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [G1] }) as any;
-    handleApi(t.ctx, { userId: BOOKER }, 'cancelPractice', { id: created[0] });
-    const afterCancel = t.line.pushes.length;
-    handleApi(t.ctx, { userId: BOOKER }, 'deletePractice', { id: created[0] });
-    expect(t.line.pushes).toHaveLength(afterCancel);
+    expect(t.line.pushes).toHaveLength(pushes);
+    expect(t.store.a.filter((a) => a.practiceId === PID)).toEqual([]);
   });
 
   it('アプリから登録すると、取り直さなくてよいよう登録後の一覧も返す', () => {
@@ -334,7 +325,7 @@ describe('出欠', () => {
     expect(t.store.a).toMatchObject([{ participant: 'Unew', answer: '行かない' }]);
   });
 
-  it('上限に達したら満員、中止なら断る', () => {
+  it('上限に達したら満員、（以前の）中止の練習なら断る', () => {
     t.store.p[0].max = 1;
     handleWebhook(t.ctx, { events: [postback('U1', `a=rsvp&p=${encodeURIComponent(PID)}&v=1`, G1)] });
     expect(t.store.p[0].status).toBe('満員');
@@ -343,9 +334,7 @@ describe('出欠', () => {
     handleWebhook(t.ctx, { events: [postback('U1', `a=rsvp&p=${encodeURIComponent(PID)}&v=0`, G1)] });
     expect(t.store.p[0].status).toBe('募集中');
 
-    handleApi(t.ctx, { userId: BOOKER }, 'cancelPractice', { id: PID });
-    expect(t.line.pushes.at(-1)?.to).toBe(G1);
-    expect(JSON.stringify(t.line.pushes.at(-1))).toContain('【中止】');
+    t.store.p[0].status = '中止';
     handleWebhook(t.ctx, { events: [postback('U2', `a=rsvp&p=${encodeURIComponent(PID)}&v=1`, G1)] });
     expect(t.line.lastReplyText()).toContain('中止になりました');
   });
@@ -369,8 +358,8 @@ describe('出欠', () => {
     expect(v.canEdit).toBe(false);
     expect(v.joinUrl).toBe(`https://pages.example/join.html?p=${encodeURIComponent(PID)}&k=uuid2`);
 
-    // 他人の練習は中止できない、追加していないゲストは消せない
-    expect(() => handleApi(t.ctx, { userId: 'U1' }, 'cancelPractice', { id: PID })).toThrow('予約者か管理者');
+    // 他人の練習は削除できない、追加していないゲストは消せない
+    expect(() => handleApi(t.ctx, { userId: 'U1' }, 'deletePractice', { id: PID })).toThrow('予約者か管理者');
     expect(() => handleApi(t.ctx, { userId: 'U3', name: 'さん' }, 'removeAttendance', { id: PID, participant: guest.participant })).toThrow();
     // 予約者は消せる、金額調整ができる
     handleApi(t.ctx, { userId: BOOKER }, 'removeAttendance', { id: PID, participant: guest.participant });

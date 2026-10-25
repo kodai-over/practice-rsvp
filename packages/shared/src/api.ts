@@ -104,7 +104,6 @@ export interface ApiActions {
   classify: { params: { reservations: Reservation[] }; result: DraftItem[] };
   createPractices: { params: { items: NewPracticeInput[]; groups: string[]; draftId?: string }; result: CreateResult };
   updatePractice: { params: { id: string; patch: PracticePatch }; result: PracticeView };
-  cancelPractice: { params: { id: string }; result: PracticeView };
   /** 練習を消す。募集を流したグループには中止を知らせる。結果は消したあとの一覧 */
   deletePractice: { params: { id: string }; result: PracticeView[] };
   /** 登録済みの練習の募集を、まだ送っていないグループに流す */
