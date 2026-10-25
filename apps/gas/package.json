@@ -5,6 +5,6 @@
   "scripts": {
     "build": "node build.mjs",
     "push": "node build.mjs && clasp push -f",
-    "deploy": "node build.mjs && clasp push -f && clasp redeploy \"$GAS_DEPLOYMENT_ID\" -d update"
+    "deploy": "node build.mjs && clasp push -f && clasp redeploy \"${GAS_DEPLOYMENT_ID:-AKfycbwZO4HlcsN0VwW1gqMwdXNYosCQ-XQIYmEZc8aX1WPaKJOFJ92GFQvYv4mRnzNfXMC2}\" -d update"
   }
 }
