@@ -263,15 +263,34 @@ describe('出欠', () => {
     expect(() => handleApi(t.ctx, { userId: 'U2' }, 'rsvp', { id: PID, answer: 'たぶん' })).toThrow('回答が不正');
   });
 
-  it('まだ募集していない練習は、登録した本人と管理者だけ削除できる', () => {
+  it('練習は、登録した本人と管理者だけ削除できる', () => {
     const item = { ...reservation, date: '2026-10-30', max: null, min: null, memo: '' };
     const { created } = handleApi(t.ctx, { userId: 'U9', name: 'きゅう' }, 'createPractices', { items: [item], groups: [] }) as any;
     expect(() => handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'deletePractice', { id: created[0] })).toThrow('予約者か管理者');
     const list = handleApi(t.ctx, { userId: 'U9' }, 'deletePractice', { id: created[0] }) as any[];
     expect(list.map((v) => v.practice.id)).not.toContain(created[0]);
     expect(t.store.a.filter((a) => a.practiceId === created[0])).toEqual([]);
-    // 募集を流した練習は削除できない（中止で知らせる）
-    expect(() => handleApi(t.ctx, { userId: BOOKER }, 'deletePractice', { id: PID })).toThrow('中止');
+    // 募集を流していない練習は、どのグループにも連絡しない
+    expect(t.line.pushes.filter((p) => JSON.stringify(p).includes('【中止】'))).toEqual([]);
+  });
+
+  it('募集を流した練習を削除すると、各グループに中止を知らせる（中止済みなら二重に送らない）', () => {
+    t.store.s.groups.push({ id: 'C2', name: 'チームB' });
+    handleApi(t.ctx, { userId: BOOKER }, 'recruitPractice', { id: PID, groups: ['C2'] });
+    const pushes = t.line.pushes.length;
+    const list = handleApi(t.ctx, { userId: ADMIN }, 'deletePractice', { id: PID }) as any[];
+    expect(list.map((v) => v.practice.id)).not.toContain(PID);
+    const sent = t.line.pushes.slice(pushes);
+    expect(sent.map((p) => p.to)).toEqual([G1, 'C2']);
+    expect(JSON.stringify(sent[0])).toContain('【中止】10/21(水) 19:00〜21:00');
+
+    // 中止にしてから削除した場合は、中止のときに知らせているので削除では送らない
+    const item = { ...reservation, date: '2026-10-30', max: null, min: null, memo: '' };
+    const { created } = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [G1] }) as any;
+    handleApi(t.ctx, { userId: BOOKER }, 'cancelPractice', { id: created[0] });
+    const afterCancel = t.line.pushes.length;
+    handleApi(t.ctx, { userId: BOOKER }, 'deletePractice', { id: created[0] });
+    expect(t.line.pushes).toHaveLength(afterCancel);
   });
 
   it('アプリから登録すると、取り直さなくてよいよう登録後の一覧も返す', () => {

@@ -345,7 +345,7 @@ function EditForm({
             style={{ marginTop: 8 }}
             disabled={busy}
             onClick={async () => {
-              if (confirm('この練習を中止にして、募集したグループに知らせますか？')) {
+              if (confirm(v.groupNames.length ? `この練習を中止にして、募集したグループ（${v.groupNames.join('、')}）に知らせますか？` : 'この練習を中止にしますか？')) {
                 if (await onCancel()) go('/');
               }
             }}
@@ -353,16 +353,20 @@ function EditForm({
             中止にする
           </button>
         )}
-        {p.groups.length === 0 && (
-          <button
-            class="btn danger block"
-            style={{ marginTop: 8 }}
-            disabled={busy}
-            onClick={() => confirm('この練習を削除しますか？（登録ミスの取り消し用。出欠も消えます）') && onDelete()}
-          >
-            削除する（まだ募集していない練習のみ）
-          </button>
-        )}
+        <button
+          class="btn danger block"
+          style={{ marginTop: 8 }}
+          disabled={busy}
+          onClick={() => {
+            const notice =
+              v.groupNames.length > 0 && p.status !== '中止'
+                ? `\n募集を流したグループ（${v.groupNames.join('、')}）に中止の連絡が届きます。`
+                : '';
+            if (confirm(`この練習を削除しますか？出欠も消えます。${notice}`)) onDelete();
+          }}
+        >
+          削除する
+        </button>
       </section>
     </>
   );

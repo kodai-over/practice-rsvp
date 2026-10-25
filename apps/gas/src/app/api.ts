@@ -101,6 +101,17 @@ function feedbackList(ctx: Ctx, me: Member): FeedbackView[] {
     }));
 }
 
+/** 募集を流した各グループに中止を知らせる */
+function notifyCancel(ctx: Ctx, p: Practice): void {
+  for (const g of p.groups) {
+    try {
+      ctx.line.push(g, [{ type: 'text', text: cancelText(p) }]);
+    } catch (e) {
+      ctx.log('cancel push failed', g, e);
+    }
+  }
+}
+
 const memberNameOf = (ctx: Ctx, userId: string) => ctx.store.getMember(userId)?.name ?? '（不明）';
 
 function getPracticeOrThrow(ctx: Ctx, id: string): Practice {
@@ -256,26 +267,21 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       cancelled = { ...p, status: '中止' };
       ctx.store.savePractice(cancelled);
     });
-    if (cancelled) {
-      const p: Practice = cancelled;
-      for (const g of p.groups) {
-        try {
-          ctx.line.push(g, [{ type: 'text', text: cancelText(p) }]);
-        } catch (e) {
-          ctx.log('cancel push failed', g, e);
-        }
-      }
-    }
+    if (cancelled) notifyCancel(ctx, cancelled);
     return view(ctx, id, me);
   },
 
   deletePractice(ctx, me, { id }) {
+    let deleted: Practice | null = null;
     ctx.withLock(() => {
       const p = getPracticeOrThrow(ctx, id);
       requireEditable(me, p);
-      if (p.groups.length > 0) throw new UserError('募集を流した練習は削除できません。「中止にする」でグループに知らせてください');
       ctx.store.deletePractice(id);
+      deleted = p;
     });
+    // 募集を流していたグループには中止を知らせる（すでに中止を知らせた練習・終わった練習には送らない）
+    const p = deleted as Practice | null;
+    if (p && isActive(p) && p.date >= toJstDate(ctx.now())) notifyCancel(ctx, p);
     return handlers.listPractices(ctx, me, {});
   },
 
