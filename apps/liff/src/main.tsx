@@ -10,7 +10,7 @@ import { RecruitListPage } from './pages/RecruitList';
 import { RegisterPage } from './pages/Register';
 import { AdminPage, SettingsPage } from './pages/Settings';
 import './styles.css';
-import { AppContext, FeedbackFab, Spinner, useRoute, useToast } from './ui';
+import { AppContext, NavBar, Spinner, useRoute, useToast } from './ui';
 
 function Router() {
   const { path, query } = useRoute();
@@ -94,7 +94,7 @@ function App() {
       ) : me ? (
         <AppContext.Provider value={{ me, setMe, toast, practices: practices?.list ?? null, practicesAt: practices?.at ?? 0, setPractices, updatePractice }}>
           <Router />
-          <FeedbackFab />
+          <NavBar />
         </AppContext.Provider>
       ) : (
         <Spinner />

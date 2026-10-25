@@ -1,51 +1,75 @@
 import { useEffect, useState } from 'preact/hooks';
 import { DEFAULT_STUDIOS, isAdmin, type CancelRule, type FeeDays, type FeeRule, type Member, type Role, type StudioDef } from '@pb/shared';
 import { api } from '../api';
-import { Spinner, TopBar, go, useApp, useRunner } from '../ui';
+import { Avatar, Icon, Spinner, TopBar, go, useApp, useRunner } from '../ui';
 
 export function SettingsPage() {
   const { me, setMe } = useApp();
   const [name, setName] = useState(me.member.name);
   const [run, busy] = useRunner();
 
+  const [editing, setEditing] = useState(false);
+  const save = async () => {
+    const m = await run(() => api('setDisplayName', { name: name.trim() }), '保存しました');
+    if (m) {
+      setMe({ ...me, member: m });
+      setEditing(false);
+    }
+  };
+
   return (
     <>
-      <TopBar title="設定" back />
-      <div class="section-title">表示名</div>
-      <section class="card">
-        <div class="muted" style={{ marginBottom: 8 }}>
-          一覧に出る名前です。絵文字やあだ名で分かりにくいときだけ変えてください。
+      <TopBar />
+      <div class="profile">
+        <Avatar name={me.member.name} />
+        <div>
+          <div class="name">{me.member.name}</div>
+          <span class="pill">{me.member.role}</span>
         </div>
-        <div class="row">
-          <input type="text" class="grow" value={name} maxLength={20} onInput={(e) => setName(e.currentTarget.value)} />
-          <button
-            class="btn primary"
-            disabled={busy || !name.trim() || name === me.member.name}
-            onClick={async () => {
-              const m = await run(() => api('setDisplayName', { name }), '保存しました');
-              if (m) setMe({ ...me, member: m });
+      </div>
+
+      <div class="field">
+        <span>表示名</span>
+        {editing ? (
+          <form
+            class="inline-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save();
             }}
           >
-            保存
+            <input type="text" value={name} maxLength={20} aria-label="表示名" autoFocus onInput={(e) => setName(e.currentTarget.value)} />
+            <button class="round-btn" aria-label="保存" disabled={busy || !name.trim() || name === me.member.name}>
+              <Icon name="check" />
+            </button>
+          </form>
+        ) : (
+          <button class="menu-row name-row" onClick={() => setEditing(true)}>
+            <span class="grow">{me.member.name}</span>
+            <Icon name="edit" size={20} />
           </button>
-        </div>
-      </section>
-      <div class="section-title">改善要望</div>
-      <section class="card">
-        <div class="muted" style={{ marginBottom: 8 }}>
-          こうなったら便利、ここが使いにくい、などを送れます。送った要望は名前と一緒に管理者だけに届きます。
-        </div>
-        <button class="btn block" onClick={() => go('/feedback')}>
-          要望を送る
-        </button>
-      </section>
+        )}
+      </div>
 
-      <p class="muted">権限: {me.member.role}</p>
-      {isAdmin(me.member) && (
-        <button class="btn block" onClick={() => go('/admin')}>
-          管理（グループ・メンバー・スタジオ）
-        </button>
-      )}
+      <ul class="menu" style={{ marginTop: 24 }}>
+        <li>
+          <button class="menu-row" onClick={() => go('/feedback')}>
+            <Icon name="chat" size={20} />
+            <span class="grow">要望を送る</span>
+            <Icon name="chevron" size={18} />
+          </button>
+        </li>
+        {isAdmin(me.member) && (
+          <li>
+            <button class="menu-row" onClick={() => go('/admin')}>
+              <Icon name="gear" size={20} />
+              <span class="grow">管理</span>
+              <span class="val">グループ・メンバー・スタジオ</span>
+              <Icon name="chevron" size={18} />
+            </button>
+          </li>
+        )}
+      </ul>
     </>
   );
 }
@@ -76,9 +100,9 @@ export function AdminPage() {
     <>
       <TopBar title="管理" back />
 
-      <div class="section-title">グループ（Botが入っているグループ）</div>
+      <div class="section-title">グループ</div>
       <section class="card">
-        {me.groups.length === 0 && <div class="muted">Botをグループに招待すると、ここに出ます</div>}
+        {me.groups.length === 0 && <div class="muted">Botをグループに招待すると出ます</div>}
         {me.groups.map((g) => (
           <GroupRow
             key={g.id}
@@ -92,7 +116,7 @@ export function AdminPage() {
         ))}
       </section>
 
-      <div class="section-title">メンバー（権限・ふだんの送り先）</div>
+      <div class="section-title">メンバー</div>
       {members == null ? (
         <Spinner />
       ) : (
@@ -125,10 +149,10 @@ export function AdminPage() {
 
       <StudioEditor studios={studios} onChange={setStudios} />
 
-      <div class="section-title">スタジオの標準料金（30分あたり）</div>
+      <div class="section-title">標準料金（30分あたり）</div>
       <section class="card">
-        <div class="muted" style={{ marginBottom: 8 }}>
-          登録画面でスタジオ・部屋・日時を選ぶと、この料金表（平日・土日祝と時間帯ごと）でスタジオ代が自動で入ります。スクショから料金が読めなかったときにも使います。部屋が空欄なら全部屋、時間帯が空欄なら終日です。料金表にない時間帯（深夜パックなど）が入ると自動では入りません。
+        <div class="muted" style={{ marginBottom: 10 }}>
+          登録時にスタジオ代を自動で入れます。部屋が空欄＝全部屋、時間が空欄＝終日
         </div>
         {fees.map((f, i) => (
           <div class="fee-rule">
@@ -147,19 +171,19 @@ export function AdminPage() {
               <input type="number" placeholder="円/30分" value={f.fee} onInput={(e) => setFee(i, { fee: Number(e.currentTarget.value) })} />
             </div>
             <button class="btn small danger" style={{ marginTop: 6 }} onClick={() => setFees(fees.filter((_, j) => j !== i))}>
-              この行を削除
+              削除
             </button>
           </div>
         ))}
         <button class="btn small" onClick={() => setFees([...fees, { studio: '', room: '', days: '', from: '', to: '', fee: 0 }])}>
-          ＋ 行を追加
+          ＋ 追加
         </button>
       </section>
 
-      <div class="section-title">キャンセル期限前警告（スタジオごと）</div>
+      <div class="section-title">キャンセル期限前の警告</div>
       <section class="card">
         <div class="muted" style={{ marginBottom: 8 }}>
-          利用日の何日前の何時に、人数が最低人数に届いていないことを予約者に知らせるか
+          スタジオ・何日前・何時に、最低人数未満を予約者に知らせる
         </div>
         {rules.map((r, i) => (
           <div class="grid3" style={{ marginBottom: 8 }}>
@@ -169,7 +193,7 @@ export function AdminPage() {
           </div>
         ))}
         <button class="btn small" onClick={() => setRules([...rules, { studio: '', daysBefore: 1, time: '10:00' }])}>
-          ＋ 行を追加
+          ＋ 追加
         </button>
       </section>
 
@@ -203,7 +227,7 @@ export function AdminPage() {
           }
         }}
       >
-        スタジオ・料金・期限・共通設定を保存
+        保存
       </button>
     </>
   );
@@ -226,10 +250,10 @@ function StudioEditor({ studios, onChange }: { studios: StudioDef[]; onChange: (
   const setStudio = (i: number, patch: Partial<StudioDef>) => onChange(studios.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   return (
     <>
-      <div class="section-title">スタジオと部屋（登録画面の選択肢・部屋の広さ）</div>
+      <div class="section-title">スタジオと部屋</div>
       <section class="card">
         <div class="muted" style={{ marginBottom: 8 }}>
-          スタジオ側で部屋や広さが変わったら、ここで直して下の「保存」を押してください。別名はスクショの読み取りで表記ゆれを正式名称にそろえるのに使います（カンマ区切り）。
+          別名（カンマ区切り）は読み取りの表記ゆれをそろえます
         </div>
         {studios.map((st, i) => (
           <div key={i} style={{ borderTop: i ? '1px solid var(--line)' : 'none', paddingTop: i ? 10 : 0, marginTop: i ? 10 : 0 }}>

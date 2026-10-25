@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
-import { canRegister, type Answer, type PracticeView } from '@pb/shared';
+import { canRegister, labelDate, type Answer, type PracticeView } from '@pb/shared';
 import { api } from '../api';
-import { RoomInfo } from '../components/StudioRoom';
-import { DateBlock, RsvpButtons, Spinner, StatusBadge, TopBar, feeLabel, go, place, useApp, useRunner } from '../ui';
+import { AvatarStack, Fee, Icon, RsvpButtons, Spinner, StatusBadge, Stub, Syncing, Tabs, go, place, useApp, useRunner } from '../ui';
 
 type Tab = 'all' | 'mine' | 'todo';
 const TAB_KEY = 'pb:tab';
@@ -54,84 +53,63 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
 
   return (
     <>
-      <TopBar title="練習">
-        {canRegister(me.member) && (
-          <button class="btn primary small" onClick={() => go('/register')}>
-            ＋ 登録
-          </button>
-        )}
-        <button class="icon-btn" onClick={() => go('/settings')}>
-          設定
-        </button>
-      </TopBar>
-
-      {practicesAt === 0 && <div class="muted" style={{ margin: '-6px 0 8px' }}>最新の情報に更新しています…</div>}
-
-      <div class="tabs" role="tablist">
-        {(
-          [
-            ['all', 'すべて'],
-            ['mine', '自分が行く'],
-            ['todo', '未回答・保留'],
-          ] as const
-        ).map(([k, label]) => (
-          <button role="tab" aria-selected={tab === k} onClick={() => selectTab(k)}>
-            {label}
-            {list && <span class="count">{groups[k].length}</span>}
-          </button>
-        ))}
-      </div>
+      <header class="tabs-head">
+        <Tabs
+          value={tab}
+          onChange={selectTab}
+          items={[
+            { key: 'all', label: 'すべて', count: list ? groups.all.length : undefined },
+            { key: 'mine', label: '行く', count: list ? groups.mine.length : undefined },
+            { key: 'todo', label: '未定', count: list ? groups.todo.length : undefined },
+          ]}
+        />
+        {(practicesAt === 0 || busy) && <Syncing />}
+      </header>
 
       {list == null ? (
         <Spinner />
       ) : shown.length === 0 ? (
-        <div class="empty">{tab === 'todo' ? '未回答・保留の練習はありません' : tab === 'mine' ? '行く予定の練習はありません' : '今後の練習はまだありません'}</div>
+        <div class="empty">
+          <div class="empty-mark">{tab === 'todo' ? '○' : '—'}</div>
+          <div>{tab === 'todo' ? 'すべて回答済み' : tab === 'mine' ? '行く練習なし' : '練習なし'}</div>
+          {tab === 'all' && canRegister(me.member) && (
+            <button class="btn primary" onClick={() => go('/register')}>
+              <Icon name="plus" size={18} />
+              登録
+            </button>
+          )}
+        </div>
       ) : (
-        shown.map((v) => <PracticeCard key={v.practice.id} v={v} busy={false} onAnswer={(a) => answer(v.practice.id, a)} />)
+        shown.map((v) => <PracticeCard key={v.practice.id} v={v} onAnswer={(a) => answer(v.practice.id, a)} />)
       )}
     </>
   );
 }
 
-function PracticeCard({ v, onAnswer, busy }: { v: PracticeView; onAnswer: (a: Answer) => void; busy: boolean }) {
-  const { me } = useApp();
+function PracticeCard({ v, onAnswer }: { v: PracticeView; onAnswer: (a: Answer) => void }) {
   const p = v.practice;
+  const open = () => go(`/p/${encodeURIComponent(p.id)}`);
   return (
-    <article class="card practice" data-answer={v.myAnswer ?? 'none'} data-status={p.status}>
-      <DateBlock date={p.date} />
-      <div class="main">
-        <button class="link" onClick={() => go(`/p/${encodeURIComponent(p.id)}`)}>
-          <div class="time">
-            {p.start}〜{p.end}
-            <StatusBadge v={v} />
-            {v.myAnswer == null && p.status !== '中止' && <span class="badge todo">未回答</span>}
-            {v.myAnswer === '保留' && p.status !== '中止' && <span class="badge todo">保留</span>}
-          </div>
-          <div class="place">
-            {place(p)}
-            <RoomInfo studios={me.settings.studios} studio={p.studio} room={p.room} />
-          </div>
-          <div class="meta">
-            <span>
-              <strong>{v.goingCount}人</strong>
-              {p.max ? ` / 上限${p.max}人` : ''}
-            </span>
-            <span>
-              <strong>{feeLabel(v)}</strong>
-            </span>
-            <span>予約 {v.bookerName}</span>
-          </div>
-          {v.going.length > 0 && (
-            <div class="chips">
-              {v.going.map((a) => (
-                <span class={`chip${a.kind === 'ゲスト' ? ' guest' : ''}`}>{a.name}</span>
-              ))}
-            </div>
-          )}
-          {p.memo && <div class="muted" style={{ marginTop: 6 }}>📝 {p.memo.split('\n')[0]}</div>}
-        </button>
-        <RsvpButtons v={v} onAnswer={onAnswer} busy={busy} />
-      </div>
+    <article class="ticket" data-answer={v.myAnswer ?? 'none'} data-status={p.status}>
+      <Stub date={p.date} onClick={open} />
+      <button class="ticket-main" onClick={open}>
+        <span class="sr">{labelDate(p.date)}</span>
+        <div class="time">
+          {p.start}–{p.end}
+          <StatusBadge v={v} />
+        </div>
+        <div class="place">{place(p)}</div>
+        <div class="ticket-foot">
+          <AvatarStack names={v.going.map((a) => ({ name: a.name, guest: a.kind === 'ゲスト' }))} />
+          <span class="count">
+            <Icon name="people" size={16} />
+            {v.goingCount}
+            {p.max ? <small>/{p.max}</small> : null}
+          </span>
+          <Fee v={v} />
+        </div>
+      </button>
+      <RsvpButtons value={v.myAnswer} status={p.status} onAnswer={onAnswer} />
     </article>
   );
 }

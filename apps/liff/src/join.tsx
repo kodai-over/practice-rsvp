@@ -1,10 +1,10 @@
 /** 参加リンクのページ。LINEを使わない人が名前を入れて出欠を出す */
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { labelDate, yen, type Answer, type JoinView } from '@pb/shared';
+import { yen, type Answer, type JoinView } from '@pb/shared';
 import { joinApi } from './api';
 import './styles.css';
-import { Spinner, place, useToast } from './ui';
+import { Pass, RsvpButtons, Spinner, useToast } from './ui';
 
 const q = new URLSearchParams(location.search);
 const id = q.get('p') ?? '';
@@ -56,58 +56,35 @@ function JoinPage() {
     }
   };
 
-  if (error) return <div class="empty">{error}</div>;
+  if (error) return <div class="empty"><div class="empty-mark">—</div>{error}</div>;
   if (!v) return <Spinner />;
   const closed = v.status === '中止';
 
   return (
     <>
       <header class="topbar">
-        <h1>練習の出欠</h1>
+        <h1>出欠</h1>
       </header>
-      <section class="card">
-        <div style={{ fontSize: 22, fontWeight: 800 }}>{labelDate(v.date)}</div>
-        <div class="time">
-          {v.start}〜{v.end}
-          {v.status === '満員' && <span class="badge full">満員</span>}
-          {closed && <span class="badge cancel">中止</span>}
-        </div>
-        <div class="place">{place(v)}</div>
-        {v.roomInfo && <div class="room-info">{v.roomInfo}</div>}
-        <div class="meta">
-          <span>
-            参加 <strong>{v.goingCount}人</strong>
-          </span>
-          {v.perPerson != null && (
-            <span>
-              1人あたり <strong>{yen(v.perPerson)}</strong>
-            </span>
-          )}
-        </div>
-        {v.memo && <div class="memo" style={{ marginTop: 8 }}>{v.memo}</div>}
-      </section>
+      <Pass
+        id={v.id}
+        date={v.date}
+        status={v.status}
+        fields={[
+          { label: 'TIME', value: `${v.start}–${v.end}`, wide: true },
+          { label: 'STUDIO', value: v.studio, jp: true, wide: !v.room },
+          ...(v.room ? [{ label: 'ROOM', value: v.room, note: v.roomInfo, jp: true }] : []),
+          { label: 'GOING', value: v.goingCount },
+          { label: 'PER PERSON', value: v.perPerson != null ? yen(v.perPerson) : '—' },
+          ...(v.memo ? [{ label: 'MEMO', value: v.memo, jp: true, wide: true }] : []),
+        ]}
+      />
 
-      {closed ? (
-        <div class="empty">この練習は中止になりました</div>
-      ) : (
-        <section class="card">
-          <label class="field">
-            <span>お名前</span>
-            <input type="text" value={name} maxLength={30} placeholder="例：山田はなこ" onInput={(e) => setName(e.currentTarget.value)} />
-          </label>
-          <div class="rsvp">
-            <button class="yes" aria-pressed={v.myAnswer === '行く'} disabled={busy || (v.status === '満員' && v.myAnswer !== '行く')} onClick={() => answer('行く')}>
-              行く
-            </button>
-            <button class="maybe" aria-pressed={v.myAnswer === '保留'} disabled={busy} onClick={() => answer('保留')}>
-              保留
-            </button>
-            <button class="no" aria-pressed={v.myAnswer === '行かない'} disabled={busy} onClick={() => answer('行かない')}>
-              行かない
-            </button>
-          </div>
-          <p class="muted">LINEの登録は要りません。同じ端末から押し直すと回答を変えられます。</p>
-        </section>
+      {!closed && (
+        <>
+          <input type="text" value={name} maxLength={30} aria-label="お名前" placeholder="お名前" style={{ marginBottom: 12 }} onInput={(e) => setName(e.currentTarget.value)} />
+          <RsvpButtons solo value={v.myAnswer} status={v.status} busy={busy} onAnswer={answer} />
+          <p class="muted" style={{ textAlign: 'center' }}>LINE不要・押し直しで変更できます</p>
+        </>
       )}
       {toastNode}
     </>
