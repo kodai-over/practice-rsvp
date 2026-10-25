@@ -45,3 +45,8 @@ npm run dev:mock -w @pb/liff   # LINE・Googleの準備なしで画面を確認
 | シートの列 | `apps/gas/src/app/schema.ts` |
 | スタジオ・部屋の初期値と表記ゆれの吸収 | `packages/shared/src/studios.ts` |
 | リッチメニュー（定義・画像） | `apps/gas/src/app/richmenu.ts`、`scripts/richmenu.mjs` |
+
+## 改善要望の扱い
+
+メンバーの要望はスプレッドシートの「要望」シートに集まります（アプリでは「設定」→「要望を見る・送る」）。
+Claude Code で「要望をまとめて」と頼むと、`.claude/skills/feedback-review` のスキルが、要望をまとめて改善案を提案し、承認されたものだけ実装して「改善済み」にします。
