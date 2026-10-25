@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { FEEDBACK_STATUSES, isAdmin, toJstDate, type FeedbackStatus, type FeedbackView } from '@pb/shared';
 import { api } from '../api';
-import { Spinner, TopBar, useApp, useRunner } from '../ui';
+import { Icon, Spinner, TopBar, useApp, useRunner } from '../ui';
 
 const STATUS_CLASS: Record<FeedbackStatus, string> = {
   未対応: 'todo',
@@ -33,15 +33,13 @@ export function FeedbackPage() {
 
   return (
     <>
-      <TopBar title="改善要望" back />
-      <form class="card" onSubmit={post}>
-        <label class="field">
-          <span>こうなったら便利、ここが使いにくい、など何でも</span>
-          <textarea rows={3} maxLength={1000} value={text} placeholder="例：練習の前日にリマインドがほしい" onInput={(e) => setText(e.currentTarget.value)} />
-        </label>
-        <div class="row">
-          <span class="muted grow">送った要望は、名前（{me.member.name}）と一緒に管理者だけに届きます</span>
+      <TopBar title="要望" />
+      <form onSubmit={post}>
+        <textarea rows={5} maxLength={1000} value={text} aria-label="要望" placeholder="こうなったら便利、ここが使いにくい、など" onInput={(e) => setText(e.currentTarget.value)} />
+        <div class="row" style={{ marginTop: 10 }}>
+          <span class="muted grow">{me.member.name} として管理者だけに届きます</span>
           <button class="btn primary" disabled={busy || !text.trim()}>
+            <Icon name="send" size={18} />
             送る
           </button>
         </div>
@@ -50,10 +48,12 @@ export function FeedbackPage() {
       {!admin ? null : list == null ? (
         <Spinner />
       ) : list.length === 0 ? (
-        <div class="empty">まだ要望はありません</div>
+        <div class="empty"><div class="empty-mark">—</div>要望なし</div>
       ) : (
         <>
-          <div class="section-title">届いた要望（管理者だけに表示）</div>
+          <div class="sec-head">
+            届いた要望<span class="n">{list.length}</span>
+          </div>
           {list.map((f) => <FeedbackCard key={f.id} f={f} admin={admin} busy={busy} onChange={setList} run={run} />)}
         </>
       )}
@@ -101,7 +101,7 @@ function FeedbackCard({
                 <option>{s}</option>
               ))}
             </select>
-            <input type="text" class="grow" placeholder="コメント（管理者用のメモ）" value={reply} onInput={(e) => setReply(e.currentTarget.value)} />
+            <input type="text" class="grow" placeholder="コメント" value={reply} onInput={(e) => setReply(e.currentTarget.value)} />
             <button class="btn small" disabled={busy || reply === f.reply} onClick={() => update({ reply })}>
               保存
             </button>

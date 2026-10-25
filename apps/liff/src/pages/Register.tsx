@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { addDays, defaultFee, labelDate, skippedNote, toJstDate, type DraftItemKind, type NewPracticeInput, type Reservation } from '@pb/shared';
 import { api } from '../api';
 import { RoomInfo, RoomSelect, StudioSelect } from '../components/StudioRoom';
-import { BusyOverlay, Spinner, TopBar, go, useApp, useRunner } from '../ui';
+import { BusyOverlay, Icon, Spinner, TopBar, go, useApp, useRunner } from '../ui';
 
 interface FormRow {
   key: number;
@@ -37,10 +37,11 @@ const emptyRow = (over: Partial<FormRow> = {}): FormRow => ({
 const fromReservation = (r: Partial<Reservation>, kind: FormRow['kind']): FormRow =>
   emptyRow({ date: r.date ?? '', start: r.start ?? '', end: r.end ?? '', studio: r.studio ?? '', room: r.room ?? '', fee: r.fee != null ? String(r.fee) : '', kind });
 
-const KIND_LABEL: Record<string, string> = {
-  extension: '既存の練習の延長として更新します',
-  duplicate: '登録済みのため飛ばします',
-  incomplete: '読み取れなかった項目を入力してください',
+/** 読み取り結果の印。延長は既存の練習を更新し、登録済みは飛ばす */
+const KIND_TAG: Record<string, { label: string; cls: string }> = {
+  extension: { label: '延長', cls: '' },
+  duplicate: { label: '登録済み', cls: 'soft' },
+  incomplete: { label: '要入力', cls: 'alert' },
 };
 
 /** 画像を描画できる形で読み込む。createImageBitmap が使えない・失敗する端末では <img> で読む */
@@ -90,6 +91,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
   const [loading, setLoading] = useState(!!draftId);
   const [run, busy] = useRunner();
   const [pasted, setPasted] = useState('');
+  const [textOpen, setTextOpen] = useState(false);
 
   useEffect(() => {
     if (!draftId) return;
@@ -103,7 +105,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
     });
   }, [draftId]);
 
-  if (loading) return <><TopBar title="練習を登録" back /><Spinner /></>;
+  if (loading) return <><TopBar title="登録" /><Spinner /></>;
 
   /** スタジオ代が空欄か自動で入れたものなら、標準料金（曜日・時間帯ごとの料金表）で入れ直す */
   const autoFee = (r: FormRow): FormRow => {
@@ -147,7 +149,10 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
   };
 
   const onText = async () => {
-    if (await parse({ text: pasted })) setPasted('');
+    if (await parse({ text: pasted })) {
+      setPasted('');
+      setTextOpen(false);
+    }
   };
 
   const submit = async () => {
@@ -181,43 +186,49 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
 
   return (
     <>
-      <TopBar title="練習を登録" back />
-      {phase === 'reading' && <BusyOverlay message="予約内容を読み取っています…" note="10〜30秒ほどかかることがあります" />}
-      {phase === 'saving' && <BusyOverlay message={groups.length ? '登録して募集を送っています…' : '登録しています…'} />}
+      <TopBar title="登録" />
+      {phase === 'reading' && <BusyOverlay message="読み取り中" note="10〜30秒" />}
+      {phase === 'saving' && <BusyOverlay message={groups.length ? '登録して募集中' : '登録中'} />}
 
-      <label class="dropzone">
-        <input type="file" accept="image/*" multiple onChange={(e) => onFiles(e.currentTarget.files)} disabled={busy} />
-        {busy ? '読み取り中…' : '📷 予約画面のスクショを選ぶと自動で入力します'}
-        <div class="muted" style={{ marginTop: 4 }}>予約一覧のように複数の予約が写っていてもOK。電話番号などが写る部分は切り取ってください</div>
-      </label>
-
-      <details class="card" style={{ marginTop: 12 }}>
-        <summary class="muted">予約完了メールなどの文章から読み取る</summary>
-        <textarea
-          rows={5}
-          style={{ marginTop: 8 }}
-          maxLength={5000}
-          placeholder="予約内容の文章を貼り付けてください"
-          value={pasted}
-          onInput={(e) => setPasted(e.currentTarget.value)}
-        />
-        <button class="btn block" style={{ marginTop: 8 }} disabled={busy || !pasted.trim()} onClick={onText}>
-          読み取る
+      <div class="sources">
+        <label class="source primary">
+          <input type="file" accept="image/*" multiple onChange={(e) => onFiles(e.currentTarget.files)} disabled={busy} aria-label="予約画面のスクショから入力" />
+          <Icon name="camera" size={28} />
+          <span>
+            スクショから
+            <small>MAX 5</small>
+          </span>
+        </label>
+        <button class="source" aria-expanded={textOpen} onClick={() => setTextOpen(!textOpen)}>
+          <Icon name="text" size={28} />
+          <span>
+            文章から
+            <small>MAIL / TEXT</small>
+          </span>
         </button>
-      </details>
+      </div>
+
+      {textOpen && (
+        <div class="card">
+          <textarea rows={5} maxLength={5000} placeholder="予約完了メールなどを貼り付け" aria-label="予約内容の文章" value={pasted} onInput={(e) => setPasted(e.currentTarget.value)} />
+          <button class="btn primary block" style={{ marginTop: 10 }} disabled={busy || !pasted.trim()} onClick={onText}>
+            読み取る
+          </button>
+        </div>
+      )}
 
       {rows.map((r, i) => {
         return (
-          <section class="card" key={r.key} style={{ marginTop: 12 }}>
-            <div class="row" style={{ marginBottom: 8 }}>
-              <strong class="grow">{r.date ? labelDate(r.date) : `${i + 1}件目`}</strong>
+          <section class="draft" key={r.key} data-kind={r.kind}>
+            <div class="draft-head">
+              <span class="grow">{r.date ? labelDate(r.date) : String(i + 1).padStart(2, '0')}</span>
+              {r.kind && KIND_TAG[r.kind] && <span class={`tag ${KIND_TAG[r.kind].cls}`}>{KIND_TAG[r.kind].label}</span>}
               {rows.length > 1 && (
-                <button class="btn small" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
-                  削除
+                <button class="icon-btn" aria-label="この日を削除" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
+                  <Icon name="x" size={18} />
                 </button>
               )}
             </div>
-            {r.kind && KIND_LABEL[r.kind] && <div class={`kind ${r.kind}`} style={{ marginBottom: 8 }}>{KIND_LABEL[r.kind]}</div>}
             <label class="field">
               <span>日付</span>
               <input type="date" value={r.date} onInput={(e) => update(r.key, 'date', e.currentTarget.value)} />
@@ -246,19 +257,23 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
             </div>
             <RoomInfo studios={me.settings.studios} studio={r.studio} room={r.room} style={{ marginTop: -4, marginBottom: 10 }} />
             <label class="field">
-              <span>スタジオ代（円）</span>
+              <span>
+                スタジオ代 ¥{r.feeAuto && r.fee !== '' && <span class="tag soft" title="スタジオの料金表（曜日・時間帯）から計算">自動</span>}
+              </span>
               <input type="number" inputMode="numeric" placeholder="金額" value={r.fee} onInput={(e) => update(r.key, 'fee', e.currentTarget.value)} />
-              {r.feeAuto && r.fee !== '' && <span class="muted" style={{ marginTop: 4, marginBottom: 0 }}>スタジオの料金表（曜日・時間帯）から計算しました。違えば直してください</span>}
             </label>
-            <details>
-              <summary class="muted">上限・最低人数・メモ（任意）</summary>
+            <details style={{ marginBottom: 8 }}>
+              <summary class="more-summary">
+                <Icon name="plus" size={16} />
+                人数・メモ
+              </summary>
               <div class="grid2" style={{ marginTop: 8 }}>
                 <label class="field">
-                  <span>上限人数</span>
+                  <span>上限</span>
                   <input type="number" inputMode="numeric" placeholder="なし" value={r.max} onInput={(e) => update(r.key, 'max', e.currentTarget.value)} />
                 </label>
                 <label class="field">
-                  <span>最低人数</span>
+                  <span>最低</span>
                   <input type="number" inputMode="numeric" placeholder={`標準 ${me.settings.minDefault}人`} value={r.min} onInput={(e) => update(r.key, 'min', e.currentTarget.value)} />
                 </label>
               </div>
@@ -271,34 +286,30 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         );
       })}
 
-      <button class="btn block" style={{ marginTop: 4 }} onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), key: undefined, kind: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
-        ＋ 日を追加
+      <button class="btn ghost block" style={{ marginTop: 4 }} onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), key: undefined, kind: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
+        <Icon name="plus" size={18} />
+        日を追加
       </button>
 
-      <div class="section-title">グループにも募集する（任意）</div>
-      <section class="card">
-        {me.groups.length === 0 ? (
-          <div class="muted">Botが入っているグループがありません。登録だけできます</div>
-        ) : (
-          <div class="muted" style={{ marginBottom: 4 }}>
-            選んだグループに募集メッセージを流します。選ばなければ登録だけ（あとから練習の画面で募集もできます）
+      {me.groups.length > 0 && (
+        <>
+          <div class="sec-head">
+            <Icon name="send" size={18} />
+            募集も送る
           </div>
-        )}
-        {me.groups.map((g) => (
-          <label class="check">
-            <input
-              type="checkbox"
-              checked={groups.includes(g.id)}
-              onChange={(e) => setGroups(e.currentTarget.checked ? [...groups, g.id] : groups.filter((x) => x !== g.id))}
-            />
-            {g.name}
-            {me.member.defaultGroups.includes(g.id) && <span class="muted">ふだんの送り先</span>}
-          </label>
-        ))}
-      </section>
+          <div class="toggles">
+            {me.groups.map((g) => (
+              <button class="toggle" aria-pressed={groups.includes(g.id)} onClick={() => setGroups(groups.includes(g.id) ? groups.filter((x) => x !== g.id) : [...groups, g.id])}>
+                {g.name}
+                {me.member.defaultGroups.includes(g.id) && <span class="dot" title="ふだんの送り先" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <button class="btn primary block" style={{ marginTop: 16 }} disabled={busy} onClick={submit}>
-        {groups.length ? '登録して募集' : '登録'}
+        {groups.length ? <><Icon name="send" size={18} />登録して募集</> : <><Icon name="check" size={18} />登録</>}
       </button>
     </>
   );
