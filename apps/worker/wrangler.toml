@@ -1,0 +1,6 @@
+name = "practice-board-webhook"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# 秘密情報は wrangler secret put で登録する（このファイルには書かない）
+#   LINE_CHANNEL_SECRET / RELAY_SECRET / GAS_URL
