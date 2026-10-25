@@ -429,10 +429,9 @@ a {
   margin-left: -7px;
 }
 
-/* ---------- 出欠 ○ △ ✕ ---------- */
+/* ---------- 出欠 ○ △ ✕（記号だけ） ---------- */
 .rsvp {
   display: flex;
-  gap: 0;
   border-top: 1px solid var(--line);
 }
 .rsvp button {
@@ -440,70 +439,69 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 46px;
+  min-height: 48px;
   border: 0;
   background: transparent;
-  color: var(--sub);
-  font-size: 13px;
-  font-weight: 500;
+  color: var(--faint);
 }
 .rsvp button + button {
   border-left: 1px solid var(--line);
 }
 .rsvp .mark {
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1;
-}
-.rsvp button[aria-checked='true'] {
-  color: var(--ink);
-  font-weight: 700;
-}
-.rsvp button.yes[aria-checked='true'] .mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+.rsvp button[aria-checked='true'] {
+  color: var(--ink);
+}
+.rsvp button[aria-checked='true'] .mark {
   background: var(--ink);
   color: var(--bg);
-  font-size: 12px;
+  transform: scale(1.06);
 }
 .rsvp button:disabled {
   opacity: 0.35;
   cursor: default;
 }
-/* チケットの外（詳細・参加リンク）では、大きなボタン3つにする */
+/* チケットの外（詳細・参加リンク）では、大きな丸いボタン3つにする */
 .rsvp.solo {
-  gap: 8px;
+  justify-content: center;
+  gap: 28px;
+  padding: 6px 0 4px;
   border: 0;
 }
 .rsvp.solo button {
-  flex-direction: column;
-  gap: 4px;
-  min-height: 72px;
+  flex: none;
+  width: 76px;
+  height: 76px;
   border: 1.5px solid var(--line);
-  border-radius: 14px;
+  border-radius: 50%;
 }
 .rsvp.solo button + button {
   border-left: 1.5px solid var(--line);
 }
 .rsvp.solo .mark {
-  font-size: 22px;
+  width: auto;
+  height: auto;
+  font-size: 30px;
+  background: transparent;
 }
 .rsvp.solo button[aria-checked='true'] {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--bg);
 }
-.rsvp.solo button.yes[aria-checked='true'] .mark {
-  width: auto;
-  height: auto;
+.rsvp.solo button[aria-checked='true'] .mark {
   background: transparent;
   color: inherit;
-  font-size: 22px;
 }
 
 /* ---------- パス（練習の詳細） ---------- */
@@ -1259,4 +1257,9 @@ details > summary {
 }
 .menu.edit {
   margin-top: 28px;
+}
+.sec-mark {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
 }

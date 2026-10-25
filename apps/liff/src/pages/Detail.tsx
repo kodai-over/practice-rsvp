@@ -121,10 +121,9 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
 function People({ mark, label, list, onRemove, dim, children }: { mark: string; label: string; list: AttendeeView[]; onRemove: (a: AttendeeView) => void; dim?: boolean; children?: ComponentChildren }) {
   return (
     <section class={dim ? 'dim' : undefined}>
-      <div class="sec-head">
-        <span aria-hidden="true">{mark}</span>
-        {label}
-        <span class="n">{list.length}</span>
+      <div class="sec-head" aria-label={`${label} ${list.length}人`}>
+        <span class="sec-mark" aria-hidden="true">{mark}</span>
+        <span class="n" aria-hidden="true">{list.length}</span>
       </div>
       <div class="people">
         {list.map((a) => (

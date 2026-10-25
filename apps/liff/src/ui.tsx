@@ -202,7 +202,7 @@ export function StatusBadge({ v }: { v: { practice: { status: string } } | Pract
 
 const ANSWER_MARK: Record<Answer, string> = { 行く: '○', 保留: '△', 行かない: '✕' };
 
-/** 出欠。日本の出欠表どおり ○ △ ✕ で選ぶ */
+/** 出欠。文字は出さず、日本の出欠表どおり ○ △ ✕ の記号だけで選ぶ */
 export function RsvpButtons({
   value,
   status,
@@ -226,13 +226,14 @@ export function RsvpButtons({
           role="radio"
           class={a === '行く' ? 'yes' : a === '保留' ? 'maybe' : 'no'}
           aria-checked={value === a}
+          aria-label={a === '行く' && full ? '満員' : a}
+          title={a}
           disabled={busy || closed || (a === '行く' && full)}
           onClick={() => value !== a && onAnswer(a)}
         >
           <span class="mark" aria-hidden="true">
             {ANSWER_MARK[a]}
           </span>
-          <span>{a === '行く' && full ? '満員' : a}</span>
         </button>
       ))}
     </div>
