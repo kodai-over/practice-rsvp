@@ -1,0 +1,475 @@
+:root {
+  --bg: #f3f4f6;
+  --card: #ffffff;
+  --text: #16181d;
+  --sub: #6b7280;
+  --line: #e5e7eb;
+  --green: #06c755;
+  --green-ink: #048a3c;
+  --green-soft: #e6f8ee;
+  --red: #e5484d;
+  --red-soft: #fdecec;
+  --amber: #c27c0e;
+  --amber-soft: #fdf3e1;
+  --chip: #f1f2f4;
+  --radius: 14px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111315;
+    --card: #1c1f23;
+    --text: #eef0f2;
+    --sub: #9aa1ab;
+    --line: #2c3036;
+    --green-ink: #3ddc84;
+    --green-soft: #12301f;
+    --red-soft: #3a1a1b;
+    --amber: #f0b44c;
+    --amber-soft: #3a2c12;
+    --chip: #262a30;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--green-ink);
+}
+
+.app {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0 16px calc(32px + env(safe-area-inset-bottom));
+}
+
+/* ---------- ヘッダー ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -16px 12px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+.topbar h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+.icon-btn {
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 15px;
+  color: var(--sub);
+}
+.back {
+  border: 0;
+  background: transparent;
+  padding: 6px 4px;
+  font-size: 15px;
+  color: var(--green-ink);
+}
+
+/* ---------- タブ ---------- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  background: var(--chip);
+  border-radius: 12px;
+}
+.tabs button {
+  flex: 1;
+  border: 0;
+  padding: 8px 4px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--sub);
+  font-weight: 600;
+  font-size: 14px;
+}
+.tabs button[aria-selected='true'] {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+.tabs .count {
+  margin-left: 4px;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* ---------- カード ---------- */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+.practice {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 12px;
+  border-left: 4px solid transparent;
+}
+.practice[data-answer='行く'] {
+  border-left-color: var(--green);
+}
+.practice[data-answer='行かない'] {
+  border-left-color: var(--line);
+}
+.practice[data-answer='none'] {
+  border-left-color: var(--amber);
+}
+.practice[data-status='中止'] {
+  opacity: 0.6;
+}
+.date-block {
+  text-align: center;
+  padding-top: 2px;
+}
+.date-block .m {
+  font-size: 12px;
+  color: var(--sub);
+}
+.date-block .d {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.date-block .w {
+  font-size: 12px;
+  color: var(--sub);
+}
+.date-block .w.sat {
+  color: #2f6fdf;
+}
+.date-block .w.sun {
+  color: var(--red);
+}
+.practice .main {
+  min-width: 0;
+}
+.practice .time {
+  font-size: 17px;
+  font-weight: 700;
+}
+.practice .place {
+  color: var(--sub);
+  font-size: 14px;
+}
+.practice .link {
+  all: unset;
+  display: block;
+  cursor: pointer;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--sub);
+}
+.meta strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  font-size: 12px;
+}
+.chip.guest::after {
+  content: 'ゲスト';
+  font-size: 10px;
+  color: var(--sub);
+}
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: 2px;
+  margin-left: 6px;
+}
+.badge.full {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.badge.cancel {
+  background: var(--chip);
+  color: var(--sub);
+}
+.badge.mine {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.badge.todo {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+/* ---------- 出欠ボタン ---------- */
+.rsvp {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.rsvp button {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  font-weight: 700;
+}
+.rsvp button.yes[aria-pressed='true'] {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.rsvp button.no[aria-pressed='true'] {
+  background: var(--chip);
+  border-color: var(--sub);
+}
+.rsvp button:disabled {
+  opacity: 0.5;
+}
+
+/* ---------- 汎用 ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text);
+}
+.btn.primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.btn.danger {
+  color: var(--red);
+  border-color: var(--red-soft);
+}
+.btn.small {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.btn.block {
+  width: 100%;
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.row > * {
+  min-width: 0;
+}
+.grow {
+  flex: 1;
+}
+.section-title {
+  margin: 20px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sub);
+}
+.muted {
+  color: var(--sub);
+  font-size: 13px;
+}
+.empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--sub);
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.list li:last-child {
+  border-bottom: 0;
+}
+.big-fee {
+  font-size: 28px;
+  font-weight: 800;
+}
+.memo {
+  white-space: pre-wrap;
+  font-size: 14px;
+}
+
+/* ---------- フォーム ---------- */
+label.field {
+  display: block;
+  margin-bottom: 10px;
+}
+label.field > span {
+  display: block;
+  font-size: 12px;
+  color: var(--sub);
+  margin-bottom: 4px;
+}
+input[type='text'],
+input[type='number'],
+input[type='date'],
+input[type='time'],
+select,
+textarea {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  min-height: 42px;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--green);
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.grid3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--green);
+}
+.kind {
+  font-size: 12px;
+  font-weight: 700;
+}
+.kind.extension {
+  color: var(--green-ink);
+}
+.kind.duplicate {
+  color: var(--sub);
+}
+.kind.incomplete {
+  color: var(--red);
+}
+.dropzone {
+  display: block;
+  padding: 18px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--sub);
+  background: var(--card);
+}
+.dropzone input {
+  display: none;
+}
+
+/* ---------- 通知 ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: #16181d;
+  color: #fff;
+  font-size: 14px;
+  z-index: 20;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+.toast.error {
+  background: var(--red);
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  margin: 60px auto;
+  border: 3px solid var(--line);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

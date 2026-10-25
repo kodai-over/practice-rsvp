@@ -1,0 +1,15 @@
+{
+  "name": "@pb/liff",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:mock": "vite --mode mock",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@line/liff": "^2.31.2",
+    "preact": "^11.0.2"
+  }
+}
