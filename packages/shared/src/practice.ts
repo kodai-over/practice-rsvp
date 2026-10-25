@@ -32,12 +32,19 @@ export function normalizeReservation(raw: Partial<Record<keyof Reservation, unkn
 /** 設定のスタジオ名がスタジオ名に含まれるか（「BUZZ」→「BUZZ横浜東口」、「worcle」→「studio worcle 横浜」） */
 const studioMatches = (key: string, studio: string) => key !== '' && studio.toLowerCase().includes(key.toLowerCase());
 
-/** スタジオ・部屋の標準料金。より詳しく（長く）書かれたスタジオ名、部屋が一致するものを優先 */
-export function defaultFee(settings: Settings, studio: string, room: string): number {
+/** スタジオ・部屋の1時間あたりの標準料金。より詳しく（長く）書かれたスタジオ名、部屋が一致するものを優先 */
+export function hourlyFee(settings: Settings, studio: string, room: string): number {
   const hits = settings.fees
     .filter((f) => studioMatches(f.studio, studio) && (f.room === '' || f.room === room))
     .sort((a, b) => b.studio.length - a.studio.length || (b.room ? 1 : 0) - (a.room ? 1 : 0));
   return hits[0]?.fee ?? 0;
+}
+
+/** 標準料金で計算したスタジオ代（1時間あたりの料金 × 利用時間）。料金の設定がなければ 0 */
+export function defaultFee(settings: Settings, r: Pick<Reservation, 'studio' | 'room' | 'start' | 'end'>): number {
+  const hourly = hourlyFee(settings, r.studio, r.room);
+  const mins = r.start && r.end ? minutes(r.end) - minutes(r.start) : 0;
+  return hourly > 0 && mins > 0 ? Math.round((hourly * mins) / 60) : 0;
 }
 
 /** スタジオ名を含むルールのうち、最も詳しく（長く）書かれたものを使う */
@@ -141,4 +148,10 @@ export function sortPractices(list: Practice[]): Practice[] {
 
 export function yen(n: number): string {
   return `¥${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+}
+
+/** 読み取ったうち対象外として除いた予約の件数を1文にする（なければ空文字） */
+export function skippedNote({ pastCount, duplicateCount = 0 }: { pastCount: number; duplicateCount?: number }): string {
+  const parts = [duplicateCount > 0 && `登録済みの予約${duplicateCount}件`, pastCount > 0 && `終了した予約${pastCount}件`].filter(Boolean);
+  return parts.length ? `${parts.join('・')}は除きました。` : '';
 }

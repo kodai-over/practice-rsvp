@@ -11,6 +11,7 @@ import {
   roomInfo,
   sortPractices,
   toJstDate,
+  toJstTime,
   type Answer,
   type AttendeeKind,
   type CreateResult,
@@ -64,11 +65,14 @@ export function readReservations(ctx: Ctx, input: ReaderInput): RawReservation[]
 
 /**
  * 読み取った予約から下書きを作る。
- * 今日より前の予約は除き、同じ部屋で続く予約は1件にまとめ（classifyReservations）、料金が読めなければ標準料金を入れる。
+ * 対象外の予約（今日より前・今日すでに終わった時間帯・登録済み）は除いて件数だけ数える。
+ * 同じ部屋で続く予約は1件にまとめ（classifyReservations）、料金が読めなければ標準料金を入れる。
  */
 export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Draft {
   const settings = ctx.store.settings();
   const today = toJstDate(ctx.now());
+  const nowTime = toJstTime(ctx.now());
+  const isPast = (r: Partial<Reservation>) => !!r.date && (r.date < today || (r.date === today && !!r.end && r.end <= nowTime));
   const complete: Reservation[] = [];
   const incomplete: Partial<Reservation>[] = [];
   let pastCount = 0;
@@ -76,14 +80,16 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
     const n = normalizeReservation(raw);
     // スタジオ名・部屋名を一覧の正式な名前にそろえる（「わーくる横浜」「横浜 301」→ studio worcle 横浜 301）
     const r = n && canonicalizeStudio(settings.studios, n);
-    if (r && r.date < today) pastCount++;
+    const partial = r ? null : pickPartial(raw);
+    if (r ? isPast(r) : isPast(partial!)) pastCount++;
     else if (r) complete.push(r);
-    else incomplete.push(canonicalizePartial(settings.studios, pickPartial(raw)));
+    else incomplete.push(canonicalizePartial(settings.studios, partial!));
   }
-  // 続いている予約をまとめてから、料金が読めなかったものに標準料金を入れる
-  const items = classifyReservations(ctx.store.practices(), complete).map((i) => ({
+  // 続いている予約をまとめ、登録済みのものを除いてから、料金が読めなかったものに標準料金を入れる
+  const classified = classifyReservations(ctx.store.practices(), complete);
+  const items = classified.filter((i) => i.kind !== 'duplicate').map((i) => ({
     ...i,
-    reservation: { ...i.reservation, fee: i.reservation.fee ?? (defaultFee(settings, i.reservation.studio, i.reservation.room) || null) },
+    reservation: { ...i.reservation, fee: i.reservation.fee ?? (defaultFee(settings, i.reservation) || null) },
   }));
   return {
     id: ctx.uuid(),
@@ -91,6 +97,7 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
     items,
     incomplete,
     pastCount,
+    duplicateCount: classified.length - items.length,
     groups: defaultGroupsFor(booker, settings.groups.map((g) => g.id)),
     createdAt: ctx.now().toISOString(),
   };
@@ -148,7 +155,7 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
   const normalized = inputs.map((input) => {
     const r = normalizeReservation(input);
     if (!r) throw new UserError(`入力が足りない予約があります（${input.date || '日付なし'}）`);
-    return { input, r: { ...r, fee: r.fee ?? defaultFee(settings, r.studio, r.room) } };
+    return { input, r: { ...r, fee: r.fee ?? defaultFee(settings, r) } };
   });
 
   ctx.withLock(() => {

@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'preact/hooks';
-import { labelDate, type PracticeView } from '@pb/shared';
+import { labelDate } from '@pb/shared';
 import { api } from '../api';
 import { RoomInfo } from '../components/StudioRoom';
 import { Spinner, TopBar, go, place, useApp, useRunner } from '../ui';
 
 /** メニューの「募集する」。自分が登録した（管理者はすべての）練習から、募集を送る練習を選ぶ */
 export function RecruitListPage() {
-  const { me } = useApp();
-  const [list, setList] = useState<PracticeView[] | null>(null);
+  const { me, practices, setPractices } = useApp();
   const [run] = useRunner();
+  const [fresh, setFresh] = useState(false);
 
+  // 手元の一覧ですぐ表示し、最新の一覧は裏で取り直す
   useEffect(() => {
-    run(() => api('listPractices')).then(
-      (r) => r && setList(r.filter((v) => v.canEdit && (v.practice.status === '募集中' || v.practice.status === '満員'))),
-    );
+    run(() => api('listPractices')).then((r) => {
+      if (r) setPractices(r, true);
+      setFresh(true);
+    });
   }, []);
+
+  const list = practices == null && !fresh ? null : (practices ?? []).filter((v) => v.canEdit && (v.practice.status === '募集中' || v.practice.status === '満員'));
 
   return (
     <>

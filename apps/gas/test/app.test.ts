@@ -126,7 +126,8 @@ describe('スクショから募集まで', () => {
     t.reader.result = [reservation, { ...reservation, start: '21:00', end: '22:00', fee: 3000 }];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm2')] });
     const card = t.line.lastReplyText();
-    expect(card).toContain('登録済みです');
+    expect(card).not.toContain('10/21(水) 19:00');
+    expect(card).toContain('登録済みの予約1件は除きました');
     expect(card).toContain('延長として更新');
     draftId = [...t.kv.data.keys()].at(-1)!.replace('draft:', '');
     handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}`)] });
@@ -136,11 +137,11 @@ describe('スクショから募集まで', () => {
     expect(t.line.lastReplyText()).toContain('22:00までに延長');
   });
 
-  it('料金が読めなければ標準料金、必須項目が欠けたら登録ボタンを出さない', () => {
+  it('料金が読めなければ標準料金（1時間あたり × 時間）、必須項目が欠けたら登録ボタンを出さない', () => {
     t.reader.result = [{ ...reservation, fee: null }, { date: '2026-10-23', start: null, end: null, studio: 'worcle横浜', room: 'B', fee: null }];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
     const card = t.line.lastReplyText();
-    expect(card).toContain('¥3,000');
+    expect(card).toContain('¥6,000');
     expect(card).toContain('読み取れなかった項目がある予約が1件');
     expect(card).not.toContain('"label":"登録する"');
   });
@@ -166,8 +167,29 @@ describe('スクショから募集まで', () => {
     expect(card).toContain('10/14(水) 19:00〜21:00');
     expect(card).toContain('¥3,200');
     expect(card).toContain('10/21(水) 19:30〜21:00');
-    expect(card).toContain('過去の日付の予約1件は除きました');
+    expect(card).toContain('終了した予約1件は除きました');
     expect(card).not.toContain('20:30');
+  });
+
+  it('登録済み・終了した予約だけなら確認カードを出さず、件数を伝える', () => {
+    t.reader.result = [reservation];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm1')] });
+    const draftId = [...t.kv.data.keys()].at(-1)!.replace('draft:', '');
+    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}`)] });
+
+    t.clock.now = new Date('2026-10-21T09:30:00Z'); // 10/21 18:30（同じ日の 17:00〜18:00 はもう終わっている）
+    const drafts = t.kv.data.size;
+    t.reader.result = [
+      { date: '2026-10-21', start: '17:00', end: '18:00', studio: 'worcle横浜', room: 'B', fee: 1000 },
+      { date: '2026-10-21', start: '19:00', end: '21:00', studio: 'worcle横浜', room: 'A', fee: 6000 },
+    ];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm2')] });
+    expect(t.line.lastReplyText()).toContain('新しく登録する予約はありませんでした。登録済みの予約1件・終了した予約1件は除きました。');
+    expect(t.kv.data.size).toBe(drafts);
+
+    // アプリの読み取りも同じ
+    const r = handleApi(t.ctx, { userId: BOOKER }, 'parseReservations', { text: '10/21' }) as any;
+    expect(r).toMatchObject({ items: [], pastCount: 1, duplicateCount: 1 });
   });
 
   it('スタジオの一覧と、これまでに登録された一覧外のスタジオを読み取りの手がかりとして渡す', () => {
@@ -372,7 +394,7 @@ describe('出欠', () => {
     const only = handleApi(t.ctx, { userId: 'U9', name: 'きゅう' }, 'createPractices', { items: [item], groups: [] }) as any;
     expect(only.created).toHaveLength(1);
     expect(t.line.pushes).toHaveLength(pushes);
-    expect(t.store.getPractice(only.created[0])).toMatchObject({ fee: 3000, max: 8, memo: 'ショーケースの通し', booker: 'U9', groups: [] });
+    expect(t.store.getPractice(only.created[0])).toMatchObject({ fee: 6000, max: 8, memo: 'ショーケースの通し', booker: 'U9', groups: [] });
     // 登録した本人は修正・中止ができ、他の一般メンバーはできない
     expect((handleApi(t.ctx, { userId: 'U9' }, 'getPractice', { id: only.created[0] }) as any).canEdit).toBe(true);
     expect((handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'getPractice', { id: only.created[0] }) as any).canEdit).toBe(false);
@@ -400,11 +422,13 @@ describe('出欠', () => {
 });
 
 describe('改善要望', () => {
-  it('誰でも投稿でき、名前つきで全員に見える。状態とコメントは管理者だけ', () => {
+  it('誰でも投稿できるが、一覧を見て状態とコメントを付けられるのは管理者だけ', () => {
     const t = setup();
-    handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'postFeedback', { text: '  前日にリマインドがほしい  ' });
-    const list = handleApi(t.ctx, { userId: BOOKER }, 'listFeedback', {}) as any[];
-    expect(list).toMatchObject([{ name: 'いち', text: '前日にリマインドがほしい', status: '未対応', mine: false, canDelete: false }]);
+    expect(handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'postFeedback', { text: '  前日にリマインドがほしい  ' })).toEqual([]);
+    expect(handleApi(t.ctx, { userId: BOOKER }, 'listFeedback', {})).toEqual([]);
+    expect(handleApi(t.ctx, { userId: 'U1' }, 'listFeedback', {})).toEqual([]);
+    const list = handleApi(t.ctx, { userId: ADMIN }, 'listFeedback', {}) as any[];
+    expect(list).toMatchObject([{ name: 'いち', text: '前日にリマインドがほしい', status: '未対応', mine: false, canDelete: true }]);
     expect(() => handleApi(t.ctx, { userId: 'U1' }, 'postFeedback', { text: ' ' })).toThrow('入力');
 
     expect(() => handleApi(t.ctx, { userId: 'U1' }, 'updateFeedback', { id: list[0].id, status: '対応済み' })).toThrow('管理者');

@@ -9,6 +9,7 @@ import {
   classifyReservations,
   confirmCard,
   defaultFee,
+  hourlyFee,
   findCancelRule,
   googleCalendarUrl,
   jstDateTime,
@@ -103,11 +104,18 @@ describe('normalizeReservation', () => {
 });
 
 describe('設定', () => {
-  it('標準料金は部屋の一致を優先', () => {
-    expect(defaultFee(settings, 'worcle', 'A')).toBe(3300);
-    expect(defaultFee(settings, 'worcle', 'B')).toBe(2500);
-    expect(defaultFee(settings, 'BUZZ横浜東口', 'Ast')).toBe(4000);
-    expect(defaultFee(settings, 'other', '')).toBe(0);
+  it('標準料金（1時間あたり）は部屋の一致を優先', () => {
+    expect(hourlyFee(settings, 'worcle', 'A')).toBe(3300);
+    expect(hourlyFee(settings, 'worcle', 'B')).toBe(2500);
+    expect(hourlyFee(settings, 'BUZZ横浜東口', 'Ast')).toBe(4000);
+    expect(hourlyFee(settings, 'other', '')).toBe(0);
+  });
+  it('スタジオ代は1時間あたりの標準料金 × 利用時間', () => {
+    expect(defaultFee(settings, { studio: 'worcle', room: 'B', start: '19:00', end: '21:00' })).toBe(5000);
+    expect(defaultFee(settings, { studio: 'worcle', room: 'A', start: '19:00', end: '20:30' })).toBe(4950);
+    expect(defaultFee(settings, { studio: 'worcle', room: 'B', start: '23:00', end: '25:00' })).toBe(5000);
+    expect(defaultFee(settings, { studio: 'other', room: '', start: '19:00', end: '21:00' })).toBe(0);
+    expect(defaultFee(settings, { studio: 'worcle', room: 'B', start: '', end: '' })).toBe(0);
   });
   it('キャンセル期限は前方一致', () => {
     expect(findCancelRule(settings.cancelRules, 'BUZZ横浜東口')?.daysBefore).toBe(1);
@@ -209,7 +217,7 @@ describe('スタジオ一覧', () => {
     expect(roomInfo(DEFAULT_STUDIOS, 'その他', 'A')).toBeNull();
   });
   it('料金・期限の設定はスタジオ名を含めば当たる', () => {
-    expect(defaultFee({ ...settings, fees: [{ studio: 'worcle', room: '', fee: 3300 }] }, 'studio worcle 横浜', '202')).toBe(3300);
+    expect(hourlyFee({ ...settings, fees: [{ studio: 'worcle', room: '', fee: 3300 }] }, 'studio worcle 横浜', '202')).toBe(3300);
     expect(findCancelRule([{ studio: 'BUZZ', daysBefore: 1, time: '10:00' }, { studio: 'BUZZ横浜東口', daysBefore: 2, time: '10:00' }], 'BUZZ横浜東口')?.daysBefore).toBe(2);
   });
 });

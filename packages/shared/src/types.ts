@@ -110,8 +110,10 @@ export interface Draft {
   items: DraftItem[];
   /** 必須項目が読み取れなかった予約（アプリで入力してもらう） */
   incomplete: Partial<Reservation>[];
-  /** 今日より前の日付で、登録しなかった予約の件数 */
+  /** 今日より前、または今日すでに終わった時間帯で、登録しなかった予約の件数 */
   pastCount: number;
+  /** すでに登録済みで、登録しなかった予約の件数（古い下書きには無い） */
+  duplicateCount?: number;
   groups: string[];
   createdAt: string;
 }

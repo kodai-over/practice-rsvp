@@ -1,5 +1,5 @@
 import { labelDate, shortDate } from './dates';
-import { yen } from './practice';
+import { skippedNote, yen } from './practice';
 import type { Draft, Group, Practice, Reservation } from './types';
 
 /** LINE Messaging API のメッセージオブジェクト（必要な範囲だけ型付け） */
@@ -61,12 +61,7 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
   const byId = new Map(practices.map((p) => [p.id, p]));
   const itemRows: Node[] = draft.items.map(({ reservation: r, kind, targetId }) => {
     const target = targetId ? byId.get(targetId) : undefined;
-    const note =
-      kind === 'extension' && target
-        ? `${shortDate(target.date)} ${timeRange(target)}の練習の延長として更新（募集は出し直しません）`
-        : kind === 'duplicate'
-          ? '登録済みです（募集は出しません）'
-          : '';
+    const note = kind === 'extension' && target ? `${shortDate(target.date)} ${timeRange(target)}の練習の延長として更新（募集は出し直しません）` : '';
     return {
       type: 'box',
       layout: 'vertical',
@@ -74,13 +69,13 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
       contents: [
         text(`${labelDate(r.date)} ${timeRange(r)}`, { weight: 'bold' }),
         text(`${place(r)}　${r.fee != null ? yen(r.fee) : '料金不明'}`, { size: 'sm' }),
-        ...(note ? [text(note, { size: 'xs', color: kind === 'duplicate' ? GRAY : GREEN })] : []),
+        ...(note ? [text(note, { size: 'xs', color: GREEN })] : []),
       ],
     };
   });
-  if (draft.pastCount > 0) {
-    itemRows.push(text(`過去の日付の予約${draft.pastCount}件は除きました。`, { size: 'xs', color: GRAY }));
-  }
+  // 登録済み・終了した予約はカードに出さず、件数だけ添える
+  const skipped = skippedNote(draft);
+  if (skipped) itemRows.push(text(skipped, { size: 'xs', color: GRAY }));
   if (draft.items.length === 0 && draft.incomplete.length === 0) {
     itemRows.push(text('登録できる今後の予約はありませんでした。', { size: 'sm' }));
   }

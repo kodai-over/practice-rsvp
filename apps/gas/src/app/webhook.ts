@@ -7,6 +7,7 @@ import {
   parsePostback,
   practiceListMessage,
   shortDate,
+  skippedNote,
   toJstDate,
   type Answer,
   type LineMessage,
@@ -152,6 +153,11 @@ function registerFrom(ctx: Ctx, ev: LineEvent, userId: string, src: { messageIds
     return;
   }
   const draft = buildDraft(ctx, member, raws);
+  if (draft.items.length === 0 && draft.incomplete.length === 0) {
+    // すべて対象外なら確認カードは出さない
+    sendToUser(ctx, ev, userId, [textMsg(`新しく登録する予約はありませんでした。${skippedNote(draft)}`)]);
+    return;
+  }
   saveDraft(ctx, draft);
   const card = confirmCard({ draft, groups: ctx.store.settings().groups, practices: ctx.store.practices(), appUrl: ctx.config.appUrl });
   sendToUser(ctx, ev, userId, [card]);

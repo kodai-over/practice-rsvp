@@ -33,10 +33,10 @@ export function SettingsPage() {
       <div class="section-title">改善要望</div>
       <section class="card">
         <div class="muted" style={{ marginBottom: 8 }}>
-          こうなったら便利、ここが使いにくい、などを送れます。送った要望は名前と一緒にメンバー全員に表示されます。
+          こうなったら便利、ここが使いにくい、などを送れます。送った要望は名前と一緒に管理者だけに届きます。
         </div>
         <button class="btn block" onClick={() => go('/feedback')}>
-          要望を見る・送る
+          要望を送る
         </button>
       </section>
 
@@ -124,13 +124,16 @@ export function AdminPage() {
 
       <StudioEditor studios={studios} onChange={setStudios} />
 
-      <div class="section-title">スタジオの標準料金（部屋が空欄なら全部屋）</div>
+      <div class="section-title">スタジオの標準料金（1時間あたり・部屋が空欄なら全部屋）</div>
       <section class="card">
+        <div class="muted" style={{ marginBottom: 8 }}>
+          登録画面でスタジオと部屋を選ぶと、1時間あたりの料金 × 利用時間でスタジオ代が自動で入ります。スクショから料金が読めなかったときにも使います。
+        </div>
         {fees.map((f, i) => (
           <div class="grid3" style={{ marginBottom: 8 }}>
             <input type="text" placeholder="スタジオ" value={f.studio} onInput={(e) => setFees(fees.map((x, j) => (j === i ? { ...x, studio: e.currentTarget.value } : x)))} />
             <input type="text" placeholder="部屋" value={f.room} onInput={(e) => setFees(fees.map((x, j) => (j === i ? { ...x, room: e.currentTarget.value } : x)))} />
-            <input type="number" placeholder="円" value={f.fee} onInput={(e) => setFees(fees.map((x, j) => (j === i ? { ...x, fee: Number(e.currentTarget.value) } : x)))} />
+            <input type="number" placeholder="円/時間" value={f.fee} onInput={(e) => setFees(fees.map((x, j) => (j === i ? { ...x, fee: Number(e.currentTarget.value) } : x)))} />
           </div>
         ))}
         <button class="btn small" onClick={() => setFees([...fees, { studio: '', room: '', fee: 0 }])}>

@@ -6,14 +6,25 @@ import { openExternal } from '../liff';
 import { RsvpButtons, Spinner, StatusBadge, TopBar, go, place, useApp, useRunner } from '../ui';
 
 export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'recruit' | null }) {
-  const { me, updatePractice, setPractices } = useApp();
-  const [v, setV] = useState<PracticeView | null>(null);
+  const { me, toast, practices, updatePractice, setPractices } = useApp();
+  const fromList = () => practices?.find((x) => x.practice.id === id) ?? null;
+  const [v, setV] = useState<PracticeView | null>(fromList);
+  const [loading, setLoading] = useState(true);
   const [run, busy] = useRunner();
   const calRef = useRef<HTMLDivElement>(null);
   const recruitRef = useRef<HTMLDivElement>(null);
 
+  // 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる）
   useEffect(() => {
-    run(() => api('getPractice', { id })).then((r) => r && setV(r));
+    setV(fromList());
+    setLoading(true);
+    api('getPractice', { id })
+      .then((r) => {
+        setV(r);
+        updatePractice(r);
+      })
+      .catch((e) => toast(e instanceof Error ? e.message : String(e), true))
+      .finally(() => setLoading(false));
   }, [id]);
 
   useEffect(() => {
@@ -21,7 +32,7 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'rec
     if (v && target) target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [v != null, focus]);
 
-  if (!v) return <><TopBar title="練習" back />{busy ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
+  if (!v) return <><TopBar title="練習" back />{loading ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
 
   const p = v.practice;
   const update = async (fn: () => Promise<PracticeView>, done?: string) => {

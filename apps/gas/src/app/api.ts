@@ -83,8 +83,9 @@ export function practiceView(ctx: Ctx, p: Practice, me: Member | null, att?: Att
   };
 }
 
-/** 要望の一覧。新しい順。名前は今の表示名で出す */
+/** 要望の一覧。新しい順。名前は今の表示名で出す。要望は送るだけで、一覧を見られるのは管理者だけ */
 function feedbackList(ctx: Ctx, me: Member): FeedbackView[] {
+  if (!isAdmin(me)) return [];
   const byId = new Map(ctx.store.members().map((m) => [m.userId, m]));
   return ctx.store
     .feedback()
@@ -218,7 +219,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       throw new UserError(`予約内容を読み取れませんでした（${e instanceof Error ? e.message : String(e)}）。手で入力してください。`);
     }
     const d = buildDraft(ctx, me, raws);
-    return { items: d.items, incomplete: d.incomplete, pastCount: d.pastCount };
+    return { items: d.items, incomplete: d.incomplete, pastCount: d.pastCount, duplicateCount: d.duplicateCount ?? 0 };
   },
 
   getDraft(ctx, me, { id }) {

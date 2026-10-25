@@ -18,14 +18,15 @@ export function FeedbackPage() {
   const admin = isAdmin(me.member);
 
   useEffect(() => {
-    run(() => api('listFeedback')).then((r) => r && setList(r));
+    // 要望は送るだけ。一覧は管理者だけが見る
+    if (admin) run(() => api('listFeedback')).then((r) => r && setList(r));
   }, []);
 
   const post = async (e: Event) => {
     e.preventDefault();
     const r = await run(() => api('postFeedback', { text }), '要望を送りました。ありがとうございます！');
     if (r) {
-      setList(r);
+      if (admin) setList(r);
       setText('');
     }
   };
@@ -39,20 +40,22 @@ export function FeedbackPage() {
           <textarea rows={3} maxLength={1000} value={text} placeholder="例：練習の前日にリマインドがほしい" onInput={(e) => setText(e.currentTarget.value)} />
         </label>
         <div class="row">
-          <span class="muted grow">投稿すると、名前（{me.member.name}）と一緒にメンバー全員に表示されます</span>
+          <span class="muted grow">送った要望は、名前（{me.member.name}）と一緒に管理者だけに届きます</span>
           <button class="btn primary" disabled={busy || !text.trim()}>
             送る
           </button>
         </div>
       </form>
 
-      <div class="section-title">みんなの要望</div>
-      {list == null ? (
+      {!admin ? null : list == null ? (
         <Spinner />
       ) : list.length === 0 ? (
         <div class="empty">まだ要望はありません</div>
       ) : (
-        list.map((f) => <FeedbackCard key={f.id} f={f} admin={admin} busy={busy} onChange={setList} run={run} />)
+        <>
+          <div class="section-title">届いた要望（管理者だけに表示）</div>
+          {list.map((f) => <FeedbackCard key={f.id} f={f} admin={admin} busy={busy} onChange={setList} run={run} />)}
+        </>
       )}
     </>
   );
@@ -98,7 +101,7 @@ function FeedbackCard({
                 <option>{s}</option>
               ))}
             </select>
-            <input type="text" class="grow" placeholder="コメント（全員に表示）" value={reply} onInput={(e) => setReply(e.currentTarget.value)} />
+            <input type="text" class="grow" placeholder="コメント（管理者用のメモ）" value={reply} onInput={(e) => setReply(e.currentTarget.value)} />
             <button class="btn small" disabled={busy || reply === f.reply} onClick={() => update({ reply })}>
               保存
             </button>

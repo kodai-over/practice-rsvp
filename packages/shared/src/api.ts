@@ -70,6 +70,7 @@ export interface ParseResult {
   items: DraftItem[];
   incomplete: Partial<Reservation>[];
   pastCount: number;
+  duplicateCount: number;
 }
 
 export interface CreateResult {
