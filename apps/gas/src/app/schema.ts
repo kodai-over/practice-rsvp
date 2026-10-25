@@ -2,7 +2,7 @@
  * スプレッドシートの4シートの列と、行⇄データの変換。
  * 列は見出し名で引くので、管理者が列を並べ替えても動く。
  */
-import type { Attendance, Feedback, Member, Practice, Settings } from '@pb/shared';
+import { DEFAULT_STUDIOS, type Attendance, type Feedback, type Member, type Practice, type Settings, type StudioDef } from '@pb/shared';
 
 export type Row = Record<string, string>;
 
@@ -157,22 +157,40 @@ export function feedbackToRow(f: Feedback): Row {
  *   共通        | 最低人数標準 / 切り上げ単位 |      | 値
  */
 export function rowsToSettings(rows: Row[]): Settings {
-  const s: Settings = { fees: [], cancelRules: [], minDefault: 3, roundUnit: 10, groups: [] };
+  const s: Settings = { studios: [], fees: [], cancelRules: [], minDefault: 3, roundUnit: 10, groups: [] };
+  const studio = (name: string): StudioDef => {
+    let found = s.studios.find((x) => x.name === name);
+    if (!found) s.studios.push((found = { name, aliases: [], rooms: [] }));
+    return found;
+  };
   for (const r of rows) {
     const [kind, k1, k2, v] = [r['種別'], r['キー1'] ?? '', r['キー2'] ?? '', r['値'] ?? ''].map((x) => (x ?? '').trim());
-    if (kind === '標準料金' && k1) s.fees.push({ studio: k1, room: k2, fee: Number(v) || 0 });
+    if (kind === 'スタジオ' && k1) studio(k1).aliases = k2.split(/[,、]/).map((x) => x.trim()).filter(Boolean);
+    else if (kind === '部屋' && k1 && k2) studio(k1).rooms.push({ name: k2, size: v });
+    else if (kind === '標準料金' && k1) s.fees.push({ studio: k1, room: k2, fee: Number(v) || 0 });
     else if (kind === 'キャンセル期限' && k1) s.cancelRules.push({ studio: k1, daysBefore: Number(k2) || 0, time: v || '10:00' });
     else if (kind === 'グループ' && k1) s.groups.push({ id: k1, name: v || k1 });
     else if (kind === '共通' && k1 === '最低人数標準') s.minDefault = Number(v) || s.minDefault;
     else if (kind === '共通' && k1 === '切り上げ単位') s.roundUnit = Number(v) || s.roundUnit;
   }
+  // シートにスタジオがまだ1件もなければ、コードの初期値（公式サイトの情報）を使う
+  if (s.studios.length === 0) s.studios = DEFAULT_STUDIOS.map((x) => ({ ...x, aliases: [...x.aliases], rooms: x.rooms.map((r) => ({ ...r })) }));
   return s;
 }
 
+/**
+ * 設定シートは1行1項目。
+ *   スタジオ     | スタジオ名 | 別名（カンマ区切り） |
+ *   部屋        | スタジオ名 | 部屋名              | 広さなどの補足
+ */
 export function settingsToRows(s: Settings): Row[] {
   return [
     { 種別: '共通', キー1: '最低人数標準', キー2: '', 値: String(s.minDefault) },
     { 種別: '共通', キー1: '切り上げ単位', キー2: '', 値: String(s.roundUnit) },
+    ...s.studios.flatMap((st) => [
+      { 種別: 'スタジオ', キー1: st.name, キー2: st.aliases.join(','), 値: '' },
+      ...st.rooms.map((r) => ({ 種別: '部屋', キー1: st.name, キー2: r.name, 値: r.size })),
+    ]),
     ...s.fees.map((f) => ({ 種別: '標準料金', キー1: f.studio, キー2: f.room, 値: String(f.fee) })),
     ...s.cancelRules.map((c) => ({ 種別: 'キャンセル期限', キー1: c.studio, キー2: String(c.daysBefore), 値: c.time })),
     ...s.groups.map((g) => ({ 種別: 'グループ', キー1: g.id, キー2: '', 値: g.name })),
@@ -181,6 +199,7 @@ export function settingsToRows(s: Settings): Row[] {
 
 /** 初期の設定。料金は仮の値なので、管理者が実際の金額に直す */
 export const INITIAL_SETTINGS: Settings = {
+  studios: DEFAULT_STUDIOS,
   minDefault: 3,
   roundUnit: 10,
   fees: [

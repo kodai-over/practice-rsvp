@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { canRegister, type Answer, type PracticeView } from '@pb/shared';
 import { api } from '../api';
+import { RoomInfo } from '../components/StudioRoom';
 import { DateBlock, RsvpButtons, Spinner, StatusBadge, TopBar, feeLabel, go, place, useApp, useRunner } from '../ui';
 
 type Tab = 'all' | 'mine' | 'todo';
@@ -15,14 +16,14 @@ function readTab(): Tab {
   }
 }
 
-export function ListPage() {
-  const { me } = useApp();
-  const [list, setList] = useState<PracticeView[] | null>(null);
-  const [tab, setTab] = useState<Tab>(readTab);
+export function ListPage({ initialTab }: { initialTab?: string | null }) {
+  const { me, practices: list, practicesAt, setPractices } = useApp();
+  const [tab, setTab] = useState<Tab>(() => (initialTab === 'mine' || initialTab === 'todo' || initialTab === 'all' ? initialTab : readTab()));
   const [run, busy] = useRunner();
 
   useEffect(() => {
-    run(() => api('listPractices')).then((r) => r && setList(r));
+    // 起動時のまとめ取得から時間がたっていれば取り直す（前回の表示のときは起動処理が取り直すので待つ）
+    if (practicesAt > 0 && Date.now() - practicesAt > 30_000) run(() => api('listPractices')).then((r) => r && setPractices(r));
   }, []);
 
   const selectTab = (t: Tab) => {
@@ -36,7 +37,7 @@ export function ListPage() {
 
   const answer = async (id: string, a: Answer) => {
     const v = await run(() => api('rsvp', { id, answer: a }));
-    if (v) setList((l) => l!.map((x) => (x.practice.id === id ? v : x)));
+    if (v) setPractices((list ?? []).map((x) => (x.practice.id === id ? v : x)));
   };
 
   const active = (list ?? []).filter((v) => v.practice.status !== '中止');
@@ -55,13 +56,12 @@ export function ListPage() {
             ＋ 登録
           </button>
         )}
-        <button class="icon-btn" onClick={() => go('/feedback')}>
-          要望
-        </button>
         <button class="icon-btn" onClick={() => go('/settings')}>
           設定
         </button>
       </TopBar>
+
+      {practicesAt === 0 && <div class="muted" style={{ margin: '-6px 0 8px' }}>最新の情報に更新しています…</div>}
 
       <div class="tabs" role="tablist">
         {(
@@ -90,6 +90,7 @@ export function ListPage() {
 }
 
 function PracticeCard({ v, onAnswer, busy }: { v: PracticeView; onAnswer: (a: Answer) => void; busy: boolean }) {
+  const { me } = useApp();
   const p = v.practice;
   return (
     <article class="card practice" data-answer={v.myAnswer ?? 'none'} data-status={p.status}>
@@ -101,7 +102,10 @@ function PracticeCard({ v, onAnswer, busy }: { v: PracticeView; onAnswer: (a: An
             <StatusBadge v={v} />
             {v.myAnswer == null && p.status !== '中止' && <span class="badge todo">未回答</span>}
           </div>
-          <div class="place">{place(p)}</div>
+          <div class="place">
+            {place(p)}
+            <RoomInfo studios={me.settings.studios} studio={p.studio} room={p.room} />
+          </div>
           <div class="meta">
             <span>
               <strong>{v.goingCount}人</strong>

@@ -61,7 +61,21 @@ export interface Group {
   name: string;
 }
 
+/** 部屋。size は広さなどの補足（例: 46.5㎡・天井2.3m） */
+export interface RoomDef {
+  name: string;
+  size: string;
+}
+
+/** スタジオ。aliases は読み取りや手入力の表記ゆれを正式な名前にそろえるための別名 */
+export interface StudioDef {
+  name: string;
+  aliases: string[];
+  rooms: RoomDef[];
+}
+
 export interface Settings {
+  studios: StudioDef[];
   fees: FeeRule[];
   cancelRules: CancelRule[];
   minDefault: number;

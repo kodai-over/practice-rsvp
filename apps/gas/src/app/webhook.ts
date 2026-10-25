@@ -185,7 +185,7 @@ function onPostback(ctx: Ctx, ev: LineEvent): void {
     case 'rsvp':
       return onRsvp(ctx, ev, userId, data.p, data.v === '1');
     case 'confirm':
-      return onConfirm(ctx, ev, userId, data.d);
+      return onConfirm(ctx, ev, userId, data.d, data.r === '1');
     case 'discard': {
       const draft = loadDraft(ctx, data.d);
       if (draft && draft.booker === userId) removeDraft(ctx, data.d);
@@ -211,7 +211,8 @@ function onRsvp(ctx: Ctx, ev: LineEvent, userId: string, practiceId: string, goi
   }
 }
 
-function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string): void {
+/** 確認カードの「登録する」（recruit=false）と「登録してグループに募集」（recruit=true） */
+function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string, recruit: boolean): void {
   const draft = loadDraft(ctx, draftId);
   if (!draft || draft.booker !== userId) {
     safeReply(ctx, ev, [textMsg('この確認カードは期限切れか、処理済みです。もう一度スクショを送ってください。')]);
@@ -219,11 +220,12 @@ function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string): vo
   }
   const member = ctx.store.getMember(userId);
   if (!member) return;
-  removeDraft(ctx, draftId); // 二度押しで募集が二重に出ないよう先に消す
+  removeDraft(ctx, draftId); // 二度押しで二重に登録・募集しないよう先に消す
   const inputs: NewPracticeInput[] = draft.items.map((i) => ({ ...i.reservation, max: null, min: null, memo: '' }));
+  const targetGroups = recruit ? draft.groups : [];
   let result;
   try {
-    result = createPractices(ctx, member, inputs, draft.groups);
+    result = createPractices(ctx, member, inputs, targetGroups);
   } catch (e) {
     saveDraft(ctx, draft);
     throw e;
@@ -231,7 +233,11 @@ function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string): vo
   const groups = ctx.store.settings().groups;
   const lines: string[] = [];
   if (result.created.length) {
-    lines.push(`募集しました（${draft.groups.map((g) => groups.find((x) => x.id === g)?.name ?? g).join('、')}）`);
+    lines.push(
+      targetGroups.length
+        ? `登録して募集しました（${targetGroups.map((g) => groups.find((x) => x.id === g)?.name ?? g).join('、')}）`
+        : '登録しました',
+    );
     for (const id of result.created) {
       const p = ctx.store.getPractice(id);
       if (p) lines.push(`・${labelDate(p.date)} ${p.start}〜${p.end} ${p.studio} ${p.room}`.trim());
@@ -241,7 +247,10 @@ function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string): vo
     const p = ctx.store.getPractice(id);
     if (p) lines.push(`${labelDate(p.date)}の練習を${p.end}までに延長しました。`);
   }
-  if (result.skipped.length) lines.push(`登録済みの予約${result.skipped.length}件は募集しませんでした。`);
+  if (result.skipped.length) lines.push(`登録済みの予約${result.skipped.length}件は飛ばしました。`);
+  if (result.created.length && !targetGroups.length) {
+    lines.push('', 'グループに募集するときは、アプリで練習を開いて「グループに募集」から送れます。', ctx.config.appUrl);
+  }
   safeReply(ctx, ev, [textMsg(lines.join('\n') || '登録する予約はありませんでした。')]);
 }
 

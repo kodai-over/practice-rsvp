@@ -32,6 +32,12 @@ interface AppState {
   me: MeView;
   setMe(me: MeView): void;
   toast(msg: string, error?: boolean): void;
+  /** 練習の一覧。起動時にまとめて取ったもの（前回の表示のときは practicesAt が 0） */
+  practices: PracticeView[] | null;
+  practicesAt: number;
+  setPractices(list: PracticeView[]): void;
+  /** 次に一覧を開いたときに取り直させる */
+  reloadPractices(): void;
 }
 
 export const AppContext = createContext<AppState>(null as unknown as AppState);

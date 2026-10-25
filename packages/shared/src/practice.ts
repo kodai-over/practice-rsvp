@@ -29,18 +29,20 @@ export function normalizeReservation(raw: Partial<Record<keyof Reservation, unkn
   return { date, start, end, studio, room, fee };
 }
 
-/** スタジオ・部屋の標準料金。部屋が一致するものを優先し、なければ部屋空欄の行 */
+/** 設定のスタジオ名がスタジオ名に含まれるか（「BUZZ」→「BUZZ横浜東口」、「worcle」→「studio worcle 横浜」） */
+const studioMatches = (key: string, studio: string) => key !== '' && studio.toLowerCase().includes(key.toLowerCase());
+
+/** スタジオ・部屋の標準料金。より詳しく（長く）書かれたスタジオ名、部屋が一致するものを優先 */
 export function defaultFee(settings: Settings, studio: string, room: string): number {
-  const byStudio = settings.fees.filter((f) => studio.startsWith(f.studio));
-  const exact = byStudio.find((f) => f.room === room);
-  if (exact) return exact.fee;
-  const any = byStudio.find((f) => f.room === '');
-  return any ? any.fee : 0;
+  const hits = settings.fees
+    .filter((f) => studioMatches(f.studio, studio) && (f.room === '' || f.room === room))
+    .sort((a, b) => b.studio.length - a.studio.length || (b.room ? 1 : 0) - (a.room ? 1 : 0));
+  return hits[0]?.fee ?? 0;
 }
 
-/** 'BUZZ横浜東口' に 'BUZZ' のルールが当たるよう、前方一致で最も長いものを使う */
+/** スタジオ名を含むルールのうち、最も詳しく（長く）書かれたものを使う */
 export function findCancelRule(rules: CancelRule[], studio: string): CancelRule | null {
-  const hits = rules.filter((r) => studio.startsWith(r.studio)).sort((a, b) => b.studio.length - a.studio.length);
+  const hits = rules.filter((r) => studioMatches(r.studio, studio)).sort((a, b) => b.studio.length - a.studio.length);
   return hits[0] ?? null;
 }
 

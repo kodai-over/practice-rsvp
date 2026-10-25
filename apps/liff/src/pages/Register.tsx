@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { addDays, defaultFee, labelDate, toJstDate, yen, type DraftItemKind, type NewPracticeInput, type Reservation } from '@pb/shared';
 import { api } from '../api';
+import { RoomInfo, RoomSelect, StudioSelect } from '../components/StudioRoom';
 import { Spinner, TopBar, go, useApp, useRunner } from '../ui';
 
 interface FormRow {
@@ -36,7 +37,7 @@ const fromReservation = (r: Partial<Reservation>, kind: FormRow['kind']): FormRo
 
 const KIND_LABEL: Record<string, string> = {
   extension: '既存の練習の延長として更新します',
-  duplicate: '登録済みのため募集しません',
+  duplicate: '登録済みのため飛ばします',
   incomplete: '読み取れなかった項目を入力してください',
 };
 
@@ -79,18 +80,13 @@ async function shrink(file: File): Promise<{ mimeType: string; data: string }> {
 }
 
 export function RegisterPage({ draftId }: { draftId: string | null }) {
-  const { me, toast } = useApp();
+  const { me, toast, reloadPractices } = useApp();
   const [rows, setRows] = useState<FormRow[]>(() => [emptyRow({ date: addDays(toJstDate(new Date()), 7) })]);
-  const [groups, setGroups] = useState<string[]>(() => {
-    // ふだんの送り先。未設定でグループが1つしかなければ、そのグループ
-    const ids = me.groups.map((g) => g.id);
-    const mine = me.member.defaultGroups.filter((g) => ids.includes(g));
-    return mine.length ? mine : ids.length === 1 ? ids : [];
-  });
+  // 登録がメイン。グループへの募集は、選んだときだけ
+  const [groups, setGroups] = useState<string[]>([]);
   const [loading, setLoading] = useState(!!draftId);
   const [run, busy] = useRunner();
   const [pasted, setPasted] = useState('');
-  const studios = [...new Set(me.settings.fees.map((f) => f.studio))];
 
   useEffect(() => {
     if (!draftId) return;
@@ -101,7 +97,6 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         return;
       }
       setRows([...d.items.map((i) => fromReservation(i.reservation, i.kind)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete'))]);
-      if (d.groups.length) setGroups(d.groups);
     });
   }, [draftId]);
 
@@ -151,8 +146,9 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
     if (items.length === 0) return toast('登録する練習がありません', true);
     const res = await run(() => api('createPractices', { items, groups, draftId: draftId ?? undefined }));
     if (!res) return;
+    reloadPractices();
     const parts = [
-      res.created.length && `${res.created.length}件を募集しました`,
+      res.created.length && (groups.length ? `${res.created.length}件を登録して募集しました` : `${res.created.length}件を登録しました`),
       res.extended.length && `${res.extended.length}件を延長しました`,
       res.skipped.length && `${res.skipped.length}件は登録済みでした`,
     ].filter(Boolean);
@@ -212,16 +208,19 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
                 <input type="time" value={r.end} onInput={(e) => update(r.key, 'end', e.currentTarget.value)} />
               </label>
             </div>
-            <div class="grid2">
-              <label class="field">
-                <span>スタジオ</span>
-                <input type="text" list="studios" placeholder="例：worcle横浜" value={r.studio} onInput={(e) => update(r.key, 'studio', e.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span>部屋</span>
-                <input type="text" placeholder="例：A" value={r.room} onInput={(e) => update(r.key, 'room', e.currentTarget.value)} />
-              </label>
+            <div class="field">
+              <span>スタジオ</span>
+              <StudioSelect
+                studios={me.settings.studios}
+                value={r.studio}
+                onChange={(v) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, studio: v, room: v === x.studio ? x.room : '', kind: x.kind === 'incomplete' ? 'incomplete' : undefined } : x)))}
+              />
             </div>
+            <div class="field">
+              <span>部屋</span>
+              <RoomSelect key={r.studio} studios={me.settings.studios} studio={r.studio} value={r.room} onChange={(v) => update(r.key, 'room', v)} />
+            </div>
+            <RoomInfo studios={me.settings.studios} studio={r.studio} room={r.room} style={{ marginTop: -4, marginBottom: 10 }} />
             <label class="field">
               <span>スタジオ代（円）</span>
               <input type="number" inputMode="numeric" placeholder={std ? `空欄なら標準料金 ${yen(std)}` : '金額'} value={r.fee} onInput={(e) => update(r.key, 'fee', e.currentTarget.value)} />
@@ -246,19 +245,20 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
           </section>
         );
       })}
-      <datalist id="studios">
-        {studios.map((s) => (
-          <option value={s} />
-        ))}
-      </datalist>
 
       <button class="btn block" style={{ marginTop: 4 }} onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), key: undefined, kind: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
         ＋ 日を追加
       </button>
 
-      <div class="section-title">送り先グループ</div>
+      <div class="section-title">グループにも募集する（任意）</div>
       <section class="card">
-        {me.groups.length === 0 && <div class="muted">Botが入っているグループがありません</div>}
+        {me.groups.length === 0 ? (
+          <div class="muted">Botが入っているグループがありません。登録だけできます</div>
+        ) : (
+          <div class="muted" style={{ marginBottom: 4 }}>
+            選んだグループに募集メッセージを流します。選ばなければ登録だけ（あとから練習の画面で募集もできます）
+          </div>
+        )}
         {me.groups.map((g) => (
           <label class="check">
             <input
@@ -267,12 +267,13 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
               onChange={(e) => setGroups(e.currentTarget.checked ? [...groups, g.id] : groups.filter((x) => x !== g.id))}
             />
             {g.name}
+            {me.member.defaultGroups.includes(g.id) && <span class="muted">ふだんの送り先</span>}
           </label>
         ))}
       </section>
 
       <button class="btn primary block" style={{ marginTop: 16 }} disabled={busy} onClick={submit}>
-        募集
+        {groups.length ? '登録して募集' : '登録'}
       </button>
     </>
   );

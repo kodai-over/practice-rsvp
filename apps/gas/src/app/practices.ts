@@ -1,5 +1,6 @@
 import {
   canRegister,
+  canonicalizeStudio,
   classifyReservations,
   defaultFee,
   goingList,
@@ -7,6 +8,7 @@ import {
   nextStatus,
   normalizeReservation,
   recruitMessages,
+  roomInfo,
   sortPractices,
   toJstDate,
   type Answer,
@@ -17,6 +19,7 @@ import {
   type NewPracticeInput,
   type Practice,
   type Reservation,
+  type Settings,
   type Via,
   makePracticeId,
 } from '@pb/shared';
@@ -50,16 +53,12 @@ export function ensureMember(ctx: Ctx, userId: string, opts: { groupId?: string;
 
 const DRAFT_TTL = 6 * 60 * 60;
 
-/** スクショか文章から予約を読み取る。これまでに登録されたスタジオ名を手がかりとして渡す */
+/** スクショか文章から予約を読み取る。スタジオ・部屋の一覧を手がかりとして渡す */
 export function readReservations(ctx: Ctx, input: ReaderInput): RawReservation[] {
   const settings = ctx.store.settings();
-  const studios = [
-    ...new Set([
-      ...ctx.store.practices().map((p) => p.studio),
-      ...settings.fees.map((f) => f.studio),
-      ...settings.cancelRules.map((r) => r.studio),
-    ]),
-  ].filter(Boolean);
+  const known = new Set(settings.studios.map((s) => s.name));
+  const others = [...new Set(ctx.store.practices().map((p) => p.studio))].filter((n) => n && !known.has(n));
+  const studios = [...settings.studios, ...others.map((name) => ({ name, aliases: [], rooms: [] }))];
   return ctx.reader.read(input, { today: toJstDate(ctx.now()), studios });
 }
 
@@ -74,10 +73,12 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
   const incomplete: Partial<Reservation>[] = [];
   let pastCount = 0;
   for (const raw of raws) {
-    const r = normalizeReservation(raw);
+    const n = normalizeReservation(raw);
+    // スタジオ名・部屋名を一覧の正式な名前にそろえる（「わーくる横浜」「横浜 301」→ studio worcle 横浜 301）
+    const r = n && canonicalizeStudio(settings.studios, n);
     if (r && r.date < today) pastCount++;
     else if (r) complete.push(r);
-    else incomplete.push(pickPartial(raw));
+    else incomplete.push(canonicalizePartial(settings.studios, pickPartial(raw)));
   }
   // 続いている予約をまとめてから、料金が読めなかったものに標準料金を入れる
   const items = classifyReservations(ctx.store.practices(), complete).map((i) => ({
@@ -100,6 +101,13 @@ export function defaultGroupsFor(m: Member, groupIds: string[]): string[] {
   const mine = m.defaultGroups.filter((g) => groupIds.includes(g));
   if (mine.length > 0) return mine;
   return groupIds.length === 1 ? groupIds : [];
+}
+
+/** 読み取れなかった項目がある予約も、スタジオ名・部屋名だけは正式な名前にそろえる */
+function canonicalizePartial(studios: Settings['studios'], p: Partial<Reservation>): Partial<Reservation> {
+  if (!p.studio) return p;
+  const c = canonicalizeStudio(studios, { date: '', start: '', end: '', fee: null, room: '', ...p, studio: p.studio });
+  return { ...p, studio: c.studio, ...(p.room ? { room: c.room } : {}) };
 }
 
 function pickPartial(raw: RawReservation): Partial<Reservation> {
@@ -127,7 +135,7 @@ export function removeDraft(ctx: Ctx, id: string): void {
 // ---------------------------------------------------------------- 登録と募集
 
 /**
- * 練習を登録し、新しく登録した練習の募集を送り先グループに流す。
+ * 練習を登録する。送り先グループを指定したときだけ、新しく登録した練習の募集をそのグループに流す。
  * 同じ練習IDは登録済みとして飛ばし、直後に続く予約は既存の練習の延長として更新する（募集は出さない）。
  */
 export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInput[], groups: string[]): CreateResult {
@@ -154,9 +162,6 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
       }
       return { input, r, item };
     });
-    if (plan.some((x) => x.item.kind === 'new') && validGroups.length === 0) {
-      throw new UserError('送り先グループを選んでください');
-    }
     for (const { r, item } of plan) {
       if (item.kind === 'duplicate') {
         result.skipped.push(item.targetId!);
@@ -178,20 +183,28 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
     }
   });
 
-  if (created.length > 0) {
-    const messages = recruitMessages(
-      sortPractices(created).map((practice) => ({ practice, bookerName: booker.name })),
-      ctx.config.appUrl,
-    );
-    for (const g of validGroups) {
-      try {
-        ctx.line.push(g, messages.slice(0, 5));
-      } catch (e) {
-        ctx.log('recruit push failed', g, e);
-      }
+  if (created.length > 0) sendRecruit(ctx, sortPractices(created), validGroups, booker.name);
+  return result;
+}
+
+/** 練習の募集をグループに流す（1グループにつき1メッセージ）。送れたグループを返す */
+export function sendRecruit(ctx: Ctx, practices: Practice[], groups: string[], bookerName: string): string[] {
+  if (practices.length === 0 || groups.length === 0) return [];
+  const { studios } = ctx.store.settings();
+  const messages = recruitMessages(
+    practices.map((practice) => ({ practice, bookerName, roomInfo: roomInfo(studios, practice.studio, practice.room) })),
+    ctx.config.appUrl,
+  );
+  const sent: string[] = [];
+  for (const g of groups) {
+    try {
+      ctx.line.push(g, messages.slice(0, 5));
+      sent.push(g);
+    } catch (e) {
+      ctx.log('recruit push failed', g, e);
     }
   }
-  return result;
+  return sent;
 }
 
 function draftPractice(ctx: Ctx, booker: Member, r: Reservation & { fee: number }, input: NewPracticeInput, groups: string[]): Practice {

@@ -86,31 +86,44 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
   }
   if (draft.incomplete.length > 0) {
     itemRows.push(
-      text(`読み取れなかった項目がある予約が${draft.incomplete.length}件あります。「修正して募集」から入力してください。`, {
+      text(`読み取れなかった項目がある予約が${draft.incomplete.length}件あります。「修正して登録」から入力してください。`, {
         size: 'sm',
         color: RED,
       }),
     );
   }
   const groupNames = draft.groups.map((id) => groups.find((g) => g.id === id)?.name ?? '（不明なグループ）');
-  const canConfirm =
-    draft.incomplete.length === 0 && draft.items.some((i) => i.kind !== 'duplicate') && draft.groups.length > 0;
+  // 登録がメイン。グループへの募集は、ふだんの送り先があるときだけ2つ目のボタンで選べる
+  const canRegister = draft.incomplete.length === 0 && draft.items.some((i) => i.kind !== 'duplicate');
+  const canRecruit = canRegister && draft.groups.length > 0 && draft.items.some((i) => i.kind === 'new');
 
   const buttons: Node[] = [];
-  if (canConfirm) {
+  if (canRegister) {
     buttons.push({
       type: 'button',
       style: 'primary',
       color: GREEN,
-      action: { type: 'postback', label: 'この内容で募集', data: encodePostback({ a: 'confirm', d: draft.id }), displayText: 'この内容で募集' },
+      action: { type: 'postback', label: '登録する', data: encodePostback({ a: 'confirm', d: draft.id }), displayText: '登録する' },
+    });
+  }
+  if (canRecruit) {
+    buttons.push({
+      type: 'button',
+      style: 'secondary',
+      action: {
+        type: 'postback',
+        label: '登録してグループに募集',
+        data: encodePostback({ a: 'confirm', d: draft.id, r: '1' }),
+        displayText: '登録してグループに募集',
+      },
     });
   }
   buttons.push(
     {
       type: 'button',
-      style: canConfirm ? 'secondary' : 'primary',
-      ...(canConfirm ? {} : { color: GREEN }),
-      action: { type: 'uri', label: '修正して募集', uri: appLink(appUrl, { draft: draft.id }) },
+      style: canRegister ? 'link' : 'primary',
+      ...(canRegister ? {} : { color: GREEN }),
+      action: { type: 'uri', label: '修正して登録', uri: appLink(appUrl, { draft: draft.id }) },
     },
     {
       type: 'button',
@@ -131,8 +144,11 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
         contents: [
           text('予約内容の確認', { weight: 'bold', size: 'lg' }),
           ...itemRows,
-          { type: 'separator' },
-          row('送り先', groupNames.length ? groupNames.join('、') : '未設定（「修正して募集」で選んでください）'),
+          ...(canRecruit
+            ? [{ type: 'separator' }, row('募集先', `${groupNames.join('、')}（「登録してグループに募集」のとき）`)]
+            : canRegister
+              ? [text('グループへの募集は、登録したあとアプリの練習画面からもできます。', { size: 'xs', color: GRAY })]
+              : []),
         ],
       },
       footer: { type: 'box', layout: 'vertical', spacing: 'sm', contents: buttons },
@@ -145,9 +161,11 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
 export interface RecruitInput {
   practice: Practice;
   bookerName: string;
+  /** 部屋の広さなどの補足 */
+  roomInfo?: string | null;
 }
 
-function recruitBubble({ practice: p, bookerName }: RecruitInput, appUrl: string): Node {
+function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appUrl: string): Node {
   const d = shortDate(p.date);
   return {
     type: 'bubble',
@@ -162,6 +180,7 @@ function recruitBubble({ practice: p, bookerName }: RecruitInput, appUrl: string
         text(timeRange(p), { size: 'md' }),
         { type: 'separator', margin: 'md' },
         row('場所', place(p)),
+        ...(roomInfo ? [row('広さ', roomInfo)] : []),
         row('予約者', bookerName),
         row('料金', `${yen(p.fee)}を参加人数で割り勘`),
         ...(p.max ? [row('上限', `${p.max}人`)] : []),

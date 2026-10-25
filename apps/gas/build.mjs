@@ -2,7 +2,7 @@
 import { build } from 'esbuild';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
-const GLOBALS = ['doPost', 'doGet', 'hourlyJob', 'setupSheets', 'installTriggers', 'checkConfig'];
+const GLOBALS = ['doPost', 'doGet', 'hourlyJob', 'setupSheets', 'installTriggers', 'checkConfig', 'setupRichMenu'];
 
 mkdirSync('dist', { recursive: true });
 await build({

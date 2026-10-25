@@ -73,6 +73,7 @@ function JoinPage() {
           {closed && <span class="badge cancel">中止</span>}
         </div>
         <div class="place">{place(v)}</div>
+        {v.roomInfo && <div class="room-info">{v.roomInfo}</div>}
         <div class="meta">
           <span>
             参加 <strong>{v.goingCount}人</strong>

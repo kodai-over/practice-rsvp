@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_STUDIOS,
   addDays,
+  canonicalizeStudio,
+  roomInfo,
   buildIcs,
   cancelWarningAt,
   classifyReservations,
@@ -46,6 +49,7 @@ const practice = (over: Partial<Practice> = {}): Practice => ({
 });
 
 const settings: Settings = {
+  studios: DEFAULT_STUDIOS,
   fees: [
     { studio: 'worcle', room: 'A', fee: 3300 },
     { studio: 'worcle', room: '', fee: 2500 },
@@ -181,6 +185,35 @@ describe('classifyReservations: 同じ登録内で続く予約', () => {
   });
 });
 
+describe('スタジオ一覧', () => {
+  const r = (studio: string, room: string) => ({ date: '2026-10-21', start: '19:00', end: '21:00', studio, room, fee: null });
+  it('別名・表記ゆれ・部屋名から正式な名前にそろえる', () => {
+    const c = (studio: string, room: string) => {
+      const x = canonicalizeStudio(DEFAULT_STUDIOS, r(studio, room));
+      return `${x.studio}|${x.room}`;
+    };
+    expect(c('わーくる横浜', '202')).toBe('studio worcle 横浜|202');
+    expect(c('worcle横浜', '３０１')).toBe('studio worcle 横浜|301');
+    expect(c('横浜', '301')).toBe('studio worcle 横浜|301');
+    expect(c('横浜', '1')).toBe('BUZZ横浜|1スタジオ');
+    expect(c('BUZZ横浜東口(天高6ｍスタジオ)', 'Bst')).toBe('BUZZ横浜東口|Bst');
+    expect(c('BUZZ横浜東口', 'A')).toBe('BUZZ横浜東口|Ast');
+    expect(c('BUZZ横浜', '3スタジオ')).toBe('BUZZ横浜|3スタジオ');
+    expect(c('市民センター', '和室')).toBe('市民センター|和室');
+    // 一覧にない部屋はそのまま（スタジオ側で部屋が増えたときなど）
+    expect(c('BUZZ横浜', '7スタジオ')).toBe('BUZZ横浜|7スタジオ');
+  });
+  it('部屋の広さ', () => {
+    expect(roomInfo(DEFAULT_STUDIOS, 'BUZZ横浜', '1スタジオ')).toBe('46.5㎡・天井2.3m');
+    expect(roomInfo(DEFAULT_STUDIOS, 'studio worcle 横浜', '202')).toBe('約30㎡（〜10名目安）');
+    expect(roomInfo(DEFAULT_STUDIOS, 'その他', 'A')).toBeNull();
+  });
+  it('料金・期限の設定はスタジオ名を含めば当たる', () => {
+    expect(defaultFee({ ...settings, fees: [{ studio: 'worcle', room: '', fee: 3300 }] }, 'studio worcle 横浜', '202')).toBe(3300);
+    expect(findCancelRule([{ studio: 'BUZZ', daysBefore: 1, time: '10:00' }, { studio: 'BUZZ横浜東口', daysBefore: 2, time: '10:00' }], 'BUZZ横浜東口')?.daysBefore).toBe(2);
+  });
+});
+
 describe('looksLikeReservation', () => {
   it('日付と時刻の両方があれば予約内容とみなす', () => {
     expect(looksLikeReservation('2026-10-21 19:30〜21:00 横浜 202 ¥3,300')).toBe(true);
@@ -220,7 +253,7 @@ describe('Flex Message', () => {
     expect(json).toContain(`${appUrl}?p=p0&cal=1`);
   });
 
-  it('確認カード: 送り先がなければ「この内容で募集」を出さない', () => {
+  it('確認カード: 「登録する」がメイン。ふだんの送り先があるときだけ「登録してグループに募集」も出す', () => {
     const base = {
       id: 'd1',
       booker: 'U1',
@@ -230,11 +263,17 @@ describe('Flex Message', () => {
       createdAt: '',
     };
     const withGroup = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'] }, groups: settings.groups, practices: [], appUrl }));
-    expect(withGroup).toContain('この内容で募集');
+    expect(withGroup).toContain('"label":"登録する","data":"a=confirm&d=d1"');
+    expect(withGroup).toContain('"label":"登録してグループに募集","data":"a=confirm&d=d1&r=1"');
     expect(withGroup).toContain('チームA');
     const noGroup = JSON.stringify(confirmCard({ draft: { ...base, groups: [] }, groups: settings.groups, practices: [], appUrl }));
-    expect(noGroup).not.toContain('"label":"この内容で募集"');
+    expect(noGroup).toContain('"label":"登録する"');
+    expect(noGroup).not.toContain('登録してグループに募集');
     expect(noGroup).toContain(`${appUrl}?draft=d1`);
+    // 読み取れない項目があれば、登録ボタンは出さず修正してもらう
+    const incomplete = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'], incomplete: [{ date: '2026-10-23' }] }, groups: settings.groups, practices: [], appUrl }));
+    expect(incomplete).not.toContain('"label":"登録する"');
+    expect(incomplete).toContain('"label":"修正して登録"');
   });
 
   it('確認カード: 延長の表示', () => {

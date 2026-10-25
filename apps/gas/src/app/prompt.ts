@@ -1,7 +1,13 @@
 /** Gemini に渡す指示文と出力の形。実際のスクショで試しながら調整する */
 
-export function readerPrompt(today: string, studios: string[], text?: string): string {
-  const known = studios.length ? studios.join('、') : '（まだありません）';
+import type { StudioDef } from '@pb/shared';
+
+export function readerPrompt(today: string, studios: StudioDef[], text?: string): string {
+  const known = studios.length
+    ? studios
+        .map((s) => `  - ${s.name}${s.aliases.length ? `（別名: ${s.aliases.join('、')}）` : ''}${s.rooms.length ? ` 部屋: ${s.rooms.map((r) => r.name).join('、')}` : ''}`)
+        .join('\n')
+    : '  （まだありません）';
   const source = text
     ? `次の文章（予約完了メールや予約一覧をコピーしたもの）から、予約内容を抜き出してください。\n----\n${text}\n----`
     : '画像（予約完了画面や予約一覧のスクリーンショット）から、予約内容を抜き出してください。';
@@ -16,10 +22,11 @@ ${source}
 - キャンセル済み・取消と書かれた予約は入れない
 - date: 利用日を YYYY-MM-DD で。年が書かれていなければ、今日以降で最も近い日付になる年を補う
 - start, end: 利用開始・終了時刻を 24時間表記の HH:mm で（深夜は 24:00, 25:00 のように表してよい）
-- studio: スタジオ名。BUZZ は「BUZZ」＋店舗名（例: BUZZ横浜東口）。studio worcle は「worcle」＋店舗名（例: worcle横浜）
-  - これまでに登録されたスタジオ名: ${known}
-  - 「横浜 301」のように店舗名と部屋番号しか書かれていないときは、上の一覧から店舗名が一致するものを studio にし、部屋番号を room にする。一致するものがなければ、書かれている店舗名をそのまま studio にする
-- room: 部屋・スタジオ番号（例: A, 301）。なければ空文字
+- studio: スタジオ名。次の一覧にあるスタジオなら、一覧の名前をそのまま使う
+${known}
+  - 「横浜 301」のように店舗名と部屋しか書かれていないときは、部屋名が一致するスタジオを一覧から選ぶ
+  - 一覧にないスタジオなら、画面に書かれている名前をそのまま使う
+- room: 部屋。一覧に部屋があるスタジオなら、一覧の部屋名をそのまま使う（例: 1スタジオ、Ast、301）。なければ空文字
 - fee: その予約の金額（税込、円、数字のみ）。分からなければ null
 - 支払い状況、電話番号、氏名、メールアドレスなど、予約内容と関係のない情報は出力しない
 - 読み取れない項目は null にする。推測で埋めない

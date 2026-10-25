@@ -3,6 +3,7 @@
  */
 import { buildIcs, appLink } from '@pb/shared';
 import type { Ctx, Kv } from './app/ports';
+import { richMenuDefinition } from './app/richmenu';
 import { route } from './app/router';
 import { INITIAL_SETTINGS, SHEETS, settingsToRows } from './app/schema';
 import { hourlyJob as runHourly } from './app/triggers';
@@ -127,4 +128,36 @@ export function checkConfig() {
   const missing = PROP_KEYS.filter((k) => !p[k] && k !== 'GEMINI_MODEL' && k !== 'GAS_URL');
   console.log(missing.length ? `未設定: ${missing.join(', ')}` : 'スクリプトプロパティはそろっています');
   console.log(`ウェブアプリURL: ${ScriptApp.getService().getUrl()}`);
+}
+
+/**
+ * 初回とメニューを変えたときに実行：Botとの個別トークの下にメニュー（リッチメニュー）を出す。
+ * 画像は GitHub Pages の richmenu.png を使う。古いメニューは消してから作り直す。
+ */
+export function setupRichMenu() {
+  const p = props();
+  if (!p.LINE_CHANNEL_ACCESS_TOKEN || !p.LIFF_ID || !p.PAGES_URL) {
+    throw new Error('LINE_CHANNEL_ACCESS_TOKEN・LIFF_ID・PAGES_URL を設定してから実行してください');
+  }
+  const auth = { Authorization: `Bearer ${p.LINE_CHANNEL_ACCESS_TOKEN}` };
+  const call = (method: 'get' | 'post' | 'delete', url: string, opts: { json?: unknown; blob?: GoogleAppsScript.Base.Blob } = {}) => {
+    const res = UrlFetchApp.fetch(url, {
+      method,
+      headers: auth,
+      muteHttpExceptions: true,
+      ...(opts.json !== undefined ? { contentType: 'application/json', payload: JSON.stringify(opts.json) } : {}),
+      ...(opts.blob ? { contentType: opts.blob.getContentType() ?? 'image/png', payload: opts.blob.getBytes() } : {}),
+    });
+    if (res.getResponseCode() >= 300) throw new Error(`${method} ${url} ${res.getResponseCode()}: ${res.getContentText()}`);
+    const text = res.getContentText();
+    return text ? JSON.parse(text) : {};
+  };
+
+  const image = UrlFetchApp.fetch(`${p.PAGES_URL.replace(/\/$/, '')}/richmenu.png`).getBlob().setContentType('image/png');
+  const old = call('get', 'https://api.line.me/v2/bot/richmenu/list').richmenus as { richMenuId: string }[];
+  const { richMenuId } = call('post', 'https://api.line.me/v2/bot/richmenu', { json: richMenuDefinition(`https://liff.line.me/${p.LIFF_ID}`) });
+  call('post', `https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`, { blob: image });
+  call('post', `https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`);
+  for (const m of old) call('delete', `https://api.line.me/v2/bot/richmenu/${m.richMenuId}`);
+  console.log(`リッチメニューを設定しました（${richMenuId}）。古いメニュー${old.length}件を削除しました`);
 }

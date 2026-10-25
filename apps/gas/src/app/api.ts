@@ -26,9 +26,10 @@ import {
   type PracticeView,
   type Role,
   type Settings,
+  type StudioDef,
 } from '@pb/shared';
 import { UserError, type Ctx, type RawReservation } from './ports';
-import { buildDraft, createPractices, ensureMember, loadDraft, readReservations, recordAnswer, refreshStatus, removeDraft } from './practices';
+import { buildDraft, createPractices, ensureMember, loadDraft, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
 
 type Handler<A extends ApiAction> = (ctx: Ctx, me: Member, params: ApiActions[A]['params']) => ApiActions[A]['result'];
 
@@ -36,7 +37,8 @@ type Handler<A extends ApiAction> = (ctx: Ctx, me: Member, params: ApiActions[A]
 export function handleApi(ctx: Ctx, auth: { userId: string; name?: string }, action: string, params: unknown): unknown {
   const handler = (handlers as Record<string, Handler<ApiAction>>)[action];
   if (!handler) throw new UserError(`不明な操作です: ${action}`);
-  const me = ctx.withLock(() => ensureMember(ctx, auth.userId, { name: auth.name }));
+  // 登録済みならロックを取らない（起動を速くするため）。未登録のときだけロックして登録する
+  const me = ctx.store.getMember(auth.userId) ?? ctx.withLock(() => ensureMember(ctx, auth.userId, { name: auth.name }));
   return handler(ctx, me, (params ?? {}) as never);
 }
 
@@ -96,6 +98,8 @@ function feedbackList(ctx: Ctx, me: Member): FeedbackView[] {
     }));
 }
 
+const memberNameOf = (ctx: Ctx, userId: string) => ctx.store.getMember(userId)?.name ?? '（不明）';
+
 function getPracticeOrThrow(ctx: Ctx, id: string): Practice {
   const p = ctx.store.getPractice(id);
   if (!p) throw new UserError('練習が見つかりません');
@@ -126,6 +130,10 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
   me(ctx, me) {
     const s = ctx.store.settings();
     return { member: me, groups: s.groups, settings: s };
+  },
+
+  home(ctx, me) {
+    return { me: handlers.me(ctx, me, {}), practices: handlers.listPractices(ctx, me, {}) };
   },
 
   listPractices(ctx, me) {
@@ -258,6 +266,24 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     return view(ctx, id, me);
   },
 
+  recruitPractice(ctx, me, { id, groups }) {
+    const p = getPracticeOrThrow(ctx, id);
+    requireEditable(me, p);
+    if (!isActive(p)) throw new UserError('募集中の練習だけ募集を送れます');
+    if (p.date < toJstDate(ctx.now())) throw new UserError('終わった練習には募集を送れません');
+    const known = new Set(ctx.store.settings().groups.map((g) => g.id));
+    // 同じグループに二重に流さない
+    const targets = [...new Set(groups ?? [])].filter((g) => known.has(g) && !p.groups.includes(g));
+    if (targets.length === 0) throw new UserError('募集を送るグループを選んでください');
+    const sent = sendRecruit(ctx, [p], targets, memberNameOf(ctx, p.booker));
+    if (sent.length === 0) throw new UserError('募集を送れませんでした。時間をおいてもう一度お試しください');
+    ctx.withLock(() => {
+      const cur = getPracticeOrThrow(ctx, id);
+      ctx.store.savePractice({ ...cur, groups: [...new Set([...cur.groups, ...sent])] });
+    });
+    return view(ctx, id, me);
+  },
+
   setDisplayName(ctx, me, { name }) {
     const m = { ...me, name: cleanName(name, 20) };
     ctx.withLock(() => ctx.store.saveMember(m));
@@ -343,6 +369,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       const s = ctx.store.settings();
       const next: Settings = {
         ...s,
+        studios: params.studios === undefined ? s.studios : cleanStudios(params.studios),
         fees: (params.fees ?? [])
           .filter((f) => f.studio?.trim())
           .map((f) => ({ studio: f.studio.trim(), room: (f.room ?? '').trim(), fee: nonNegative(f.fee) ?? 0 })),
@@ -361,6 +388,24 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     });
   },
 };
+
+/** 管理画面から来たスタジオ・部屋の一覧を整える（空の行は捨て、同じ名前はまとめる） */
+function cleanStudios(list: StudioDef[]): StudioDef[] {
+  const out: StudioDef[] = [];
+  for (const st of Array.isArray(list) ? list : []) {
+    const name = String(st?.name ?? '').trim().slice(0, 50);
+    if (!name || out.some((x) => x.name === name)) continue;
+    const rooms: StudioDef['rooms'] = [];
+    for (const r of Array.isArray(st.rooms) ? st.rooms : []) {
+      const rn = String(r?.name ?? '').trim().slice(0, 30);
+      if (rn && !rooms.some((x) => x.name === rn)) rooms.push({ name: rn, size: String(r?.size ?? '').trim().slice(0, 60) });
+    }
+    const aliases = (Array.isArray(st.aliases) ? st.aliases : []).map((a) => String(a).trim()).filter(Boolean).slice(0, 20);
+    out.push({ name, aliases, rooms });
+  }
+  if (out.length === 0) throw new UserError('スタジオを1つ以上登録してください');
+  return out;
+}
 
 function fail(msg: string): never {
   throw new UserError(msg);

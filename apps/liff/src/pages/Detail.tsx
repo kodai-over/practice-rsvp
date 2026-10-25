@@ -1,28 +1,35 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { labelDate, yen, type Answer, type AttendeeView, type PracticePatch, type PracticeView } from '@pb/shared';
 import { api } from '../api';
+import { RoomInfo, RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';
 import { RsvpButtons, Spinner, StatusBadge, TopBar, go, place, useApp, useRunner } from '../ui';
 
-export function DetailPage({ id, focusCalendar }: { id: string; focusCalendar: boolean }) {
+export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | 'recruit' | null }) {
+  const { me, reloadPractices } = useApp();
   const [v, setV] = useState<PracticeView | null>(null);
   const [run, busy] = useRunner();
   const calRef = useRef<HTMLDivElement>(null);
+  const recruitRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     run(() => api('getPractice', { id })).then((r) => r && setV(r));
   }, [id]);
 
   useEffect(() => {
-    if (v && focusCalendar) calRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [v != null, focusCalendar]);
+    const target = focus === 'calendar' ? calRef : focus === 'recruit' ? recruitRef : null;
+    if (v && target) target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [v != null, focus]);
 
   if (!v) return <><TopBar title="練習" back />{busy ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
 
   const p = v.practice;
   const update = async (fn: () => Promise<PracticeView>, done?: string) => {
     const r = await run(fn, done);
-    if (r) setV(r);
+    if (r) {
+      setV(r);
+      reloadPractices(); // 一覧に戻ったときに最新にする
+    }
     return r;
   };
 
@@ -36,6 +43,7 @@ export function DetailPage({ id, focusCalendar }: { id: string; focusCalendar: b
           <StatusBadge v={v} />
         </div>
         <div class="place">{place(p)}</div>
+        <RoomInfo studios={me.settings.studios} studio={p.studio} room={p.room} />
         <div class="meta">
           <span>予約 {v.bookerName}</span>
           {v.groupNames.length > 0 && <span>募集先 {v.groupNames.join('、')}</span>}
@@ -78,6 +86,11 @@ export function DetailPage({ id, focusCalendar }: { id: string; focusCalendar: b
           iPhoneのカレンダー
         </button>
       </div>
+
+      <div ref={recruitRef} />
+      {v.canEdit && (p.status === '募集中' || p.status === '満員') && (
+        <RecruitForm v={v} busy={busy} onSend={(groups) => update(() => api('recruitPractice', { id, groups }), 'グループに募集を送りました')} />
+      )}
 
       {v.joinUrl && <JoinLink url={v.joinUrl} />}
 
@@ -166,6 +179,48 @@ function Memo({ v, onAppend, busy }: { v: PracticeView; onAppend: (t: string) =>
   );
 }
 
+function RecruitForm({ v, onSend, busy }: { v: PracticeView; onSend: (groups: string[]) => Promise<unknown>; busy: boolean }) {
+  const { me } = useApp();
+  const [picked, setPicked] = useState<string[]>([]);
+  const rest = me.groups.filter((g) => !v.practice.groups.includes(g.id));
+  return (
+    <>
+      <div class="section-title">グループに募集</div>
+      <section class="card">
+        {v.groupNames.length > 0 && <div class="muted" style={{ marginBottom: 6 }}>募集済み: {v.groupNames.join('、')}</div>}
+        {me.groups.length === 0 ? (
+          <div class="muted">Botをグループに招待すると、ここから募集を送れます</div>
+        ) : rest.length === 0 ? (
+          <div class="muted">すべてのグループに募集済みです</div>
+        ) : (
+          <>
+            {rest.map((g) => (
+              <label class="check">
+                <input
+                  type="checkbox"
+                  checked={picked.includes(g.id)}
+                  onChange={(e) => setPicked(e.currentTarget.checked ? [...picked, g.id] : picked.filter((x) => x !== g.id))}
+                />
+                {g.name}
+              </label>
+            ))}
+            <button
+              class="btn primary block"
+              style={{ marginTop: 8 }}
+              disabled={busy || picked.length === 0}
+              onClick={async () => {
+                if (await onSend(picked)) setPicked([]);
+              }}
+            >
+              募集を送る
+            </button>
+          </>
+        )}
+      </section>
+    </>
+  );
+}
+
 function JoinLink({ url }: { url: string }) {
   const { toast } = useApp();
   const copy = async () => {
@@ -192,6 +247,7 @@ function JoinLink({ url }: { url: string }) {
 }
 
 function EditForm({ v, onSave, onCancel, busy }: { v: PracticeView; onSave: (p: PracticePatch) => Promise<unknown>; onCancel: () => Promise<unknown>; busy: boolean }) {
+  const { me } = useApp();
   const p = v.practice;
   const [f, setF] = useState({
     start: p.start,
@@ -221,10 +277,10 @@ function EditForm({ v, onSave, onCancel, busy }: { v: PracticeView; onSave: (p: 
           </label>
         </div>
         <div class="grid2">
-          <label class="field">
+          <div class="field">
             <span>部屋</span>
-            <input type="text" value={f.room} onInput={set('room')} />
-          </label>
+            <RoomSelect studios={me.settings.studios} studio={p.studio} value={f.room} onChange={(room) => setF({ ...f, room })} />
+          </div>
           <label class="field">
             <span>スタジオ代（円）</span>
             <input type="number" inputMode="numeric" value={f.fee} onInput={set('fee')} />

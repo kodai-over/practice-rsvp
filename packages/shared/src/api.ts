@@ -12,6 +12,7 @@ import type {
   Practice,
   Reservation,
   Settings,
+  StudioDef,
   Via,
 } from './types';
 
@@ -77,8 +78,15 @@ export interface CreateResult {
 
 export type PracticePatch = Partial<Pick<Practice, 'start' | 'end' | 'room' | 'fee' | 'max' | 'min' | 'memo' | 'feeOverride'>>;
 
+export interface HomeView {
+  me: MeView;
+  practices: PracticeView[];
+}
+
 export interface ApiActions {
   me: { params: Record<string, never>; result: MeView };
+  /** 起動時に1回で取る（自分の情報と今後の練習の一覧） */
+  home: { params: Record<string, never>; result: HomeView };
   listPractices: { params: Record<string, never>; result: PracticeView[] };
   getPractice: { params: { id: string }; result: PracticeView };
   rsvp: { params: { id: string; answer: Answer }; result: PracticeView };
@@ -92,6 +100,8 @@ export interface ApiActions {
   createPractices: { params: { items: NewPracticeInput[]; groups: string[]; draftId?: string }; result: CreateResult };
   updatePractice: { params: { id: string; patch: PracticePatch }; result: PracticeView };
   cancelPractice: { params: { id: string }; result: PracticeView };
+  /** 登録済みの練習の募集を、まだ送っていないグループに流す */
+  recruitPractice: { params: { id: string; groups: string[] }; result: PracticeView };
   setDisplayName: { params: { name: string }; result: Member };
   listMembers: { params: Record<string, never>; result: Member[] };
   updateMember: { params: { userId: string; patch: Partial<Pick<Member, 'name' | 'role' | 'defaultGroups'>> }; result: Member };
@@ -101,7 +111,7 @@ export interface ApiActions {
   updateFeedback: { params: { id: string; status?: FeedbackStatus; reply?: string }; result: FeedbackView[] };
   deleteFeedback: { params: { id: string }; result: FeedbackView[] };
   updateSettings: {
-    params: { fees: FeeRule[]; cancelRules: CancelRule[]; minDefault: number; roundUnit: number };
+    params: { studios?: StudioDef[]; fees: FeeRule[]; cancelRules: CancelRule[]; minDefault: number; roundUnit: number };
     result: Settings;
   };
 }
@@ -115,6 +125,8 @@ export interface JoinView {
   end: string;
   studio: string;
   room: string;
+  /** 部屋の広さなどの補足 */
+  roomInfo: string | null;
   memo: string;
   status: Practice['status'];
   goingCount: number;

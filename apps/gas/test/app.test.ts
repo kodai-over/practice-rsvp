@@ -17,6 +17,7 @@ function setup() {
     { userId: BOOKER, name: '後輩', role: '予約者', defaultGroups: [G1] },
   );
   t.store.s = {
+    studios: [{ name: 'worcle横浜', aliases: [], rooms: [] }],
     fees: [{ studio: 'worcle', room: '', fee: 3000 }],
     cancelRules: [{ studio: 'worcle', daysBefore: 4, time: '10:00' }],
     minDefault: 3,
@@ -61,14 +62,27 @@ describe('スクショから募集まで', () => {
     const card = t.line.lastReplyText();
     expect(card).toContain('予約内容の確認');
     expect(card).toContain('チームA');
-    expect(card).toContain('この内容で募集');
+    expect(card).toContain('"label":"登録する"');
+    expect(card).toContain('登録してグループに募集');
   });
 
-  it('グループが複数で送り先未設定なら、送り先を選んでもらう', () => {
+  it('グループが複数でふだんの送り先が未設定なら、「登録する」だけ出す', () => {
     t.store.s.groups.push({ id: 'C2', name: 'チームB' });
     t.reader.result = [reservation];
     handleWebhook(t.ctx, { events: [imageEvent('Ustranger')] });
-    expect(t.line.lastReplyText()).toContain('未設定');
+    expect(t.line.lastReplyText()).toContain('"label":"登録する"');
+    expect(t.line.lastReplyText()).not.toContain('登録してグループに募集');
+  });
+
+  it('「登録する」は登録だけ。グループには流さず、あとから募集する方法を案内する', () => {
+    t.reader.result = [reservation];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
+    const draftId = [...t.kv.data.keys()][0].replace('draft:', '');
+    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}`)] });
+    expect(t.store.p).toMatchObject([{ id: PID, groups: [] }]);
+    expect(t.line.pushes).toHaveLength(0);
+    expect(t.line.lastReplyText()).toContain('登録しました');
+    expect(t.line.lastReplyText()).toContain('グループに募集');
   });
 
   it('読み取りで例外が起きたら、エラーだと伝える', () => {
@@ -82,7 +96,7 @@ describe('スクショから募集まで', () => {
     );
   });
 
-  it('確認カード → この内容で募集 → グループに募集が1メッセージで流れる', () => {
+  it('確認カード → 登録してグループに募集 → グループに募集が1メッセージで流れる', () => {
     t.reader.result = [reservation, { ...reservation, date: '2026-10-22' }];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
     const card = t.line.lastReplyText();
@@ -90,15 +104,15 @@ describe('スクショから募集まで', () => {
     expect(card).toContain('チームA');
     const draftId = [...t.kv.data.keys()][0].replace('draft:', '');
 
-    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}`)] });
+    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}&r=1`)] });
     expect(t.store.p.map((p) => p.id)).toEqual([PID, 'worcle横浜-20261022-1900-A']);
     expect(t.line.pushes).toHaveLength(1);
     expect(t.line.pushes[0].to).toBe(G1);
     expect(t.line.pushes[0].messages).toHaveLength(1);
-    expect(t.line.lastReplyText()).toContain('募集しました（チームA）');
+    expect(t.line.lastReplyText()).toContain('登録して募集しました（チームA）');
 
     // 二度押ししても二重に募集しない
-    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}`)] });
+    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}&r=1`)] });
     expect(t.line.pushes).toHaveLength(1);
     expect(t.line.lastReplyText()).toContain('期限切れか、処理済み');
   });
@@ -107,7 +121,7 @@ describe('スクショから募集まで', () => {
     t.reader.result = [reservation];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm1')] });
     let draftId = [...t.kv.data.keys()].at(-1)!.replace('draft:', '');
-    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}`)] });
+    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}&r=1`)] });
 
     t.reader.result = [reservation, { ...reservation, start: '21:00', end: '22:00', fee: 3000 }];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm2')] });
@@ -122,13 +136,13 @@ describe('スクショから募集まで', () => {
     expect(t.line.lastReplyText()).toContain('22:00までに延長');
   });
 
-  it('料金が読めなければ標準料金、必須項目が欠けたら募集ボタンを出さない', () => {
+  it('料金が読めなければ標準料金、必須項目が欠けたら登録ボタンを出さない', () => {
     t.reader.result = [{ ...reservation, fee: null }, { date: '2026-10-23', start: null, end: null, studio: 'worcle横浜', room: 'B', fee: null }];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
     const card = t.line.lastReplyText();
     expect(card).toContain('¥3,000');
     expect(card).toContain('読み取れなかった項目がある予約が1件');
-    expect(card).not.toContain('"label":"この内容で募集"');
+    expect(card).not.toContain('"label":"登録する"');
   });
 
   it('複数枚送信はそろってからまとめて読み取る', () => {
@@ -156,11 +170,11 @@ describe('スクショから募集まで', () => {
     expect(card).not.toContain('20:30');
   });
 
-  it('これまでのスタジオ名を読み取りの手がかりとして渡す', () => {
-    t.store.p.push({ ...JSON.parse(JSON.stringify(baseP)), studio: 'worcle横浜' });
+  it('スタジオの一覧と、これまでに登録された一覧外のスタジオを読み取りの手がかりとして渡す', () => {
+    t.store.p.push({ ...JSON.parse(JSON.stringify(baseP)), studio: '市民センター' });
     t.reader.result = [reservation];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
-    expect(t.reader.calls[0].hints.studios).toEqual(expect.arrayContaining(['worcle横浜', 'worcle']));
+    expect(t.reader.calls[0].hints.studios.map((s) => s.name)).toEqual(['worcle横浜', '市民センター']);
     expect(t.reader.calls[0].hints.today).toBe('2026-10-10');
   });
 
@@ -193,6 +207,21 @@ describe('スクショから募集まで', () => {
     expect(() => handleApi(t.ctx, { userId: BOOKER }, 'parseReservations', {})).toThrow('スクショを選ぶか');
   });
 
+  it('読み取ったスタジオ名・部屋名を一覧の正式な名前にそろえる', () => {
+    t.store.s.studios = [
+      { name: 'BUZZ横浜', aliases: [], rooms: [{ name: '1スタジオ', size: '46.5㎡' }] },
+      { name: 'studio worcle 横浜', aliases: ['わーくる横浜'], rooms: [{ name: '301', size: '約20㎡' }] },
+    ];
+    t.reader.result = [
+      { date: '2026-10-21', start: '19:00', end: '21:00', studio: '横浜', room: '301', fee: 2400 },
+      { date: '2026-10-22', start: '19:00', end: '21:00', studio: 'BUZZ 横浜', room: 'スタジオ1', fee: 2600 },
+    ];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
+    const card = t.line.lastReplyText();
+    expect(card).toContain('studio worcle 横浜 301');
+    expect(card).toContain('BUZZ横浜 1スタジオ');
+  });
+
   it('応答が間に合わなければプッシュで確認カードを送る', () => {
     t.reader.result = [reservation];
     t.line.failReply = true;
@@ -208,7 +237,7 @@ describe('出欠', () => {
     t.reader.result = [reservation];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
     const draftId = [...t.kv.data.keys()][0].replace('draft:', '');
-    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}`)] });
+    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}&r=1`)] });
     t.line.replies = [];
   });
 
@@ -278,15 +307,36 @@ describe('出欠', () => {
     expect(t.store.a).toHaveLength(1);
   });
 
-  it('アプリから手動登録（送り先なしは拒否、一般メンバーも登録でき予約者になる）', () => {
+  it('アプリから手動登録（送り先なしなら登録だけ、一般メンバーも登録でき予約者になる）', () => {
     const item = { ...reservation, date: '2026-10-30', fee: null, max: 8, min: null, memo: 'ショーケースの通し' };
-    expect(() => handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [] })).toThrow('送り先');
-    const res = handleApi(t.ctx, { userId: 'U9', name: 'きゅう' }, 'createPractices', { items: [item], groups: [G1] }) as any;
-    expect(res.created).toHaveLength(1);
-    expect(t.store.getPractice(res.created[0])).toMatchObject({ fee: 3000, max: 8, memo: 'ショーケースの通し', booker: 'U9' });
+    const pushes = t.line.pushes.length;
+    const only = handleApi(t.ctx, { userId: 'U9', name: 'きゅう' }, 'createPractices', { items: [item], groups: [] }) as any;
+    expect(only.created).toHaveLength(1);
+    expect(t.line.pushes).toHaveLength(pushes);
+    expect(t.store.getPractice(only.created[0])).toMatchObject({ fee: 3000, max: 8, memo: 'ショーケースの通し', booker: 'U9', groups: [] });
     // 登録した本人は修正・中止ができ、他の一般メンバーはできない
-    expect((handleApi(t.ctx, { userId: 'U9' }, 'getPractice', { id: res.created[0] }) as any).canEdit).toBe(true);
-    expect((handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'getPractice', { id: res.created[0] }) as any).canEdit).toBe(false);
+    expect((handleApi(t.ctx, { userId: 'U9' }, 'getPractice', { id: only.created[0] }) as any).canEdit).toBe(true);
+    expect((handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'getPractice', { id: only.created[0] }) as any).canEdit).toBe(false);
+
+    const withGroup = handleApi(t.ctx, { userId: 'U9' }, 'createPractices', { items: [{ ...item, date: '2026-10-31' }], groups: [G1] }) as any;
+    expect(t.store.getPractice(withGroup.created[0])?.groups).toEqual([G1]);
+    expect(t.line.pushes).toHaveLength(pushes + 1);
+  });
+
+  it('あとからグループに募集できる。同じグループには二重に流さない。登録した本人と管理者だけ', () => {
+    t.store.s.groups.push({ id: 'C2', name: 'チームB' });
+    const item = { ...reservation, date: '2026-10-30', max: null, min: null, memo: '' };
+    const { created } = handleApi(t.ctx, { userId: 'U9', name: 'きゅう' }, 'createPractices', { items: [item], groups: [] }) as any;
+    const id = created[0];
+    expect(() => handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'recruitPractice', { id, groups: [G1] })).toThrow('予約者か管理者');
+    const pushes = t.line.pushes.length;
+    const v = handleApi(t.ctx, { userId: 'U9' }, 'recruitPractice', { id, groups: [G1] }) as any;
+    expect(v.groupNames).toEqual(['チームA']);
+    expect(t.line.pushes.slice(pushes).map((p) => p.to)).toEqual([G1]);
+    expect(() => handleApi(t.ctx, { userId: 'U9' }, 'recruitPractice', { id, groups: [G1] })).toThrow('グループを選んで');
+    handleApi(t.ctx, { userId: ADMIN }, 'recruitPractice', { id, groups: [G1, 'C2'] });
+    expect(t.line.pushes.slice(pushes).map((p) => p.to)).toEqual([G1, 'C2']);
+    expect(t.store.getPractice(id)?.groups).toEqual([G1, 'C2']);
   });
 });
 
@@ -371,5 +421,20 @@ describe('ルーター', () => {
     const t = setup();
     handleWebhook(t.ctx, { events: [{ type: 'join', replyToken: 'rt', source: { type: 'group', groupId: 'Cnew' } }] });
     expect(t.store.s.groups.find((g) => g.id === 'Cnew')?.name).toBe('名前-Cnew');
+  });
+});
+
+describe('リッチメニュー', () => {
+  it('4つのボタンが横に並び、それぞれアプリの画面を開く', async () => {
+    const { richMenuDefinition } = await import('../src/app/richmenu');
+    const def = richMenuDefinition('https://liff.line.me/APP');
+    expect(def.size).toEqual({ width: 2500, height: 843 });
+    expect(def.areas.map((a) => a.action.uri)).toEqual([
+      'https://liff.line.me/APP?view=register',
+      'https://liff.line.me/APP?view=recruit',
+      'https://liff.line.me/APP?view=mine',
+      'https://liff.line.me/APP?view=feedback',
+    ]);
+    expect(def.areas.reduce((sum, a) => sum + a.bounds.width, 0)).toBe(2500);
   });
 });

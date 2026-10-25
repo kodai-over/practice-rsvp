@@ -1,7 +1,7 @@
 # Practice RSVP（ダンス練習 自動募集システム）
 
-予約者がスタジオの予約画面のスクショをLINE Botに送り、「この内容で募集」を押すだけで、
-練習の登録・募集・出欠・割り勘までをLINE上で進める仕組みです。Google（スプレッドシート・Apps Script・Gemini API）、
+予約者がスタジオの予約画面のスクショをLINE Botに送り、「登録する」を押すだけで、
+練習の登録・出欠・割り勘までをLINE上で進める仕組みです。グループへの募集は必要なときだけ流せます。Google（スプレッドシート・Apps Script・Gemini API）、
 LINE、Cloudflare Workers、GitHub Pages の無料枠で動きます。
 
 ```
@@ -43,3 +43,5 @@ npm run dev:mock -w @pb/liff   # LINE・Googleの準備なしで画面を確認
 | 参加リンク | `apps/gas/src/app/join.ts`、`apps/liff/src/join.tsx` |
 | キャンセル期限前警告・終了処理 | `apps/gas/src/app/triggers.ts` |
 | シートの列 | `apps/gas/src/app/schema.ts` |
+| スタジオ・部屋の初期値と表記ゆれの吸収 | `packages/shared/src/studios.ts` |
+| リッチメニュー（定義・画像） | `apps/gas/src/app/richmenu.ts`、`scripts/richmenu.mjs` |

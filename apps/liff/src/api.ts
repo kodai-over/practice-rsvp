@@ -6,6 +6,10 @@ const GAS_URL = import.meta.env.VITE_GAS_URL as string;
 export class ApiError extends Error {}
 
 let idTokenProvider: () => string | null = () => null;
+// LIFF の初期化が終わるまで通信を待たせる（前回の表示を先に出すため、画面は初期化より先に動き出す）
+let markReady: () => void = () => {};
+const ready = new Promise<void>((resolve) => (markReady = resolve));
+export { markReady };
 let onAuthExpired: () => void = () => {};
 
 export function configureAuth(getToken: () => string | null, expired: () => void) {
@@ -33,7 +37,7 @@ async function post<T>(body: Record<string, unknown>): Promise<T> {
 
 /** LINE内アプリの操作。IDトークンを毎回付け、サーバー側で本人を確かめる */
 export function api<A extends ApiAction>(action: A, params: ApiActions[A]['params'] = {} as ApiActions[A]['params']) {
-  return post<ApiActions[A]['result']>({ kind: 'api', idToken: idTokenProvider(), action, params });
+  return ready.then(() => post<ApiActions[A]['result']>({ kind: 'api', idToken: idTokenProvider(), action, params }));
 }
 
 /** 参加リンクのページの操作（LINEログインなし） */

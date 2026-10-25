@@ -1,5 +1,5 @@
 /** 参加リンク（LINEを使わない人の出欠）。合言葉が合う練習への出欠登録だけができる */
-import { goingList, perPersonFee, toJstDate, type Answer, type JoinActions, type JoinView, type Practice } from '@pb/shared';
+import { goingList, perPersonFee, roomInfo, toJstDate, type Answer, type JoinActions, type JoinView, type Practice } from '@pb/shared';
 import { UserError, type Ctx } from './ports';
 import { recordAnswer } from './practices';
 
@@ -13,6 +13,7 @@ function openPractice(ctx: Ctx, id: unknown, key: unknown): Practice {
 function joinView(ctx: Ctx, p: Practice, participant?: string): JoinView {
   const att = ctx.store.attendance(p.id);
   const going = goingList(att, p.id).length;
+  const settings = ctx.store.settings();
   const mine = participant ? att.find((a) => a.participant === participant && a.via === '参加リンク') : undefined;
   return {
     id: p.id,
@@ -21,10 +22,11 @@ function joinView(ctx: Ctx, p: Practice, participant?: string): JoinView {
     end: p.end,
     studio: p.studio,
     room: p.room,
+    roomInfo: roomInfo(settings.studios, p.studio, p.room),
     memo: p.memo,
     status: p.status,
     goingCount: going,
-    perPerson: perPersonFee(p.fee, going, ctx.store.settings().roundUnit, p.feeOverride),
+    perPerson: perPersonFee(p.fee, going, settings.roundUnit, p.feeOverride),
     myAnswer: mine?.answer ?? null,
   };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { isAdmin, type CancelRule, type FeeRule, type Member, type Role } from '@pb/shared';
+import { DEFAULT_STUDIOS, isAdmin, type CancelRule, type FeeRule, type Member, type Role, type StudioDef } from '@pb/shared';
 import { api } from '../api';
 import { Spinner, TopBar, go, useApp, useRunner } from '../ui';
 
@@ -30,6 +30,16 @@ export function SettingsPage() {
           </button>
         </div>
       </section>
+      <div class="section-title">改善要望</div>
+      <section class="card">
+        <div class="muted" style={{ marginBottom: 8 }}>
+          こうなったら便利、ここが使いにくい、などを送れます。送った要望は名前と一緒にメンバー全員に表示されます。
+        </div>
+        <button class="btn block" onClick={() => go('/feedback')}>
+          要望を見る・送る
+        </button>
+      </section>
+
       <p class="muted">権限: {me.member.role}</p>
       {isAdmin(me.member) && (
         <button class="btn block" onClick={() => go('/admin')}>
@@ -44,6 +54,7 @@ export function AdminPage() {
   const { me, setMe } = useApp();
   const [members, setMembers] = useState<Member[] | null>(null);
   const [run, busy] = useRunner();
+  const [studios, setStudios] = useState<StudioDef[]>(me.settings.studios);
   const [fees, setFees] = useState<FeeRule[]>(me.settings.fees);
   const [rules, setRules] = useState<CancelRule[]>(me.settings.cancelRules);
   const [minDefault, setMinDefault] = useState(String(me.settings.minDefault));
@@ -111,6 +122,8 @@ export function AdminPage() {
         ))
       )}
 
+      <StudioEditor studios={studios} onChange={setStudios} />
+
       <div class="section-title">スタジオの標準料金（部屋が空欄なら全部屋）</div>
       <section class="card">
         {fees.map((f, i) => (
@@ -161,17 +174,18 @@ export function AdminPage() {
         disabled={busy}
         onClick={async () => {
           const settings = await run(
-            () => api('updateSettings', { fees, cancelRules: rules, minDefault: Number(minDefault), roundUnit: Number(roundUnit) }),
+            () => api('updateSettings', { studios, fees, cancelRules: rules, minDefault: Number(minDefault), roundUnit: Number(roundUnit) }),
             '保存しました',
           );
           if (settings) {
             setMe({ ...me, settings });
+            setStudios(settings.studios);
             setFees(settings.fees);
             setRules(settings.cancelRules);
           }
         }}
       >
-        料金・期限・共通設定を保存
+        スタジオ・料金・期限・共通設定を保存
       </button>
     </>
   );
@@ -186,5 +200,59 @@ function GroupRow({ name, onSave, busy }: { name: string; onSave: (n: string) =>
         保存
       </button>
     </div>
+  );
+}
+
+/** スタジオと部屋の一覧。スタジオ側で部屋や広さが変わったら、ここで直す（コードの変更は要らない） */
+function StudioEditor({ studios, onChange }: { studios: StudioDef[]; onChange: (s: StudioDef[]) => void }) {
+  const setStudio = (i: number, patch: Partial<StudioDef>) => onChange(studios.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  return (
+    <>
+      <div class="section-title">スタジオと部屋（登録画面の選択肢・部屋の広さ）</div>
+      <section class="card">
+        <div class="muted" style={{ marginBottom: 8 }}>
+          スタジオ側で部屋や広さが変わったら、ここで直して下の「保存」を押してください。別名はスクショの読み取りで表記ゆれを正式名称にそろえるのに使います（カンマ区切り）。
+        </div>
+        {studios.map((st, i) => (
+          <div key={i} style={{ borderTop: i ? '1px solid var(--line)' : 'none', paddingTop: i ? 10 : 0, marginTop: i ? 10 : 0 }}>
+            <div class="row" style={{ marginBottom: 6 }}>
+              <input type="text" class="grow" placeholder="スタジオ名（正式名称）" value={st.name} onInput={(e) => setStudio(i, { name: e.currentTarget.value })} />
+              <button class="btn small danger" onClick={() => confirm(`${st.name || 'このスタジオ'}を一覧から消しますか？`) && onChange(studios.filter((_, j) => j !== i))}>
+                削除
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="別名（例：わーくる横浜, worcle横浜）"
+              value={st.aliases.join(', ')}
+              onInput={(e) => setStudio(i, { aliases: e.currentTarget.value.split(/[,、]/).map((x) => x.trim()).filter(Boolean) })}
+            />
+            {st.rooms.map((r, k) => (
+              <div class="row" style={{ marginTop: 6 }}>
+                <input type="text" style={{ width: '30%' }} placeholder="部屋" value={r.name} onInput={(e) => setStudio(i, { rooms: st.rooms.map((x, m) => (m === k ? { ...x, name: e.currentTarget.value } : x)) })} />
+                <input type="text" class="grow" placeholder="広さ（例：46.5㎡・天井2.3m）" value={r.size} onInput={(e) => setStudio(i, { rooms: st.rooms.map((x, m) => (m === k ? { ...x, size: e.currentTarget.value } : x)) })} />
+                <button class="btn small" onClick={() => setStudio(i, { rooms: st.rooms.filter((_, m) => m !== k) })}>
+                  ×
+                </button>
+              </div>
+            ))}
+            <button class="btn small" style={{ marginTop: 6 }} onClick={() => setStudio(i, { rooms: [...st.rooms, { name: '', size: '' }] })}>
+              ＋ 部屋を追加
+            </button>
+          </div>
+        ))}
+        <div class="row" style={{ marginTop: 12 }}>
+          <button class="btn small" onClick={() => onChange([...studios, { name: '', aliases: [], rooms: [] }])}>
+            ＋ スタジオを追加
+          </button>
+          <button
+            class="btn small"
+            onClick={() => confirm('スタジオと部屋の一覧を初期値（2026年10月時点の公式サイトの情報）に戻しますか？') && onChange(DEFAULT_STUDIOS.map((x) => ({ ...x, rooms: x.rooms.map((r) => ({ ...r })) })))}
+          >
+            初期値に戻す
+          </button>
+        </div>
+      </section>
+    </>
   );
 }

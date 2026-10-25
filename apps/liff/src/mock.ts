@@ -16,6 +16,7 @@ store.m = [
   { userId: 'U4', name: 'みお', role: '一般', defaultGroups: [] },
 ];
 store.s = {
+  studios: [],
   fees: [
     { studio: 'worcle', room: '', fee: 3300 },
     { studio: 'BUZZ', room: '', fee: 4400 },
@@ -56,9 +57,9 @@ const mk = (days: number, start: string, end: string, studio: string, room: stri
   };
 };
 store.p = [
-  mk(2, '19:00', '21:00', 'worcle横浜', 'A', 6600, 'Ume', { memo: 'ショーケースの通し' }),
-  mk(5, '13:00', '16:00', 'BUZZ横浜東口', 'Ast', 13200, 'U2', { max: 3, groups: ['G1', 'G2'] }),
-  mk(9, '20:00', '22:00', 'worcle横浜', 'B', 6600, 'Ume'),
+  mk(2, '19:00', '21:00', 'studio worcle 横浜', '202', 4400, 'Ume', { memo: 'ショーケースの通し' }),
+  mk(5, '13:00', '16:00', 'BUZZ横浜東口', 'Bst', 5400, 'U2', { max: 3, groups: ['G1', 'G2'] }),
+  mk(9, '20:00', '22:00', '市民センター', '和室', 1200, 'Ume'),
 ];
 const att = (practiceId: string, participant: string, name: string, answer: '行く' | '行かない', kind: 'メンバー' | 'ゲスト' = 'メンバー', addedBy = participant) =>
   store.saveAttendance({ practiceId, participant, name, kind, via: kind === 'ゲスト' ? 'アプリ' : 'ボタン', addedBy, answer, updatedAt: new Date().toISOString() });
@@ -91,11 +92,11 @@ const ctx: Ctx = {
   reader: {
     // 予約一覧のスクショ（過去の予約・続けて取った予約・延長・読めない行を含む）を読んだ想定
     read: () => [
-      { date: addDays(today, -3), start: '19:00', end: '20:30', studio: 'worcle横浜', room: '301', fee: 2400 },
-      { date: addDays(today, 12), start: '19:00', end: '20:30', studio: 'worcle横浜', room: '301', fee: 2400 },
-      { date: addDays(today, 12), start: '20:30', end: '21:00', studio: 'worcle横浜', room: '301', fee: 800 },
-      { date: addDays(today, 2), start: '21:00', end: '22:00', studio: 'worcle横浜', room: 'A', fee: 3300 },
-      { date: addDays(today, 14), start: null, end: null, studio: 'worcle横浜', room: 'C', fee: null },
+      { date: addDays(today, -3), start: '19:00', end: '20:30', studio: '横浜', room: '301', fee: 2400 },
+      { date: addDays(today, 12), start: '19:00', end: '20:30', studio: '横浜', room: '301', fee: 2400 },
+      { date: addDays(today, 12), start: '20:30', end: '21:00', studio: '横浜', room: '301', fee: 800 },
+      { date: addDays(today, 2), start: '21:00', end: '22:00', studio: 'わーくる横浜', room: '202', fee: 2200 },
+      { date: addDays(today, 14), start: null, end: null, studio: 'BUZZ横浜', room: '1', fee: null },
     ],
   },
   withLock: (fn) => fn(),

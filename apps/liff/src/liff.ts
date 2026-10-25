@@ -1,5 +1,5 @@
 import liff from '@line/liff';
-import { MOCK, configureAuth } from './api';
+import { MOCK, configureAuth, markReady } from './api';
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID as string;
 
@@ -22,6 +22,7 @@ export async function initLiff(): Promise<URLSearchParams> {
       },
     );
   }
+  markReady();
   return new URLSearchParams(location.search);
 }
 

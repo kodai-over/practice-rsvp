@@ -9,7 +9,7 @@ export class MemoryStore implements Store {
   p: Practice[] = [];
   a: Attendance[] = [];
   m: Member[] = [];
-  s: Settings = { fees: [], cancelRules: [], minDefault: 3, roundUnit: 10, groups: [] };
+  s: Settings = { studios: [], fees: [], cancelRules: [], minDefault: 3, roundUnit: 10, groups: [] };
   f: Feedback[] = [];
 
   practices() {
