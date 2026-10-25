@@ -9,7 +9,11 @@ import {
   classifyReservations,
   confirmCard,
   defaultFee,
-  hourlyFee,
+  DEFAULT_FEES,
+  formatFeeValue,
+  isHolidayOrWeekend,
+  jpHolidays,
+  parseFeeValue,
   findCancelRule,
   googleCalendarUrl,
   jstDateTime,
@@ -52,9 +56,9 @@ const practice = (over: Partial<Practice> = {}): Practice => ({
 const settings: Settings = {
   studios: DEFAULT_STUDIOS,
   fees: [
-    { studio: 'worcle', room: 'A', fee: 3300 },
-    { studio: 'worcle', room: '', fee: 2500 },
-    { studio: 'BUZZ', room: '', fee: 4000 },
+    { studio: 'worcle', room: 'A', fee: 1650 },
+    { studio: 'worcle', room: '', fee: 1250 },
+    { studio: 'BUZZ', room: '', fee: 2000 },
   ],
   cancelRules: [
     { studio: 'worcle', daysBefore: 4, time: '10:00' },
@@ -104,18 +108,42 @@ describe('normalizeReservation', () => {
 });
 
 describe('設定', () => {
-  it('標準料金（1時間あたり）は部屋の一致を優先', () => {
-    expect(hourlyFee(settings, 'worcle', 'A')).toBe(3300);
-    expect(hourlyFee(settings, 'worcle', 'B')).toBe(2500);
-    expect(hourlyFee(settings, 'BUZZ横浜東口', 'Ast')).toBe(4000);
-    expect(hourlyFee(settings, 'other', '')).toBe(0);
+  it('スタジオ代は30分あたりの標準料金 × 利用時間。部屋の一致を優先', () => {
+    const d = '2026-10-28';
+    expect(defaultFee(settings, { studio: 'worcle', room: 'B', date: d, start: '19:00', end: '21:00' })).toBe(5000);
+    expect(defaultFee(settings, { studio: 'worcle', room: 'A', date: d, start: '19:00', end: '20:30' })).toBe(4950);
+    expect(defaultFee(settings, { studio: 'worcle', room: 'B', date: d, start: '23:00', end: '25:00' })).toBe(5000);
+    expect(defaultFee(settings, { studio: 'BUZZ横浜東口', room: 'Ast', date: d, start: '19:00', end: '20:00' })).toBe(4000);
+    expect(defaultFee(settings, { studio: 'other', room: '', date: d, start: '19:00', end: '21:00' })).toBe(0);
+    expect(defaultFee(settings, { studio: 'worcle', room: 'B', date: d, start: '', end: '' })).toBe(0);
   });
-  it('スタジオ代は1時間あたりの標準料金 × 利用時間', () => {
-    expect(defaultFee(settings, { studio: 'worcle', room: 'B', start: '19:00', end: '21:00' })).toBe(5000);
-    expect(defaultFee(settings, { studio: 'worcle', room: 'A', start: '19:00', end: '20:30' })).toBe(4950);
-    expect(defaultFee(settings, { studio: 'worcle', room: 'B', start: '23:00', end: '25:00' })).toBe(5000);
-    expect(defaultFee(settings, { studio: 'other', room: '', start: '19:00', end: '21:00' })).toBe(0);
-    expect(defaultFee(settings, { studio: 'worcle', room: 'B', start: '', end: '' })).toBe(0);
+  it('公式の料金表: 平日・土日祝と時間帯で料金が変わる', () => {
+    const s = { ...settings, fees: DEFAULT_FEES };
+    const fee = (studio: string, room: string, date: string, start: string, end: string) => defaultFee(s, { studio, room, date, start, end });
+    // 平日（月）の 16:00〜19:00 は 10:00〜17:00 の料金と 17:00〜 の料金をまたぐ
+    expect(fee('BUZZ横浜', '1スタジオ', '2026-10-26', '16:00', '19:00')).toBe(2 * 900 + 4 * 1300);
+    // 祝日（文化の日・火）は土日祝の料金
+    expect(fee('BUZZ横浜', '1スタジオ', '2026-11-03', '16:00', '19:00')).toBe(6 * 1300);
+    expect(fee('BUZZ横浜東口', 'Bst', '2026-10-31', '19:00', '21:00')).toBe(4 * 900);
+    expect(fee('studio worcle 横浜', '202', '2026-10-28', '19:00', '21:00')).toBe(4 * 1100);
+    // 30分に満たない分は割合で
+    expect(fee('studio worcle 横浜', '202', '2026-10-28', '19:00', '19:45')).toBe(1650);
+    // 深夜パック・6時間セットの時間帯は料金表にないので計算しない
+    expect(fee('BUZZ横浜', '1スタジオ', '2026-10-26', '23:00', '24:00')).toBe(0);
+    expect(fee('studio worcle 横浜', '202', '2026-10-28', '23:00', '25:00')).toBe(0);
+  });
+  it('祝日（振替休日・国民の休日を含む）', () => {
+    const h = jpHolidays(2026);
+    for (const d of ['2026-01-12', '2026-03-20', '2026-05-06', '2026-07-20', '2026-09-21', '2026-09-22', '2026-09-23', '2026-10-12', '2026-11-23']) expect(h.has(d)).toBe(true);
+    expect(h.has('2026-10-26')).toBe(false);
+    expect(isHolidayOrWeekend('2026-10-25')).toBe(true);
+    expect(isHolidayOrWeekend('2026-10-26')).toBe(false);
+  });
+  it('設定シートの標準料金の書き方', () => {
+    expect(parseFeeValue('平日 17:00-23:30 1,300')).toEqual({ days: '平日', from: '17:00', to: '23:30', fee: 1300 });
+    expect(parseFeeValue('１１００')).toEqual({ days: '', from: '', to: '', fee: 1100 });
+    expect(parseFeeValue('高い')).toBeNull();
+    expect(formatFeeValue({ studio: 'x', room: '', days: '土日祝', from: '10:00', to: '23:30', fee: 1300 })).toBe('土日祝 10:00-23:30 1300');
   });
   it('キャンセル期限は前方一致', () => {
     expect(findCancelRule(settings.cancelRules, 'BUZZ横浜東口')?.daysBefore).toBe(1);
@@ -217,7 +245,7 @@ describe('スタジオ一覧', () => {
     expect(roomInfo(DEFAULT_STUDIOS, 'その他', 'A')).toBeNull();
   });
   it('料金・期限の設定はスタジオ名を含めば当たる', () => {
-    expect(hourlyFee({ ...settings, fees: [{ studio: 'worcle', room: '', fee: 3300 }] }, 'studio worcle 横浜', '202')).toBe(3300);
+    expect(defaultFee({ ...settings, fees: [{ studio: 'worcle', room: '', fee: 1650 }] }, { studio: 'studio worcle 横浜', room: '202', date: '2026-10-28', start: '19:00', end: '20:00' })).toBe(3300);
     expect(findCancelRule([{ studio: 'BUZZ', daysBefore: 1, time: '10:00' }, { studio: 'BUZZ横浜東口', daysBefore: 2, time: '10:00' }], 'BUZZ横浜東口')?.daysBefore).toBe(2);
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { addDays, defaultFee, hourlyFee, labelDate, skippedNote, toJstDate, yen, type DraftItemKind, type NewPracticeInput, type Reservation } from '@pb/shared';
+import { addDays, defaultFee, labelDate, skippedNote, toJstDate, type DraftItemKind, type NewPracticeInput, type Reservation } from '@pb/shared';
 import { api } from '../api';
 import { RoomInfo, RoomSelect, StudioSelect } from '../components/StudioRoom';
 import { BusyOverlay, Spinner, TopBar, go, useApp, useRunner } from '../ui';
@@ -105,7 +105,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
 
   if (loading) return <><TopBar title="練習を登録" back /><Spinner /></>;
 
-  /** スタジオ代が空欄か自動で入れたものなら、標準料金（1時間あたり × 時間）で入れ直す */
+  /** スタジオ代が空欄か自動で入れたものなら、標準料金（曜日・時間帯ごとの料金表）で入れ直す */
   const autoFee = (r: FormRow): FormRow => {
     if (!r.feeAuto && r.fee !== '') return r;
     const std = r.studio ? defaultFee(me.settings, r) : 0;
@@ -116,7 +116,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
       rs.map((r) => {
         if (r.key !== key) return r;
         const next = { ...r, [k]: value, kind: r.kind === 'incomplete' ? ('incomplete' as const) : undefined };
-        return k === 'fee' ? { ...next, feeAuto: false } : k === 'start' || k === 'end' || k === 'room' ? autoFee(next) : next;
+        return k === 'fee' ? { ...next, feeAuto: false } : k === 'date' || k === 'start' || k === 'end' || k === 'room' ? autoFee(next) : next;
       }),
     );
 
@@ -207,7 +207,6 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
       </details>
 
       {rows.map((r, i) => {
-        const hourly = r.studio ? hourlyFee(me.settings, r.studio, r.room) : 0;
         return (
           <section class="card" key={r.key} style={{ marginTop: 12 }}>
             <div class="row" style={{ marginBottom: 8 }}>
@@ -249,7 +248,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
             <label class="field">
               <span>スタジオ代（円）</span>
               <input type="number" inputMode="numeric" placeholder="金額" value={r.fee} onInput={(e) => update(r.key, 'fee', e.currentTarget.value)} />
-              {r.feeAuto && r.fee !== '' && hourly > 0 && <span class="muted" style={{ marginTop: 4, marginBottom: 0 }}>標準料金（1時間 {yen(hourly)}）から計算しました。違えば直してください</span>}
+              {r.feeAuto && r.fee !== '' && <span class="muted" style={{ marginTop: 4, marginBottom: 0 }}>スタジオの料金表（曜日・時間帯）から計算しました。違えば直してください</span>}
             </label>
             <details>
               <summary class="muted">上限・最低人数・メモ（任意）</summary>

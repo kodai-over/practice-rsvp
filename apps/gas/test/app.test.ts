@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleApi } from '../src/app/api';
+import { DEFAULT_FEES } from '@pb/shared';
+import { INITIAL_SETTINGS, rowsToSettings, settingsToRows } from '../src/app/schema';
 import { handleJoin } from '../src/app/join';
 import { route } from '../src/app/router';
 import { hourlyJob } from '../src/app/triggers';
@@ -18,7 +20,7 @@ function setup() {
   );
   t.store.s = {
     studios: [{ name: 'worcle横浜', aliases: [], rooms: [] }],
-    fees: [{ studio: 'worcle', room: '', fee: 3000 }],
+    fees: [{ studio: 'worcle', room: '', fee: 1500 }],
     cancelRules: [{ studio: 'worcle', daysBefore: 4, time: '10:00' }],
     minDefault: 3,
     roundUnit: 10,
@@ -519,5 +521,18 @@ describe('リッチメニュー', () => {
       'https://liff.line.me/APP?view=feedback',
     ]);
     expect(def.areas.reduce((sum, a) => sum + a.bounds.width, 0)).toBe(2500);
+  });
+});
+
+describe('設定シート', () => {
+  it('標準料金は曜日・時間帯つきで書き戻せる。0円の行しかなければ公式の料金表を使う', () => {
+    const rows = settingsToRows({ ...INITIAL_SETTINGS, groups: [] });
+    expect(rows).toContainEqual({ 種別: '標準料金', キー1: 'BUZZ横浜', キー2: '1スタジオ', 値: '平日 17:00-23:30 1300' });
+    expect(rowsToSettings(rows).fees).toEqual(DEFAULT_FEES);
+
+    const zero = rowsToSettings([{ 種別: '標準料金', キー1: 'worcle', キー2: '', 値: '0' }]);
+    expect(zero.fees).toEqual(DEFAULT_FEES);
+    const custom = rowsToSettings([{ 種別: '標準料金', キー1: 'worcle', キー2: '', 値: '1000' }]);
+    expect(custom.fees).toEqual([{ studio: 'worcle', room: '', days: '', from: '', to: '', fee: 1000 }]);
   });
 });

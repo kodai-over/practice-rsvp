@@ -46,10 +46,20 @@ export interface Member {
   defaultGroups: string[];
 }
 
+/** 標準料金の曜日の区分。'' は毎日 */
+export type FeeDays = '' | '平日' | '土日祝';
+
+/**
+ * スタジオの標準料金（30分あたり）。部屋が '' なら全部屋。
+ * days・from・to で曜日と時間帯を絞れる（from/to が '' なら終日。to は '24:00' のように書く）
+ */
 export interface FeeRule {
   studio: string;
   room: string;
   fee: number;
+  days?: FeeDays;
+  from?: string;
+  to?: string;
 }
 
 export interface CancelRule {

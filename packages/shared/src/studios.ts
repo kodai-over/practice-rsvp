@@ -3,7 +3,7 @@
  * 正本は設定シート（管理画面から編集できる）で、ここの値はシートにまだ何もないときの初期値。
  * スタジオ側で部屋や広さが変わったら、管理画面で直せばコードの変更なしで反映される。
  */
-import type { Reservation, StudioDef } from './types';
+import type { FeeRule, Reservation, StudioDef } from './types';
 
 /** 2026年10月時点の各公式サイトの情報 */
 export const DEFAULT_STUDIOS: StudioDef[] = [
@@ -45,6 +45,48 @@ export const DEFAULT_STUDIOS: StudioDef[] = [
       { name: '501', size: '約45㎡（〜13名目安）' },
     ],
   },
+];
+
+/**
+ * BUZZ の料金（30分あたり・税込）。平日は 6:00〜10:00 / 10:00〜17:00 / 17:00〜23:30、
+ * 土日祝は 6:00〜10:00 / 10:00〜23:30 の料金。23:30〜翌6:00 の深夜パックは入れない（手入力）
+ */
+const buzz = (studio: string, room: string, [w1, w2, w3, h1, h2]: number[]): FeeRule[] => [
+  { studio, room, days: '平日', from: '06:00', to: '10:00', fee: w1 },
+  { studio, room, days: '平日', from: '10:00', to: '17:00', fee: w2 },
+  { studio, room, days: '平日', from: '17:00', to: '23:30', fee: w3 },
+  { studio, room, days: '土日祝', from: '06:00', to: '10:00', fee: h1 },
+  { studio, room, days: '土日祝', from: '10:00', to: '23:30', fee: h2 },
+];
+
+/** worcle の料金（30分あたり・税込・毎日 9:00〜24:00）。24:00〜30:00 の6時間セットは入れない（手入力） */
+const worcle = (room: string, fee: number): FeeRule => ({ studio: 'studio worcle 横浜', room, days: '', from: '09:00', to: '24:00', fee });
+
+/**
+ * 部屋ごとの標準料金の初期値（2026年10月時点の各公式サイトの料金表）。
+ * 正本は設定シートで、シートに標準料金が1行もないときだけ使う。特定の日は料金が違うことがある
+ */
+export const DEFAULT_FEES: FeeRule[] = [
+  // https://buzz-st.com/yokohama#price
+  ...buzz('BUZZ横浜', '1スタジオ', [500, 900, 1300, 900, 1300]),
+  ...buzz('BUZZ横浜', '2スタジオ', [400, 700, 900, 700, 900]),
+  ...buzz('BUZZ横浜', '3スタジオ', [400, 700, 900, 700, 900]),
+  ...buzz('BUZZ横浜', '4スタジオ', [400, 600, 800, 600, 800]),
+  ...buzz('BUZZ横浜', '5スタジオ', [400, 600, 800, 600, 800]),
+  ...buzz('BUZZ横浜', '6スタジオ', [300, 500, 600, 400, 600]),
+  // https://buzz-st.com/yokohama3#price
+  ...buzz('BUZZ横浜東口', 'Ast', [500, 1000, 1200, 700, 1200]),
+  ...buzz('BUZZ横浜東口', 'Bst', [500, 700, 900, 600, 900]),
+  ...buzz('BUZZ横浜東口', 'Cst', [500, 700, 900, 600, 900]),
+  ...buzz('BUZZ横浜東口', 'Dst', [400, 600, 800, 500, 800]),
+  // https://www.studioworcle.com/yokohama/
+  worcle('101', 650),
+  worcle('201', 800),
+  worcle('202', 1100),
+  worcle('301', 800),
+  worcle('302', 1100),
+  worcle('401', 1650),
+  worcle('501', 1450),
 ];
 
 /** 一覧にないスタジオを選ぶときの表示 */

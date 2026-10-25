@@ -392,7 +392,18 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
         studios: params.studios === undefined ? s.studios : cleanStudios(params.studios),
         fees: (params.fees ?? [])
           .filter((f) => f.studio?.trim())
-          .map((f) => ({ studio: f.studio.trim(), room: (f.room ?? '').trim(), fee: nonNegative(f.fee) ?? 0 })),
+          .map((f) => {
+            const from = normalizeTime(f.from ?? '') ?? '';
+            const to = normalizeTime(f.to ?? '') ?? '';
+            return {
+              studio: f.studio.trim(),
+              room: (f.room ?? '').trim(),
+              days: f.days === '平日' || f.days === '土日祝' ? f.days : '',
+              from: from && to ? from : '',
+              to: from && to ? to : '',
+              fee: nonNegative(f.fee) ?? 0,
+            };
+          }),
         cancelRules: (params.cancelRules ?? [])
           .filter((r) => r.studio?.trim())
           .map((r) => ({

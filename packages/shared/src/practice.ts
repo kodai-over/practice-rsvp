@@ -1,8 +1,10 @@
-import { addDays, isValidDate, jstDateTime, minutes, normalizeTime } from './dates';
+import { addDays, isHolidayOrWeekend, isValidDate, jstDateTime, minutes, normalizeTime } from './dates';
 import type {
   Attendance,
   CancelRule,
   DraftItem,
+  FeeDays,
+  FeeRule,
   Practice,
   PracticeStatus,
   Reservation,
@@ -32,19 +34,60 @@ export function normalizeReservation(raw: Partial<Record<keyof Reservation, unkn
 /** 設定のスタジオ名がスタジオ名に含まれるか（「BUZZ」→「BUZZ横浜東口」、「worcle」→「studio worcle 横浜」） */
 const studioMatches = (key: string, studio: string) => key !== '' && studio.toLowerCase().includes(key.toLowerCase());
 
-/** スタジオ・部屋の1時間あたりの標準料金。より詳しく（長く）書かれたスタジオ名、部屋が一致するものを優先 */
-export function hourlyFee(settings: Settings, studio: string, room: string): number {
-  const hits = settings.fees
-    .filter((f) => studioMatches(f.studio, studio) && (f.room === '' || f.room === room))
-    .sort((a, b) => b.studio.length - a.studio.length || (b.room ? 1 : 0) - (a.room ? 1 : 0));
-  return hits[0]?.fee ?? 0;
+/** そのスタジオ・部屋に当たる標準料金の設定 */
+export function feeRulesFor(settings: Settings, studio: string, room: string): FeeRule[] {
+  return settings.fees.filter((f) => f.fee > 0 && studioMatches(f.studio, studio) && (f.room === '' || f.room === room));
 }
 
-/** 標準料金で計算したスタジオ代（1時間あたりの料金 × 利用時間）。料金の設定がなければ 0 */
-export function defaultFee(settings: Settings, r: Pick<Reservation, 'studio' | 'room' | 'start' | 'end'>): number {
-  const hourly = hourlyFee(settings, r.studio, r.room);
-  const mins = r.start && r.end ? minutes(r.end) - minutes(r.start) : 0;
-  return hourly > 0 && mins > 0 ? Math.round((hourly * mins) / 60) : 0;
+/** 時刻（分）が料金の時間帯に入るか。'24:00' をまたぐ時間帯（例 '23:30'〜'30:00'）は翌日の分も見る */
+function inBand(f: FeeRule, m: number): boolean {
+  if (!f.from || !f.to) return true;
+  const from = minutes(f.from);
+  const to = minutes(f.to);
+  return (m >= from && m < to) || (m + 1440 >= from && m + 1440 < to);
+}
+
+/** 細かく書かれた設定ほど優先する（スタジオ名が長い・部屋の指定あり・曜日の指定あり・時間帯の指定あり） */
+const ruleScore = (f: FeeRule) => f.studio.length * 8 + (f.room ? 4 : 0) + (f.days ? 2 : 0) + (f.from && f.to ? 1 : 0);
+
+/**
+ * 標準料金で計算したスタジオ代。30分ごとに、その日（平日・土日祝）と時間帯の料金を足す。
+ * 料金の設定がない時間帯が1つでもあれば計算できないので 0 を返す（手で入力してもらう）
+ */
+export function defaultFee(settings: Settings, r: Pick<Reservation, 'studio' | 'room' | 'date' | 'start' | 'end'>): number {
+  if (!r.studio || !r.start || !r.end) return 0;
+  const rules = feeRulesFor(settings, r.studio, r.room);
+  const start = minutes(r.start);
+  const end = minutes(r.end);
+  if (rules.length === 0 || end <= start) return 0;
+  let total = 0;
+  for (let m = start; m < end; m += 30) {
+    // 24:00 を過ぎた分は翌日として曜日を見る
+    const date = r.date ? (m >= 1440 ? addDays(r.date, 1) : r.date) : '';
+    const holiday = date ? isHolidayOrWeekend(date) : false;
+    const hit = rules
+      .filter((f) => (!f.days || (date && (f.days === '土日祝') === holiday)) && inBand(f, m % 1440))
+      .sort((a, b) => ruleScore(b) - ruleScore(a))[0];
+    if (!hit) return 0;
+    total += (hit.fee * (Math.min(end, m + 30) - m)) / 30;
+  }
+  return Math.round(total);
+}
+
+/** 設定シートの値の書き方: 「1300」「平日 17:00-23:30 1300」「土日祝 10:00-23:30 1300」 */
+export function parseFeeValue(v: string): Pick<FeeRule, 'fee' | 'days' | 'from' | 'to'> | null {
+  const m = v
+    .normalize('NFKC')
+    .trim()
+    .match(/^(?:(平日|土日祝)\s*)?(?:(\d{1,2}:\d{2})\s*[-〜~]\s*(\d{1,2}:\d{2})\s*)?([\d,]+)\s*円?$/);
+  if (!m) return null;
+  const from = m[2] ? normalizeTime(m[2]) : null;
+  const to = m[3] ? normalizeTime(m[3]) : null;
+  return { days: (m[1] as FeeDays | undefined) ?? '', from: from ?? '', to: to ?? '', fee: Number(m[4].replace(/,/g, '')) };
+}
+
+export function formatFeeValue(f: FeeRule): string {
+  return [f.days, f.from && f.to ? `${f.from}-${f.to}` : '', String(f.fee)].filter(Boolean).join(' ');
 }
 
 /** スタジオ名を含むルールのうち、最も詳しく（長く）書かれたものを使う */

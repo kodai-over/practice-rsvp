@@ -2,7 +2,7 @@
  * スプレッドシートの4シートの列と、行⇄データの変換。
  * 列は見出し名で引くので、管理者が列を並べ替えても動く。
  */
-import { DEFAULT_STUDIOS, type Attendance, type Feedback, type Member, type Practice, type Settings, type StudioDef } from '@pb/shared';
+import { DEFAULT_FEES, DEFAULT_STUDIOS, formatFeeValue, parseFeeValue, type Attendance, type Feedback, type Member, type Practice, type Settings, type StudioDef } from '@pb/shared';
 
 export type Row = Record<string, string>;
 
@@ -152,7 +152,7 @@ export function feedbackToRow(f: Feedback): Row {
 
 /**
  * 設定シートは1行1項目。
- *   標準料金     | スタジオ | 部屋（空欄=全部屋） | 1時間あたりの金額
+ *   標準料金     | スタジオ | 部屋（空欄=全部屋） | 30分あたりの金額。曜日・時間帯を付けられる（例「平日 17:00-23:30 1300」）
  *   キャンセル期限 | スタジオ | 何日前             | 警告時刻
  *   グループ     | グループID |                   | 表示名
  *   共通        | 最低人数標準 / 切り上げ単位 |      | 値
@@ -168,7 +168,10 @@ export function rowsToSettings(rows: Row[]): Settings {
     const [kind, k1, k2, v] = [r['種別'], r['キー1'] ?? '', r['キー2'] ?? '', r['値'] ?? ''].map((x) => (x ?? '').trim());
     if (kind === 'スタジオ' && k1) studio(k1).aliases = k2.split(/[,、]/).map((x) => x.trim()).filter(Boolean);
     else if (kind === '部屋' && k1 && k2) studio(k1).rooms.push({ name: k2, size: v });
-    else if (kind === '標準料金' && k1) s.fees.push({ studio: k1, room: k2, fee: Number(v) || 0 });
+    else if (kind === '標準料金' && k1) {
+      const f = parseFeeValue(v);
+      if (f) s.fees.push({ studio: k1, room: k2, ...f });
+    }
     else if (kind === 'キャンセル期限' && k1) s.cancelRules.push({ studio: k1, daysBefore: Number(k2) || 0, time: v || '10:00' });
     else if (kind === 'グループ' && k1) s.groups.push({ id: k1, name: v || k1 });
     else if (kind === '共通' && k1 === '最低人数標準') s.minDefault = Number(v) || s.minDefault;
@@ -176,6 +179,8 @@ export function rowsToSettings(rows: Row[]): Settings {
   }
   // シートにスタジオがまだ1件もなければ、コードの初期値（公式サイトの情報）を使う
   if (s.studios.length === 0) s.studios = DEFAULT_STUDIOS.map((x) => ({ ...x, aliases: [...x.aliases], rooms: x.rooms.map((r) => ({ ...r })) }));
+  // 標準料金も同じ。0円の行しかなければ、まだ入力されていないとみなす
+  if (!s.fees.some((f) => f.fee > 0)) s.fees = DEFAULT_FEES.map((f) => ({ ...f }));
   return s;
 }
 
@@ -192,21 +197,18 @@ export function settingsToRows(s: Settings): Row[] {
       { 種別: 'スタジオ', キー1: st.name, キー2: st.aliases.join(','), 値: '' },
       ...st.rooms.map((r) => ({ 種別: '部屋', キー1: st.name, キー2: r.name, 値: r.size })),
     ]),
-    ...s.fees.map((f) => ({ 種別: '標準料金', キー1: f.studio, キー2: f.room, 値: String(f.fee) })),
+    ...s.fees.map((f) => ({ 種別: '標準料金', キー1: f.studio, キー2: f.room, 値: formatFeeValue(f) })),
     ...s.cancelRules.map((c) => ({ 種別: 'キャンセル期限', キー1: c.studio, キー2: String(c.daysBefore), 値: c.time })),
     ...s.groups.map((g) => ({ 種別: 'グループ', キー1: g.id, キー2: '', 値: g.name })),
   ];
 }
 
-/** 初期の設定。料金は仮の値なので、管理者が実際の金額に直す */
+/** 初期の設定。料金は公式サイトの料金表（変わったら管理画面で直す） */
 export const INITIAL_SETTINGS: Settings = {
   studios: DEFAULT_STUDIOS,
   minDefault: 3,
   roundUnit: 10,
-  fees: [
-    { studio: 'worcle', room: '', fee: 0 },
-    { studio: 'BUZZ', room: '', fee: 0 },
-  ],
+  fees: DEFAULT_FEES,
   cancelRules: [
     // worcle は利用日の3日前から100%のため、その前日（4日前）の10時に警告
     { studio: 'worcle', daysBefore: 4, time: '10:00' },

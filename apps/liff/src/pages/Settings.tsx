@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { DEFAULT_STUDIOS, isAdmin, type CancelRule, type FeeRule, type Member, type Role, type StudioDef } from '@pb/shared';
+import { DEFAULT_STUDIOS, isAdmin, type CancelRule, type FeeDays, type FeeRule, type Member, type Role, type StudioDef } from '@pb/shared';
 import { api } from '../api';
 import { Spinner, TopBar, go, useApp, useRunner } from '../ui';
 
@@ -56,6 +56,7 @@ export function AdminPage() {
   const [run, busy] = useRunner();
   const [studios, setStudios] = useState<StudioDef[]>(me.settings.studios);
   const [fees, setFees] = useState<FeeRule[]>(me.settings.fees);
+  const setFee = (i: number, patch: Partial<FeeRule>) => setFees(fees.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const [rules, setRules] = useState<CancelRule[]>(me.settings.cancelRules);
   const [minDefault, setMinDefault] = useState(String(me.settings.minDefault));
   const [roundUnit, setRoundUnit] = useState(String(me.settings.roundUnit));
@@ -124,19 +125,33 @@ export function AdminPage() {
 
       <StudioEditor studios={studios} onChange={setStudios} />
 
-      <div class="section-title">スタジオの標準料金（1時間あたり・部屋が空欄なら全部屋）</div>
+      <div class="section-title">スタジオの標準料金（30分あたり）</div>
       <section class="card">
         <div class="muted" style={{ marginBottom: 8 }}>
-          登録画面でスタジオと部屋を選ぶと、1時間あたりの料金 × 利用時間でスタジオ代が自動で入ります。スクショから料金が読めなかったときにも使います。
+          登録画面でスタジオ・部屋・日時を選ぶと、この料金表（平日・土日祝と時間帯ごと）でスタジオ代が自動で入ります。スクショから料金が読めなかったときにも使います。部屋が空欄なら全部屋、時間帯が空欄なら終日です。料金表にない時間帯（深夜パックなど）が入ると自動では入りません。
         </div>
         {fees.map((f, i) => (
-          <div class="grid3" style={{ marginBottom: 8 }}>
-            <input type="text" placeholder="スタジオ" value={f.studio} onInput={(e) => setFees(fees.map((x, j) => (j === i ? { ...x, studio: e.currentTarget.value } : x)))} />
-            <input type="text" placeholder="部屋" value={f.room} onInput={(e) => setFees(fees.map((x, j) => (j === i ? { ...x, room: e.currentTarget.value } : x)))} />
-            <input type="number" placeholder="円/時間" value={f.fee} onInput={(e) => setFees(fees.map((x, j) => (j === i ? { ...x, fee: Number(e.currentTarget.value) } : x)))} />
+          <div class="fee-rule">
+            <div class="grid3">
+              <input type="text" placeholder="スタジオ" value={f.studio} onInput={(e) => setFee(i, { studio: e.currentTarget.value })} />
+              <input type="text" placeholder="部屋" value={f.room} onInput={(e) => setFee(i, { room: e.currentTarget.value })} />
+              <select value={f.days ?? ''} onChange={(e) => setFee(i, { days: e.currentTarget.value as FeeDays })}>
+                <option value="">毎日</option>
+                <option value="平日">平日</option>
+                <option value="土日祝">土日祝</option>
+              </select>
+            </div>
+            <div class="grid3" style={{ marginTop: 6 }}>
+              <input type="text" inputMode="numeric" placeholder="開始 17:00" value={f.from ?? ''} onInput={(e) => setFee(i, { from: e.currentTarget.value })} />
+              <input type="text" inputMode="numeric" placeholder="終了 23:30" value={f.to ?? ''} onInput={(e) => setFee(i, { to: e.currentTarget.value })} />
+              <input type="number" placeholder="円/30分" value={f.fee} onInput={(e) => setFee(i, { fee: Number(e.currentTarget.value) })} />
+            </div>
+            <button class="btn small danger" style={{ marginTop: 6 }} onClick={() => setFees(fees.filter((_, j) => j !== i))}>
+              この行を削除
+            </button>
           </div>
         ))}
-        <button class="btn small" onClick={() => setFees([...fees, { studio: '', room: '', fee: 0 }])}>
+        <button class="btn small" onClick={() => setFees([...fees, { studio: '', room: '', days: '', from: '', to: '', fee: 0 }])}>
           ＋ 行を追加
         </button>
       </section>

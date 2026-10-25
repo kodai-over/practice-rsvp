@@ -2,7 +2,7 @@
  * `npm run dev:mock` 用。Apps Script と同じ業務ロジックをブラウザ内のメモリで動かし、
  * LINEやGoogleの準備がなくても画面を確かめられるようにする。
  */
-import { addDays, makePracticeId, toJstDate, type LineMessage, type Practice } from '@pb/shared';
+import { addDays, DEFAULT_FEES, DEFAULT_STUDIOS, makePracticeId, toJstDate, type LineMessage, type Practice } from '@pb/shared';
 import { MemoryKv, MemoryStore } from '../../gas/src/app/memory';
 import type { Ctx } from '../../gas/src/app/ports';
 import { route } from '../../gas/src/app/router';
@@ -16,11 +16,8 @@ store.m = [
   { userId: 'U4', name: 'みお', role: '一般', defaultGroups: [] },
 ];
 store.s = {
-  studios: [],
-  fees: [
-    { studio: 'worcle', room: '', fee: 3300 },
-    { studio: 'BUZZ', room: '', fee: 4400 },
-  ],
+  studios: DEFAULT_STUDIOS,
+  fees: DEFAULT_FEES,
   cancelRules: [
     { studio: 'worcle', daysBefore: 4, time: '10:00' },
     { studio: 'BUZZ', daysBefore: 1, time: '10:00' },
