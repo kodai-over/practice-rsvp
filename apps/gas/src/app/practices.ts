@@ -288,7 +288,8 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
           result.extended.push(item.targetId!);
         }
       } else {
-        created.push(practices.find((p) => p.id === makePracticeId(r))!);
+        // 同じIDの中止した練習が残っていても、この登録で積んだ方（後ろ）を使う
+        created.push([...practices].reverse().find((p) => p.id === makePracticeId(r))!);
       }
     }
     for (const p of created) {
