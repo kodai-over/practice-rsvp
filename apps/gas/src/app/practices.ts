@@ -338,7 +338,9 @@ export function sendRecruit(ctx: Ctx, practices: Practice[], groups: string[], b
   for (const g of groups) {
     try {
       // カードのリンクに送り先のグループと合言葉を入れるので、グループごとに作る
-      ctx.line.push(g, recruitMessages(items, ctx.config.appUrl, groupLink(ctx, g) ?? undefined).slice(0, 5));
+      const messages = recruitMessages(items, ctx.config.appUrl, groupLink(ctx, g) ?? undefined);
+      // 1回に送れるのは5通まで。練習が多くてカードが増えたときは分けて送る
+      for (let i = 0; i < messages.length; i += 5) ctx.line.push(g, messages.slice(i, i + 5));
       sent.push(g);
     } catch (e) {
       ctx.log('recruit push failed', g, e);

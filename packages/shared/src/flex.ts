@@ -172,8 +172,11 @@ export interface RecruitInput {
 
 /** LINE のボタンのリンクに入れられる長さ */
 const MAX_URI = 1000;
-/** 1枚のカードに載せる練習の数（多すぎるとカードが送れない大きさになる） */
+/** 1枚のカードに載せる練習の数と大きさ（LINE の上限は30KB。多すぎるとカードが送れない） */
 const MAX_PER_CARD = 12;
+const MAX_CARD_BYTES = 25_000;
+/** カードに載せるメモの長さ（全文はアプリで見る） */
+const MAX_MEMO = 40;
 
 /**
  * 募集の練習だけを並べた回答画面を開くリンク（?r=練習ID を練習の数だけ付ける）。
@@ -198,9 +201,25 @@ function recruitItem({ practice: p, bookerName }: RecruitInput, first: boolean):
       row('場所', place(p)),
       row('予約者', bookerName),
       ...(p.max ? [row('上限', `${p.max}人`)] : []),
-      ...(p.memo ? [row('メモ', p.memo)] : []),
+      ...(p.memo ? [row('メモ', [...p.memo].length > MAX_MEMO ? [...p.memo].slice(0, MAX_MEMO).join('') + '…' : p.memo)] : []),
     ],
   };
+}
+
+/** 「出欠を答える」のリンク。1件でもリンクに入りきらない（スタジオ名が極端に長いなど）ときは、その練習の画面を開く */
+function cardLink(items: RecruitInput[], appUrl: string, group?: LinkGroup): string {
+  const link = answerLink(appUrl, items.map((c) => c.practice), group);
+  return link.length <= MAX_URI ? link : practiceLink(appUrl, items[0].practice, group);
+}
+
+/** カードの UTF-8 での大きさ（Apps Script には TextEncoder が無いので数える） */
+function bytes(m: LineMessage): number {
+  let n = 0;
+  for (const ch of JSON.stringify(m.contents)) {
+    const c = ch.codePointAt(0)!;
+    n += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+  }
+  return n;
 }
 
 /**
@@ -226,7 +245,7 @@ function recruitCard(items: RecruitInput[], appUrl: string, group?: LinkGroup): 
             type: 'button',
             style: 'primary',
             color: GREEN,
-            action: { type: 'uri', label: '出欠を答える', uri: answerLink(appUrl, items.map((c) => c.practice), group) },
+            action: { type: 'uri', label: '出欠を答える', uri: cardLink(items, appUrl, group) },
           },
         ],
       },
@@ -240,7 +259,10 @@ export function recruitMessages(items: RecruitInput[], appUrl: string, group?: L
   let cur: RecruitInput[] = [];
   for (const item of items) {
     const next = [...cur, item];
-    const fits = next.length <= MAX_PER_CARD && answerLink(appUrl, next.map((c) => c.practice), group).length <= MAX_URI;
+    const fits =
+      next.length <= MAX_PER_CARD &&
+      answerLink(appUrl, next.map((c) => c.practice), group).length <= MAX_URI &&
+      bytes(recruitCard(next, appUrl, group)) <= MAX_CARD_BYTES;
     if (cur.length && !fits) {
       chunks.push(cur);
       cur = [item];

@@ -90,7 +90,7 @@ export function useAnswer(run: ReturnType<typeof useRunner>[0]) {
   };
 }
 
-export function PracticeCard({ v, onAnswer }: { v: PracticeView; onAnswer: (a: Answer) => void }) {
+export function PracticeCard({ v, onAnswer, busy }: { v: PracticeView; onAnswer: (a: Answer) => void; busy?: boolean }) {
   const p = v.practice;
   const open = () => go(`/p/${encodeURIComponent(p.id)}`);
   return (
@@ -113,7 +113,7 @@ export function PracticeCard({ v, onAnswer }: { v: PracticeView; onAnswer: (a: A
           <Fee v={v} />
         </div>
       </button>
-      <RsvpButtons value={v.myAnswer} status={p.status} onAnswer={onAnswer} />
+      <RsvpButtons value={v.myAnswer} status={p.status} busy={busy} onAnswer={onAnswer} />
     </article>
   );
 }

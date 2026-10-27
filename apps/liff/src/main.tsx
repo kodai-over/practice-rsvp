@@ -1,5 +1,5 @@
 import { render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { HomeView, MeView, PracticeView } from '@studio-attendance/shared';
 import { api } from './api';
 import { initLiff } from './liff';
@@ -53,6 +53,8 @@ function App() {
   const [practices, setPracticesState] = useState<{ list: PracticeView[]; at: number } | null>(cached ? { list: cached.practices, at: 0 } : null);
   const [error, setError] = useState<string | null>(null);
   const [toast, toastNode] = useToast();
+  // 起動中に出欠などで差し替えた練習。あとから届いた起動時の一覧（それより前の状態）で戻さない
+  const touched = useRef<Set<string> | null>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -82,7 +84,12 @@ function App() {
       }
       const home = await api('home');
       setMe(home.me);
-      setPracticesState({ list: home.practices, at: Date.now() });
+      setPracticesState((cur) => {
+        const keep = touched.current;
+        touched.current = null;
+        const list = home.practices.map((v) => (keep?.has(v.practice.id) ? (cur?.list.find((x) => x.practice.id === v.practice.id) ?? v) : v));
+        return { list, at: Date.now() };
+      });
       saveCache(home);
     })().catch((e) => {
       const msg = e instanceof Error ? e.message : String(e);
@@ -92,12 +99,14 @@ function App() {
   }, []);
 
   const setPractices = (list: PracticeView[], fresh = false) => setPracticesState((cur) => ({ list, at: fresh ? Date.now() : cur?.at || Date.now() }));
-  const updatePractice = (v: PracticeView) =>
+  const updatePractice = (v: PracticeView) => {
+    touched.current?.add(v.practice.id);
     setPracticesState((cur) => {
       if (!cur) return cur;
       const has = cur.list.some((x) => x.practice.id === v.practice.id);
       return { ...cur, list: has ? cur.list.map((x) => (x.practice.id === v.practice.id ? v : x)) : [...cur.list, v] };
     });
+  };
 
   return (
     <div class="app">

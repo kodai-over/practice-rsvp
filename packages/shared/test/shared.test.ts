@@ -335,6 +335,15 @@ describe('Flex Message', () => {
     expect(msgs.reduce((n, m) => n + JSON.stringify(m).match(/r=/g)!.length, 0)).toBe(5);
   });
 
+  it('募集カード: メモは短くし、1件でもリンクに入りきらなければその練習の画面を開く', () => {
+    const memo = 'あ'.repeat(100);
+    const [card] = recruitMessages([{ practice: practice({ id: 'p0', memo }), bookerName: 'a' }], appUrl);
+    expect(JSON.stringify(card)).toContain(`"${'あ'.repeat(40)}…"`);
+    const huge = practice({ id: 'い'.repeat(200) });
+    const [one] = recruitMessages([{ practice: huge, bookerName: 'a' }], appUrl);
+    expect(JSON.stringify(one)).toContain(`"uri":"${appUrl}?p=${encodeURIComponent(huge.id)}"`);
+  });
+
   it('グループに伝える文: 行く・行かないを日付でまとめ、保留と未回答は載せない', () => {
     const at = (date: string, start: string) => ({ date, start });
     expect(
