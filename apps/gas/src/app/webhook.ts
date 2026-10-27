@@ -25,6 +25,7 @@ import {
   saveDraft,
   upcoming,
 } from './practices';
+import { goneKey } from './triggers';
 
 // LINE Webhook のイベント（使う項目だけ）
 interface Source {
@@ -244,11 +245,13 @@ function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string, rec
     throw e;
   }
   const groups = ctx.store.settings().groups;
+  // 実際に募集を送れたグループ（確認カードを出したあとに外れたグループには送らない）
+  const recruited = result.recruited ?? [];
   const lines: string[] = [];
   if (result.created.length) {
     lines.push(
-      targetGroups.length
-        ? `登録して募集しました（${targetGroups.map((g) => groups.find((x) => x.id === g)?.name ?? g).join('、')}）`
+      recruited.length
+        ? `登録して募集しました（${recruited.map((g) => groups.find((x) => x.id === g)?.name ?? g).join('、')}）`
         : '登録しました',
     );
     for (const id of result.created) {
@@ -261,7 +264,7 @@ function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string, rec
     if (p) lines.push(`${labelDate(p.date)}の練習を${p.end}までに延長しました。`);
   }
   if (result.skipped.length) lines.push(`登録済みの予約${result.skipped.length}件は飛ばしました。`);
-  if (result.created.length && !targetGroups.length) {
+  if (result.created.length && !recruited.length) {
     lines.push('', 'グループに募集するときは、アプリの「募集」で練習を開くと送れます。', ctx.config.appUrl);
   }
   safeReply(ctx, ev, [textMsg(lines.join('\n') || '登録する予約はありませんでした。')]);
@@ -273,11 +276,21 @@ function onJoin(ctx: Ctx, ev: LineEvent): void {
   const id = chatId(ev.source);
   if (!id || ev.source.type === 'user') return;
   let name = '';
-  try {
-    name = ev.source.groupId ? (ctx.line.groupSummary(id)?.groupName ?? '') : '';
-  } catch (e) {
-    ctx.log('group summary error', e);
+  if (ev.source.groupId) {
+    try {
+      const summary = ctx.line.groupSummary(id);
+      // 他の公式アカウントがいるトークなどでは、招待された直後にLINEがBotを外す。そのときは設定に載せない
+      if (!summary) {
+        ctx.log('joined but group not found', id);
+        return;
+      }
+      name = summary.groupName ?? '';
+    } catch (e) {
+      ctx.log('group summary error', e);
+    }
   }
+  // 見つからないと数えていた途中で招待し直された場合は、数え直す
+  ctx.kv.remove(goneKey(id));
   ctx.withLock(() => {
     const s = ctx.store.settings();
     if (!s.groups.some((g) => g.id === id)) {
