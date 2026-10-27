@@ -227,6 +227,51 @@ a {
   color: #fff;
 }
 
+/* ---------- 左にスワイプして削除する行（募集） ---------- */
+.swipe {
+  position: relative;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.swipe-body {
+  position: relative;
+  z-index: 1;
+  /* 縦のスクロールはブラウザに任せ、横の動きだけ受け取る */
+  touch-action: pan-y;
+  /* 中止の練習（半透明）の下から赤が透けないように */
+  background: var(--bg);
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+.swipe-body > .ticket {
+  margin-bottom: 0;
+}
+.swipe-delete {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 88px;
+  border: 0;
+  border-radius: 0 14px 14px 0;
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+/* 閉じているときは、チケットの角から赤がのぞかないよう隠す */
+.swipe:not(.open):not(.dragging) .swipe-delete {
+  visibility: hidden;
+}
+.swipe-delete:disabled {
+  opacity: 0.6;
+}
+
 /* ---------- チケット（練習） ---------- */
 .ticket {
   position: relative;
@@ -1290,7 +1335,13 @@ details > summary {
 }
 /* 「グループに伝える」で送る文の見本 */
 .report {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0 0 12px;
+  border: 0;
+  color: var(--ink);
+  resize: vertical;
   padding: 12px 14px;
   background: var(--paper);
   border-radius: 10px;

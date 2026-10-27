@@ -62,7 +62,9 @@ function App() {
       // 募集カードや確認カードのリンク（?p= / ?cal= / ?draft=）を画面に振り分ける
       // ?view= は以前のメニュー（4つのボタン）のリンク。古いリンクから開かれても困らないよう残す
       const p = params.get('p');
-      // 募集カードの「出欠を答える」は ?r=練習ID を練習の数だけ付けて開く
+      // キャンセル期限前のお知らせなど、予約者が練習を直す・消すためのリンク（「募集」の練習の画面）
+      const manage = params.get('manage');
+      // 募集カードの「RSVP」は ?r=練習ID を練習の数だけ付けて開く
       const answers = params.getAll('r');
       const draft = params.get('draft');
       // グループのカードから開いたときは、先にそのグループのメンバーとして覚えてもらう（でないと練習が見えない）
@@ -73,7 +75,9 @@ function App() {
       const view = views[params.get('view') ?? ''];
       const hash = answers.length
         ? `/answer?${answers.map((id) => `r=${encodeURIComponent(id)}`).join('&')}`
-        : p
+        : manage
+          ? `/recruit/${encodeURIComponent(manage)}`
+          : p
           ? `/p/${encodeURIComponent(p)}${params.get('cal') ? '?cal=1' : ''}`
           : draft
             ? `/register?draft=${encodeURIComponent(draft)}${params.get('recruit') === '1' ? '&recruit=1' : ''}`

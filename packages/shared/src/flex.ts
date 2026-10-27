@@ -206,7 +206,7 @@ function recruitItem({ practice: p, bookerName }: RecruitInput, first: boolean):
   };
 }
 
-/** 「出欠を答える」のリンク。1件でもリンクに入りきらない（スタジオ名が極端に長いなど）ときは、アプリのトップを開く */
+/** 「RSVP」のリンク。1件でもリンクに入りきらない（スタジオ名が極端に長いなど）ときは、アプリのトップを開く */
 function cardLink(items: RecruitInput[], appUrl: string, group?: LinkGroup): string {
   const links = [answerLink(appUrl, items.map((c) => c.practice), group), group?.key ? appLink(appUrl, { g: group.id, k: group.key }) : appUrl];
   return links.find((l) => l.length <= MAX_URI) ?? appUrl;
@@ -223,7 +223,7 @@ function bytes(m: LineMessage): number {
 }
 
 /**
- * 参加者募集のカード。その回に募集した練習を1枚に並べ、ボタンは「出欠を答える」だけ。
+ * 参加者募集のカード。その回に募集した練習を1枚に並べ、ボタンは「RSVP」だけ。
  * 押すとアプリでその練習だけの回答画面が開く（グループのトークには何も流れない）
  */
 function recruitCard(items: RecruitInput[], appUrl: string, group?: LinkGroup): LineMessage {
@@ -245,7 +245,7 @@ function recruitCard(items: RecruitInput[], appUrl: string, group?: LinkGroup): 
             type: 'button',
             style: 'primary',
             color: GREEN,
-            action: { type: 'uri', label: '出欠を答える', uri: cardLink(items, appUrl, group) },
+            action: { type: 'uri', label: 'RSVP', uri: cardLink(items, appUrl, group) },
           },
         ],
       },
@@ -332,13 +332,14 @@ export function warningText(p: Practice, going: number, min: number, appUrl: str
   return [
     `${practiceSummary(p)} の参加は現在${going}人です（最低人数${min}人）。`,
     'まもなくキャンセル料がかかります。キャンセルするか判断してください。',
-    appLink(appUrl, { p: p.id }),
+    // 削除は「募集」の練習の画面でするので、そこを開く
+    appLink(appUrl, { manage: p.id }),
   ].join('\n');
 }
 
 /**
  * 回答画面の「グループに伝える」で、本人の発言としてグループに送る文。
- * 行く・行かないを日付でまとめ、保留と未回答は載せない。載せるものが無ければ null
+ * 行く・保留・行かないを日付でまとめ、未回答は載せない。載せるものが無ければ null
  */
 export function answerReport(items: { practice: Pick<Practice, 'date' | 'start'>; answer: Answer | null }[]): string | null {
   // 同じ日に練習が2つあるときだけ、開始時刻も付けて見分ける
@@ -351,8 +352,9 @@ export function answerReport(items: { practice: Pick<Practice, 'date' | 'start'>
       .map((x) => label(x.practice))
       .join('・');
   const going = pick('行く');
+  const maybe = pick('保留');
   const notGoing = pick('行かない');
-  const lines = [going && `○ ${going} 行きます`, notGoing && `✕ ${notGoing} 行きません`].filter(Boolean);
+  const lines = [going && `○ ${going} 行きます`, maybe && `△ ${maybe} 未定です`, notGoing && `✕ ${notGoing} 行きません`].filter(Boolean);
   return lines.length ? ['出欠を回答しました', ...lines].join('\n') : null;
 }
 

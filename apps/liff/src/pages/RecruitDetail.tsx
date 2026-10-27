@@ -1,13 +1,13 @@
 import { useState } from 'preact/hooks';
 import type { AttendeeView, PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
-import { Avatar, Icon, Spinner, Syncing, TopBar, useApp } from '../ui';
-import { PracticePass, usePractice } from './Detail';
+import { Avatar, Icon, Spinner, Syncing, TopBar, go, useApp } from '../ui';
+import { EditForm, PracticePass, usePractice } from './Detail';
 
-/** 募集の画面。募集先のグループ・ゲストの追加・参加リンクだけ */
+/** 「募集」から開く練習の画面。募集先のグループ・ゲストの追加・参加リンク・（予約者と管理者は）編集と削除 */
 export function RecruitDetailPage({ id }: { id: string }) {
-  const { me } = useApp();
-  const { v, loading, busy, update } = usePractice(id);
+  const { me, setPractices } = useApp();
+  const { v, loading, run, busy, update } = usePractice(id);
   if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
   const guests = [...v.going, ...v.maybe, ...v.notGoing].filter((a) => a.kind === 'ゲスト');
   const remove = (a: AttendeeView) => update(() => api('removeAttendance', { id, participant: a.participant }), '取り消しました');
@@ -49,6 +49,21 @@ export function RecruitDetailPage({ id }: { id: string }) {
       </section>
 
       {v.joinUrl && <JoinLink url={v.joinUrl} />}
+
+      {v.canEdit && (
+        <EditForm
+          v={v}
+          busy={busy}
+          onSave={(patch) => update(() => api('updatePractice', { id, patch }), '保存しました')}
+          onDelete={async () => {
+            const list = await run(() => api('deletePractice', { id }), '削除しました');
+            if (list) {
+              setPractices(list, true);
+              go('/recruit');
+            }
+          }}
+        />
+      )}
     </>
   );
 }

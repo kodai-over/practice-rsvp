@@ -105,6 +105,7 @@ const ICONS = {
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
   gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z',
   check: 'M5 12.5 10 17.5 19 7',
+  trash: 'M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 10.5v6M14 10.5v6',
 } as const;
 export type IconName = keyof typeof ICONS;
 
@@ -151,12 +152,10 @@ export function Tabs<K extends string>({ items, value, onChange }: { items: { ke
 
 /** 画面下の浮いたナビ。どの画面からでも主な画面と要望に移れる */
 export function NavBar() {
-  const { me, practices } = useApp();
+  const { me } = useApp();
   const { path } = useRoute();
-  // 練習の画面は「予定」、登録の画面は「募集」を光らせる。募集の画面（/recruit/:id）は、
-  // 「募集」に並ぶ自分の練習なら「募集」、予定から開いた他の人の練習なら「予定」
-  const others = path[0] === 'recruit' && path[1] && practices?.find((v) => v.practice.id === path[1])?.practice.booker !== me.member.userId;
-  const here = path[0] === 'p' || path[0] === 'answer' || others ? '' : path[0] === 'register' ? 'recruit' : (path[0] ?? '');
+  // 練習の画面は「予定」、募集の画面（/recruit/:id）と登録の画面は「募集」を光らせる
+  const here = path[0] === 'p' || path[0] === 'answer' ? '' : path[0] === 'register' ? 'recruit' : (path[0] ?? '');
   const items: { to: string; key: string; icon: IconName; label: string }[] = [
     { to: '/', key: '', icon: 'ticket', label: '予定' },
     ...(canRegister(me.member) ? ([{ to: '/recruit', key: 'recruit', icon: 'send', label: '募集' }] as const) : []),

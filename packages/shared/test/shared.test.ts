@@ -28,6 +28,7 @@ import {
   practiceListMessage,
   recruitMessages,
   answerReport,
+  warningText,
   toJstDate,
   yen,
   type Practice,
@@ -310,7 +311,7 @@ describe('カレンダー', () => {
 describe('Flex Message', () => {
   const appUrl = 'https://liff.line.me/123-abc';
 
-  it('募集カード: 練習を1枚に並べ、ボタンは「出欠を答える」だけ', () => {
+  it('募集カード: 練習を1枚に並べ、ボタンは「RSVP」だけ', () => {
     const items = [0, 1].map((i) => ({ practice: practice({ id: `p${i}`, date: addDays('2026-11-01', i), max: i ? 5 : null }), bookerName: 'おおゆち' }));
     const msgs = recruitMessages(items, appUrl, { id: 'C1', key: 'k1' });
     expect(msgs).toHaveLength(1);
@@ -318,7 +319,7 @@ describe('Flex Message', () => {
     const json = JSON.stringify(msgs[0]);
     expect(json).toContain('"text":"参加者募集"');
     expect(json).toContain('おおゆち');
-    expect(json).toContain('"label":"出欠を答える"');
+    expect(json).toContain('"label":"RSVP"');
     expect(json).toContain(`"uri":"${appUrl}?r=p0&r=p1&g=C1&k=k1"`);
     // その場で答えるボタン（押すとトークに発言が流れる）は載せない
     expect(json).not.toContain('postback');
@@ -344,7 +345,7 @@ describe('Flex Message', () => {
     expect(JSON.stringify(top)).toContain(`"uri":"${appUrl}?g=C1&k=k1"`);
   });
 
-  it('グループに伝える文: 行く・行かないを日付でまとめ、保留と未回答は載せない', () => {
+  it('グループに伝える文: 行く・保留・行かないを日付でまとめ、未回答は載せない', () => {
     const at = (date: string, start: string) => ({ date, start });
     expect(
       answerReport([
@@ -354,14 +355,20 @@ describe('Flex Message', () => {
         { practice: at('2026-11-04', '19:00'), answer: '保留' },
         { practice: at('2026-11-05', '19:00'), answer: null },
       ]),
-    ).toBe('出欠を回答しました\n○ 11/1(日)・11/2(月) 行きます\n✕ 11/3(火) 行きません');
+    ).toBe('出欠を回答しました\n○ 11/1(日)・11/2(月) 行きます\n△ 11/4(水) 未定です\n✕ 11/3(火) 行きません');
     // 同じ日に2つあるときは開始時刻で見分ける
     const sameDay = answerReport([
       { practice: at('2026-11-01', '13:00'), answer: '行く' },
       { practice: at('2026-11-01', '19:00'), answer: '行かない' },
     ]);
     expect(sameDay).toBe('出欠を回答しました\n○ 11/1(日) 13:00 行きます\n✕ 11/1(日) 19:00 行きません');
-    expect(answerReport([{ practice: at('2026-11-01', '13:00'), answer: '保留' }])).toBeNull();
+    expect(answerReport([{ practice: at('2026-11-01', '13:00'), answer: null }])).toBeNull();
+  });
+
+  it('キャンセル期限前のお知らせは「募集」の練習の画面を開く', () => {
+    const text = warningText(practice({ id: 'p1' }), 1, 3, appUrl);
+    expect(text).toContain(`${appUrl}?manage=p1`);
+    expect(text).not.toContain('?p=');
   });
 
   it('確認カード: 「登録して募集」「登録のみ」「やめる」', () => {
