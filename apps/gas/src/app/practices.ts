@@ -243,25 +243,34 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
 
   ctx.withLock(() => {
     const practices = ctx.store.practices();
+    // この登録で作る練習のID
+    const batch = new Set<string>();
+    const sameGroups = (a: string[], b: string[]) => a.length === b.length && a.every((g) => b.includes(g));
     // 先に全件を分類し、送り先がないまま一部だけ登録されることを防ぐ
     const plan = normalized.map(({ input, r }) => {
-      const [item] = classifyFor(practices, booker, [r]);
+      let [item] = classifyFor(practices, booker, [r]);
+      // 同じ登録内で続く予約（19-21時と21-22時など）は1つの練習にまとめる。ただし募集先が違えば別の練習にする
+      if (item.kind === 'extension' && batch.has(item.targetId!)) {
+        const target = practices.find((p) => p.id === item.targetId)!;
+        if (!sameGroups(target.groups, groupsOf(input))) item = { reservation: item.reservation, kind: 'new' };
+      }
       if (item.kind === 'new') {
-        // 同じ登録内で続く予約（19-21時と21-22時など）も延長として扱えるよう、仮に積んでおく
-        practices.push({ ...draftPractice(ctx, booker, r, input, groupsOf(input)) });
+        // 続く予約を延長として扱えるよう、仮に積んでおく
+        const d = draftPractice(ctx, booker, r, input, groupsOf(input));
+        practices.push(d);
+        batch.add(d.id);
       }
       return { input, r, item };
     });
-    for (const { input, r, item } of plan) {
+    for (const { r, item } of plan) {
       if (item.kind === 'duplicate') {
         result.skipped.push(item.targetId!);
       } else if (item.kind === 'extension') {
         const target = practices.find((p) => p.id === item.targetId)!;
         target.end = r.end;
         target.fee += r.fee;
-        // 同じ登録の中で1つの練習にまとめた予約は、それぞれで選んだ募集先をどれも送る
-        if (created.includes(target)) target.groups = [...new Set([...target.groups, ...groupsOf(input)])];
-        else {
+        // 同じ登録の中でまとめるのは募集先が同じ予約だけ（上の分類で分けてある）
+        if (!created.includes(target)) {
           ctx.store.savePractice(target);
           result.extended.push(target.id);
         }

@@ -278,7 +278,8 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     const d = loadDraft(ctx, id);
     if (!d || d.booker !== me.userId) return null;
     // 確認カードを出してから状態が変わっているかもしれないので分類し直す
-    return { ...d, items: classifyFor(ctx.store.practices(), me, d.items.map((i) => i.reservation)) };
+    // まとめる前の予約から分類し直し、アプリで分け直せるよう parts を残す
+    return { ...d, items: classifyFor(ctx.store.practices(), me, d.items.flatMap((i) => i.parts ?? [i.reservation])) };
   },
 
   classify(ctx, me, { reservations }) {

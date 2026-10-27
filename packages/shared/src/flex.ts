@@ -101,45 +101,50 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
       }),
     );
   }
-  const groupNames = draft.groups.map((id) => groups.find((g) => g.id === id)?.name ?? '（不明なグループ）');
-  // 登録がメイン。グループへの募集は、ふだんの送り先があるときだけ2つ目のボタンで選べる
   const canRegister = draft.incomplete.length === 0 && draft.items.some((i) => i.kind !== 'duplicate');
-  const canRecruit = canRegister && draft.groups.length > 0 && draft.items.some((i) => i.kind === 'new');
+  const canRecruit = canRegister && groups.length > 0 && draft.items.some((i) => i.kind === 'new');
+  // グループが1つだけなら、そこにそのまま募集する。2つ以上なら、アプリで予約ごとに募集先を選んでもらう
+  const single = groups.length === 1 ? groups[0] : null;
 
   const buttons: Node[] = [];
-  if (canRegister) {
+  if (canRecruit) {
     buttons.push({
       type: 'button',
       style: 'primary',
       color: GREEN,
-      action: { type: 'postback', label: '登録する', data: encodePostback({ a: 'confirm', d: draft.id }), displayText: '登録する' },
+      action: single
+        ? { type: 'postback', label: '登録して募集', data: encodePostback({ a: 'confirm', d: draft.id, r: '1' }), displayText: '登録して募集' }
+        : { type: 'uri', label: '登録して募集', uri: appLink(appUrl, { draft: draft.id, recruit: '1' }) },
     });
   }
-  if (canRecruit) {
+  if (canRegister) {
     buttons.push({
       type: 'button',
-      style: 'secondary',
-      action: {
-        type: 'postback',
-        label: '登録してグループに募集',
-        data: encodePostback({ a: 'confirm', d: draft.id, r: '1' }),
-        displayText: '登録してグループに募集',
-      },
+      style: canRecruit ? 'secondary' : 'primary',
+      ...(canRecruit ? {} : { color: GREEN }),
+      action: { type: 'postback', label: '登録のみ', data: encodePostback({ a: 'confirm', d: draft.id }), displayText: '登録のみ' },
+    });
+  } else {
+    // 読み取れなかった項目があれば、アプリで直してから登録してもらう
+    buttons.push({
+      type: 'button',
+      style: 'primary',
+      color: GREEN,
+      action: { type: 'uri', label: '修正して登録', uri: appLink(appUrl, { draft: draft.id }) },
     });
   }
-  buttons.push(
-    {
-      type: 'button',
-      style: canRegister ? 'link' : 'primary',
-      ...(canRegister ? {} : { color: GREEN }),
-      action: { type: 'uri', label: '修正して登録', uri: appLink(appUrl, { draft: draft.id }) },
-    },
-    {
-      type: 'button',
-      style: 'link',
-      action: { type: 'postback', label: 'やめる', data: encodePostback({ a: 'discard', d: draft.id }), displayText: 'やめる' },
-    },
-  );
+  buttons.push({
+    type: 'button',
+    style: 'link',
+    action: { type: 'postback', label: 'やめる', data: encodePostback({ a: 'discard', d: draft.id }), displayText: 'やめる' },
+  });
+  const note = !canRegister
+    ? []
+    : canRecruit && single
+      ? [{ type: 'separator' }, row('募集先', `${single.name}（「登録して募集」のとき）`)]
+      : canRecruit
+        ? [text('「登録して募集」では、アプリで予約ごとに募集先を選べます。', { size: 'xs', color: GRAY })]
+        : [];
 
   return {
     type: 'flex',
@@ -153,11 +158,7 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
         contents: [
           text('予約内容の確認', { weight: 'bold', size: 'lg' }),
           ...itemRows,
-          ...(canRecruit
-            ? [{ type: 'separator' }, row('募集先', `${groupNames.join('、')}（「登録してグループに募集」のとき）`)]
-            : canRegister
-              ? [text('グループへの募集は、登録したあとアプリの練習画面からもできます。', { size: 'xs', color: GRAY })]
-              : []),
+          ...note,
         ],
       },
       footer: { type: 'box', layout: 'vertical', spacing: 'sm', contents: buttons },

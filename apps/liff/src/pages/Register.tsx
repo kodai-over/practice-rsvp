@@ -18,8 +18,10 @@ interface FormRow {
   kind?: DraftItemKind | 'incomplete';
   /** スタジオ代を標準料金から自動で入れた（手で直したら false） */
   feeAuto?: boolean;
-  /** 予約ごとに募集先を選ぶときの、この予約の募集先 */
+  /** この予約の募集先（空なら登録だけ） */
   groups: string[];
+  /** 続けて取った予約を1つにまとめたときの、まとめる前の予約（「分ける」で分け直せる） */
+  parts?: Reservation[];
 }
 
 let seq = 0;
@@ -37,8 +39,8 @@ const emptyRow = (over: Partial<Omit<FormRow, 'key'>> = {}): FormRow => ({
   ...over,
   key: ++seq,
 });
-const fromReservation = (r: Partial<Reservation>, kind: FormRow['kind']): FormRow =>
-  emptyRow({ date: r.date ?? '', start: r.start ?? '', end: r.end ?? '', studio: r.studio ?? '', room: r.room ?? '', fee: r.fee != null ? String(r.fee) : '', kind });
+const fromReservation = (r: Partial<Reservation>, kind: FormRow['kind'], groups: string[] = [], parts?: Reservation[]): FormRow =>
+  emptyRow({ date: r.date ?? '', start: r.start ?? '', end: r.end ?? '', studio: r.studio ?? '', room: r.room ?? '', fee: r.fee != null ? String(r.fee) : '', kind, groups, parts });
 
 /** 読み取り結果の印。延長は既存の練習を更新し、登録済みは飛ばす */
 const KIND_TAG: Record<string, { label: string; cls: string }> = {
@@ -85,29 +87,25 @@ async function shrink(file: File): Promise<{ mimeType: string; data: string }> {
   return { mimeType: 'image/jpeg', data: url.slice(url.indexOf(',') + 1) };
 }
 
-export function RegisterPage({ draftId }: { draftId: string | null }) {
+/** recruit: 確認カードの「登録して募集」から開いた（ふだんの送り先を各予約に入れておく） */
+export function RegisterPage({ draftId, recruit = false }: { draftId: string | null; recruit?: boolean }) {
   const { me, toast, setPractices } = useApp();
   const [phase, setPhase] = useState<null | 'reading' | 'saving'>(null);
   const [rows, setRows] = useState<FormRow[]>(() => [emptyRow({ date: addDays(toJstDate(new Date()), 7) })]);
-  // 登録がメイン。グループへの募集は、選んだときだけ
-  const [groups, setGroups] = useState<string[]>([]);
-  // 予約が2件以上あるときは、予約ごとに募集先を選べる（1件目はグループ1だけ、2件目はグループ2だけ、など）
-  const [perRow, setPerRow] = useState(false);
-  const eachRow = perRow && rows.length > 1;
+  // 募集先は予約ごとに、その予約の欄で選ぶ（空なら登録だけ）。2件以上なら下でまとめて付け外しもできる
   // 延長（既存の練習を伸ばす）と登録済みの予約には募集を送らないので、選べるのは新しく登録する予約だけ
   const pickable = (r: FormRow) => r.kind !== 'duplicate' && r.kind !== 'extension';
-  const recruiting = eachRow ? rows.some((r) => pickable(r) && r.groups.length > 0) : groups.length > 0;
-  /** 入力欄を入れ替えるとき（読み取り・下書き）。予約ごとに選んでいたら、まとめての募集先を入れておく */
-  const replaceRows = (next: FormRow[]) => setRows(perRow ? next.map((r) => ({ ...r, groups: [...groups] })) : next);
-  const removeRow = (key: number) => {
-    const rest = rows.filter((x) => x.key !== key);
-    // 1件になったら「まとめて」に戻し、その予約で選んでいた募集先を引き継ぐ
-    if (perRow && rest.length === 1) {
-      setPerRow(false);
-      setGroups(rest[0].groups);
-    }
-    setRows(rest);
+  const recruiting = rows.some((r) => pickable(r) && r.groups.length > 0);
+  const setRowGroups = (key: number, g: string[]) => setRows((rs) => rs.map((x) => (x.key === key ? { ...x, groups: g } : x)));
+  /** まとめて選ぶ：押したグループを、選べる予約すべてに付ける（すべてに付いていれば外す） */
+  const allHave = (g: string) => rows.filter(pickable).every((r) => r.groups.includes(g));
+  const toggleAll = (g: string) => {
+    const on = !allHave(g);
+    setRows((rs) => rs.map((r) => (pickable(r) ? { ...r, groups: on ? [...new Set([...r.groups, g])] : r.groups.filter((x) => x !== g) } : r)));
   };
+  /** まとめた予約を、まとめる前の予約に分ける（続けて取った予約を別々の募集先に送るとき） */
+  const splitRow = (r: FormRow) =>
+    setRows((rs) => rs.flatMap((x) => (x.key === r.key && r.parts ? r.parts.map((p, i) => fromReservation(p, i === 0 && r.kind === 'extension' ? 'extension' : undefined, r.groups)) : [x])));
   const [loading, setLoading] = useState(!!draftId);
   const [run, busy] = useRunner();
   const [pasted, setPasted] = useState('');
@@ -121,7 +119,8 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         toast('確認カードの期限が切れています。もう一度入力してください', true);
         return;
       }
-      replaceRows([...d.items.map((i) => fromReservation(i.reservation, i.kind)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete'))]);
+      const g = recruit ? d.groups : [];
+      setRows([...d.items.map((i) => fromReservation(i.reservation, i.kind, g, i.parts)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete', g))]);
     });
   }, [draftId]);
 
@@ -150,14 +149,14 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
     const res = await run(() => api('parseReservations', params));
     setPhase(null);
     if (!res) return false;
-    const next = [...res.items.map((i) => fromReservation(i.reservation, i.kind)), ...res.incomplete.map((r) => fromReservation(r, 'incomplete'))];
+    const next = [...res.items.map((i) => fromReservation(i.reservation, i.kind, [], i.parts)), ...res.incomplete.map((r) => fromReservation(r, 'incomplete'))];
     // 登録済み・終了した予約はサーバーで除かれている。件数だけ伝える
     const skipped = skippedNote(res);
     if (next.length === 0) {
       toast(`新しく登録する予約はありませんでした。${skipped || '手で入力してください。'}`, true);
       return false;
     }
-    replaceRows(next);
+    setRows(next);
     toast(`${next.length}件を読み取りました。${skipped}内容を確かめてください`);
     return true;
   };
@@ -190,12 +189,12 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         max: r.max.trim() ? Number(r.max) : null,
         min: r.min.trim() ? Number(r.min) : null,
         memo: r.memo,
-        ...(eachRow ? { groups: pickable(r) ? r.groups : [] } : {}),
+        groups: pickable(r) ? r.groups : [],
       }));
     if (items.length === 0) return toast('登録する練習がありません', true);
     if (me.actAs === 'test' && recruiting && !confirm('確認用アカウント「admin」として、グループに募集を送ります。よろしいですか？')) return;
     setPhase('saving');
-    const res = await run(() => api('createPractices', { items, groups: eachRow ? [] : groups, draftId: draftId ?? undefined }));
+    const res = await run(() => api('createPractices', { items, groups: [], draftId: draftId ?? undefined }));
     setPhase(null);
     if (!res) return;
     if (res.practices) setPractices(res.practices, true); // 一覧を取り直さずにすぐ反映
@@ -244,7 +243,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
               <span class="grow">{r.date ? labelDate(r.date) : String(i + 1).padStart(2, '0')}</span>
               {r.kind && KIND_TAG[r.kind] && <span class={`tag ${KIND_TAG[r.kind].cls}`}>{KIND_TAG[r.kind].label}</span>}
               {rows.length > 1 && (
-                <button class="icon-btn" aria-label="この予約を削除" onClick={() => removeRow(r.key)}>
+                <button class="icon-btn" aria-label="この予約を削除" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
                   <Icon name="x" size={18} />
                 </button>
               )}
@@ -302,50 +301,45 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
                 <input type="text" placeholder="例：ショーケースの通し" value={r.memo} onInput={(e) => update(r.key, 'memo', e.currentTarget.value)} />
               </label>
             </details>
-            {eachRow && pickable(r) && (
+            {r.parts && r.parts.length > 1 && (
+              <div class="row muted" style={{ marginBottom: 10 }}>
+                <span class="grow">続けて取った予約{r.parts.length}件をまとめています</span>
+                <button class="btn small" onClick={() => splitRow(r)}>
+                  分ける
+                </button>
+              </div>
+            )}
+            {me.groups.length > 0 && pickable(r) && (
               <div class="field">
-                <span>この予約の募集先</span>
-                <GroupToggles groups={me.groups} defaults={me.member.defaultGroups} value={r.groups} onChange={(g) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, groups: g } : x)))} />
+                <span>募集先（選ばなければ登録だけ）</span>
+                <GroupToggles groups={me.groups} defaults={me.member.defaultGroups} value={r.groups} onChange={(g) => setRowGroups(r.key, g)} />
               </div>
             )}
           </section>
         );
       })}
 
-      <button class="add-row" onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), kind: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
+      <button class="add-row" onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), kind: undefined, parts: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
         <Icon name="plus" size={18} />
         予約を追加
       </button>
 
-      {me.groups.length > 0 && (
+      {me.groups.length > 0 && rows.filter(pickable).length > 1 && (
         <>
           <div class="sec-head">
             <Icon name="send" size={18} />
-            募集も送る
+            すべての予約の募集先
           </div>
-          {rows.length > 1 && (
-            <div class="toggles" role="group" aria-label="募集先の選び方" style={{ marginBottom: 10 }}>
-              <button class="toggle" aria-pressed={!perRow} onClick={() => setPerRow(false)}>
-                まとめて選ぶ
+          <div class="toggles">
+            {me.groups.map((g) => (
+              <button class="toggle" aria-pressed={allHave(g.id)} onClick={() => toggleAll(g.id)}>
+                {g.name}
               </button>
-              <button
-                class="toggle"
-                aria-pressed={perRow}
-                onClick={() => {
-                  // はじめて切り替えたときは、まとめて選んでいた募集先を各予約に入れておく（予約ごとに選んだ内容は消さない）
-                  if (!perRow && rows.every((r) => r.groups.length === 0)) setRows((rs) => rs.map((r) => ({ ...r, groups: [...groups] })));
-                  setPerRow(true);
-                }}
-              >
-                予約ごとに選ぶ
-              </button>
-            </div>
-          )}
-          {eachRow ? (
-            <div class="muted">それぞれの予約の「この予約の募集先」で選んでください</div>
-          ) : (
-            <GroupToggles groups={me.groups} defaults={me.member.defaultGroups} value={groups} onChange={setGroups} />
-          )}
+            ))}
+          </div>
+          <div class="muted" style={{ marginTop: 6 }}>
+            押すと、すべての予約に付けたり外したりします。予約ごとに変えるときは、それぞれの予約の「募集先」で選んでください
+          </div>
         </>
       )}
 

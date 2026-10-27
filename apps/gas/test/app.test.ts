@@ -69,16 +69,29 @@ describe('スクショから募集まで', () => {
     const card = t.line.lastReplyText();
     expect(card).toContain('予約内容の確認');
     expect(card).toContain('チームA');
-    expect(card).toContain('"label":"登録する"');
-    expect(card).toContain('登録してグループに募集');
+    // グループが1つなら「登録して募集」でそのまま募集できる
+    expect(card).toContain('"label":"登録して募集","data":"a=confirm');
+    expect(card).toContain('"label":"登録のみ"');
+    expect(card).toContain('"label":"やめる"');
+    expect(card).not.toContain('修正して登録');
   });
 
-  it('グループが複数でふだんの送り先が未設定なら、「登録する」だけ出す', () => {
+  it('グループが複数なら「登録して募集」でアプリを開き、予約ごとに募集先を選ぶ', () => {
     t.store.s.groups.push({ id: 'C2', name: 'チームB' });
     t.reader.result = [reservation];
     handleWebhook(t.ctx, { events: [imageEvent('Ustranger')] });
-    expect(t.line.lastReplyText()).toContain('"label":"登録する"');
-    expect(t.line.lastReplyText()).not.toContain('登録してグループに募集');
+    const card = t.line.lastReplyText();
+    expect(card).toMatch(/"label":"登録して募集","uri":"https:\/\/liff\.line\.me\/APP\?draft=[^"]+&recruit=1"/);
+    expect(card).toContain('"label":"登録のみ"');
+  });
+
+  it('グループが1つもなければ「登録のみ」と「やめる」', () => {
+    t.store.s.groups = [];
+    t.reader.result = [reservation];
+    handleWebhook(t.ctx, { events: [imageEvent('Ustranger')] });
+    const card = t.line.lastReplyText();
+    expect(card).not.toContain('登録して募集');
+    expect(card).toContain('"label":"登録のみ"');
   });
 
   it('「登録する」は登録だけ。グループには流さず、あとから募集する方法を案内する', () => {
@@ -901,7 +914,7 @@ describe('予約ごとの募集先', () => {
     expect(JSON.stringify(t.line.pushes[before])).toContain('11/5');
   });
 
-  it('同じ登録で1つの練習にまとまる予約は、それぞれで選んだ募集先にどれも送る', () => {
+  it('続けて取った予約は、募集先が違えば別の練習にする。同じならまとめる', () => {
     const t = setup();
     t.store.s.groups.push({ id: G2, name: 'チームB' });
     const items = [
@@ -909,9 +922,29 @@ describe('予約ごとの募集先', () => {
       { ...reservation, date: '2026-10-28', start: '21:00', end: '22:00', max: null, min: null, memo: '', groups: [G2] },
     ];
     const res = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items, groups: [] }) as any;
-    expect(res.created).toHaveLength(1);
-    expect(t.store.p[0]).toMatchObject({ end: '22:00', groups: [G1, G2] });
+    expect(res.created).toHaveLength(2);
+    expect(t.store.p.map((p) => [p.start, p.end, p.groups])).toEqual([['19:00', '21:00', [G1]], ['21:00', '22:00', [G2]]]);
     expect(res.recruited).toEqual([G1, G2]);
+    expect(JSON.stringify(t.line.pushes.find((p) => p.to === G2))).toContain('21:00〜22:00');
+
+    const same = items.map((i) => ({ ...i, date: '2026-10-29', groups: [G1] }));
+    const res2 = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: same, groups: [] }) as any;
+    expect(res2.created).toHaveLength(1);
+    expect(t.store.getPractice(res2.created[0])).toMatchObject({ start: '19:00', end: '22:00', groups: [G1] });
+  });
+
+  it('スクショで続けて取った予約は1件にまとめ、アプリで分け直せるよう、まとめる前の予約も返す', () => {
+    const t = setup();
+    t.reader.result = [
+      { ...reservation, start: '19:00', end: '21:00', fee: 4000 },
+      { ...reservation, start: '21:00', end: '22:00', fee: 2000 },
+    ];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
+    const draftId = [...t.kv.data.keys()][0].replace('draft:', '');
+    const d = handleApi(t.ctx, { userId: BOOKER }, 'getDraft', { id: draftId }) as any;
+    expect(d.items).toHaveLength(1);
+    expect(d.items[0].reservation).toMatchObject({ start: '19:00', end: '22:00' });
+    expect(d.items[0].parts.map((r: any) => [r.start, r.end])).toEqual([['19:00', '21:00'], ['21:00', '22:00']]);
   });
 
   it('送れなかったグループは練習の送り先から外し、あとから送り直せる', () => {

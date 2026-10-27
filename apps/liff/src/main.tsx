@@ -18,7 +18,7 @@ function Router() {
   if (path[0] === 'p' && path[1]) return <DetailPage id={path[1]} focus={query.get('cal') === '1' ? 'calendar' : null} />;
   if (path[0] === 'recruit' && path[1]) return <RecruitDetailPage id={path[1]} />;
   if (path[0] === 'recruit') return <RecruitListPage />;
-  if (path[0] === 'register') return <RegisterPage draftId={query.get('draft')} />;
+  if (path[0] === 'register') return <RegisterPage draftId={query.get('draft')} recruit={query.get('recruit') === '1'} />;
   if (path[0] === 'settings') return <SettingsPage />;
   if (path[0] === 'admin') return <AdminPage />;
   if (path[0] === 'feedback') return <FeedbackPage />;
@@ -68,7 +68,7 @@ function App() {
       const hash = p
         ? `/p/${encodeURIComponent(p)}${params.get('cal') ? '?cal=1' : ''}`
         : draft
-          ? `/register?draft=${encodeURIComponent(draft)}`
+          ? `/register?draft=${encodeURIComponent(draft)}${params.get('recruit') === '1' ? '&recruit=1' : ''}`
           : view;
       if (hash) {
         history.replaceState(null, '', `${location.pathname}#${hash}`);
