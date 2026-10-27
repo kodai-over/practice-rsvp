@@ -22,7 +22,7 @@ LINE、Cloudflare Workers、GitHub Pages の無料枠で動きます。
 | `apps/gas` | Apps Script。`src/app/` が業務ロジック（GAS非依存でテスト可能）、`src/gas/` がシート・LINE・Geminiとの接続 |
 | `apps/worker` | Cloudflare Workers。LINEの署名を確かめて Apps Script に中継 |
 | `apps/liff` | LINE内アプリ（Preact）と参加リンクのページ `join.html` |
-| `docs/` | 初期設定・デプロイ手順、予約者・メンバー向けの案内文 |
+| `docs/` | 初期設定・デプロイ手順、予約者・メンバー向けの案内文、グループでの動作確認チェックリスト |
 
 ## はじめかた
 
