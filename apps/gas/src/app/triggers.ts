@@ -3,10 +3,12 @@ import type { Ctx } from './ports';
 
 /**
  * 毎時実行。
+ * - グループ名をLINE側の名前にそろえる
  * - 日付を過ぎた練習を「終了」にする（参加リンクも無効になる）
  * - キャンセル期限前警告：警告時刻を過ぎ、参加人数が最低人数に届いていない練習を予約者に知らせる
  */
 export function hourlyJob(ctx: Ctx): void {
+  syncGroupNames(ctx);
   const now = ctx.now();
   const today = toJstDate(now);
   const settings = ctx.store.settings();
@@ -41,4 +43,33 @@ export function hourlyJob(ctx: Ctx): void {
       ctx.log('warning push failed', w.to, e);
     }
   }
+}
+
+/**
+ * グループ名をLINE側の名前にそろえる（グループ名の変更はWebhookで届かないため、毎時取得し直す）。
+ * 複数人トーク（IDが C で始まらない）は名前を取得できないので対象外。取得に失敗したグループはそのままにする
+ */
+export function syncGroupNames(ctx: Ctx): void {
+  const latest = new Map<string, string>();
+  for (const g of ctx.store.settings().groups) {
+    if (!g.id.startsWith('C')) continue;
+    try {
+      const name = ctx.line.groupSummary(g.id)?.groupName;
+      if (name) latest.set(g.id, name);
+    } catch (e) {
+      ctx.log('group summary error', g.id, e);
+    }
+  }
+  ctx.withLock(() => {
+    const s = ctx.store.settings();
+    let changed = false;
+    for (const g of s.groups) {
+      const name = latest.get(g.id);
+      if (name && name !== g.name) {
+        g.name = name;
+        changed = true;
+      }
+    }
+    if (changed) ctx.store.saveSettings(s);
+  });
 }

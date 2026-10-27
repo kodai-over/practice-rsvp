@@ -95,17 +95,17 @@ export function AdminPage() {
 
       <div class="section-title">グループ</div>
       <section class="card">
-        {me.groups.length === 0 && <div class="muted">Botをグループに招待すると出ます</div>}
+        {me.groups.length === 0 ? (
+          <div class="muted">Botをグループに招待すると出ます</div>
+        ) : (
+          <div class="muted" style={{ marginBottom: 8 }}>
+            名前はLINEのグループ名に1時間ごとにそろえます
+          </div>
+        )}
         {me.groups.map((g) => (
-          <GroupRow
-            key={g.id}
-            name={g.name}
-            busy={busy}
-            onSave={async (name) => {
-              const groups = await run(() => api('renameGroup', { id: g.id, name }), '保存しました');
-              if (groups) setMe({ ...me, groups, settings: { ...me.settings, groups } });
-            }}
-          />
+          <div key={g.id} style={{ marginBottom: 8 }}>
+            {g.name}
+          </div>
         ))}
       </section>
 
@@ -223,18 +223,6 @@ export function AdminPage() {
         保存
       </button>
     </>
-  );
-}
-
-function GroupRow({ name, onSave, busy }: { name: string; onSave: (n: string) => void; busy: boolean }) {
-  const [v, setV] = useState(name);
-  return (
-    <div class="row" style={{ marginBottom: 8 }}>
-      <input type="text" class="grow" value={v} onInput={(e) => setV(e.currentTarget.value)} />
-      <button class="btn small" disabled={busy || !v.trim() || v === name} onClick={() => onSave(v.trim())}>
-        保存
-      </button>
-    </div>
   );
 }
 

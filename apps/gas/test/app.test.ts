@@ -496,6 +496,18 @@ describe('ルーター', () => {
     handleWebhook(t.ctx, { events: [{ type: 'join', replyToken: 'rt', source: { type: 'group', groupId: 'Cnew' } }] });
     expect(t.store.s.groups.find((g) => g.id === 'Cnew')?.name).toBe('名前-Cnew');
   });
+
+  it('毎時の処理でグループ名をLINE側の名前にそろえる', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: 'Cfail', name: '旧名' }, { id: 'Rroom', name: 'グループ3' });
+    t.line.groupNames = { [G1]: 'チームA①', Cfail: new Error('not found') };
+    hourlyJob(t.ctx);
+    expect(t.store.s.groups).toEqual([
+      { id: G1, name: 'チームA①' },
+      { id: 'Cfail', name: '旧名' }, // 取得できなければそのまま
+      { id: 'Rroom', name: 'グループ3' }, // 複数人トークは対象外
+    ]);
+  });
 });
 
 describe('リッチメニュー', () => {

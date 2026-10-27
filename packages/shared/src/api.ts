@@ -111,7 +111,6 @@ export interface ApiActions {
   setDisplayName: { params: { name: string }; result: Member };
   listMembers: { params: Record<string, never>; result: Member[] };
   updateMember: { params: { userId: string; patch: Partial<Pick<Member, 'name' | 'role' | 'defaultGroups'>> }; result: Member };
-  renameGroup: { params: { id: string; name: string }; result: Group[] };
   listFeedback: { params: Record<string, never>; result: FeedbackView[] };
   postFeedback: { params: { text: string }; result: FeedbackView[] };
   updateFeedback: { params: { id: string; status?: FeedbackStatus; reply?: string }; result: FeedbackView[] };
