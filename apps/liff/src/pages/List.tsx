@@ -86,7 +86,7 @@ export function useAnswer(run: ReturnType<typeof useRunner>[0]) {
     if (before) updatePractice({ ...before, myAnswer: a });
     const v = await run(() => api('rsvp', { id, answer: a }));
     if (v) updatePractice(v);
-    else if (before) updatePractice(before);
+    else if (before) updatePractice(before, { revert: true });
   };
 }
 

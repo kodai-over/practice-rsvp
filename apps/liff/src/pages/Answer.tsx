@@ -7,24 +7,29 @@ import { PracticeCard, useAnswer } from './List';
 
 /** 募集カードの「出欠を答える」から開く画面。その募集の練習だけを並べ、答えたらグループに伝えられる */
 export function AnswerPage({ ids: raw }: { ids: string[] }) {
-  const { practices: list, setPractices, toast } = useApp();
+  const { practices: list, practicesAt, setPractices, toast } = useApp();
   const ids = [...new Set(raw)];
   const [run, busy] = useRunner();
   const answer = useAnswer(run);
   const [send, sending] = useRunner();
-  // この画面で最新の一覧を取り終えたか。前回の表示の回答のまま送らないよう、それまでは答えも送信も止める
-  const [fresh, setFresh] = useState(false);
-
-  useEffect(() => {
+  // 最新の一覧を取り終えたか。前回の表示の回答のまま送らないよう、取れるまでは答えも送信も止める
+  // 起動時や直前に取ったばかりなら、取り直さない
+  const [load, setLoad] = useState<'loading' | 'ok' | 'error'>(() => (practicesAt > 0 && Date.now() - practicesAt < 30_000 ? 'ok' : 'loading'));
+  const reload = () => {
+    setLoad('loading');
     run(() => api('listPractices')).then((r) => {
       if (r) setPractices(r, true);
-      setFresh(true);
+      setLoad(r ? 'ok' : 'error');
     });
+  };
+  useEffect(() => {
+    if (load === 'loading') reload();
   }, []);
+  const fresh = load === 'ok';
 
   const found = ids.map((id) => list?.find((v) => v.practice.id === id)).filter((v) => v != null);
   // 前回の表示に無い練習（募集されたばかりのもの）は、最新を取り終わるまで待つ
-  if (list == null || (found.length < ids.length && !fresh))
+  if (list == null || (found.length < ids.length && load === 'loading'))
     return (
       <>
         <TopBar title="出欠を答える" />
@@ -50,15 +55,23 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
 
   return (
     <>
-      <TopBar title="出欠を答える">{(busy || !fresh) && <Syncing />}</TopBar>
-      {found.length === 0 ? (
+      <TopBar title="出欠を答える">{(busy || load === 'loading') && <Syncing />}</TopBar>
+      {load === 'error' && (
+        <div class="empty">
+          最新の出欠を読み込めませんでした
+          <button class="btn primary" onClick={reload}>
+            読み込み直す
+          </button>
+        </div>
+      )}
+      {load === 'error' ? null : found.length === 0 ? (
         <div class="empty">練習が見つかりません（終わった・削除された・見られない練習です）</div>
       ) : (
         found.map((v) => <PracticeCard key={v.practice.id} v={v} busy={busy || !fresh} onAnswer={(a) => answer(v.practice.id, a)} />)
       )}
       {found.length > 0 && found.length < ids.length && <p class="note">終わった・削除された・見られない練習は表示していません</p>}
 
-      {found.length > 0 && (
+      {fresh && found.length > 0 && (
         <section>
           <div class="sec-head">
             <Icon name="chat" size={18} />

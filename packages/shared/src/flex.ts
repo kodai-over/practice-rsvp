@@ -206,10 +206,10 @@ function recruitItem({ practice: p, bookerName }: RecruitInput, first: boolean):
   };
 }
 
-/** 「出欠を答える」のリンク。1件でもリンクに入りきらない（スタジオ名が極端に長いなど）ときは、その練習の画面を開く */
+/** 「出欠を答える」のリンク。1件でもリンクに入りきらない（スタジオ名が極端に長いなど）ときは、アプリのトップを開く */
 function cardLink(items: RecruitInput[], appUrl: string, group?: LinkGroup): string {
-  const link = answerLink(appUrl, items.map((c) => c.practice), group);
-  return link.length <= MAX_URI ? link : practiceLink(appUrl, items[0].practice, group);
+  const links = [answerLink(appUrl, items.map((c) => c.practice), group), group?.key ? appLink(appUrl, { g: group.id, k: group.key }) : appUrl];
+  return links.find((l) => l.length <= MAX_URI) ?? appUrl;
 }
 
 /** カードの UTF-8 での大きさ（Apps Script には TextEncoder が無いので数える） */

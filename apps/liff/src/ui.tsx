@@ -38,7 +38,7 @@ interface AppState {
   /** 一覧を置き換える。fresh なら「今取った最新」として扱う（一覧に戻っても取り直さない） */
   setPractices(list: PracticeView[], fresh?: boolean): void;
   /** 1件だけ差し替える（出欠や修正の結果をすぐ一覧に反映する） */
-  updatePractice(v: PracticeView): void;
+  updatePractice(v: PracticeView, opts?: { revert?: boolean }): void;
 }
 
 export const AppContext = createContext<AppState>(null as unknown as AppState);

@@ -55,7 +55,8 @@ export async function sendToChat(text: string) {
     return;
   }
   // スコープを足す前にログインした人は、まだ許可していないことがある。そのときは先に許可を求める
+  // 求められない設定のときもあるので、失敗してもそのまま送ってみる（送れなければ sendMessages が失敗する）
   const { state } = await liff.permission.query('chat_message.write').catch(() => ({ state: 'granted' }));
-  if (state === 'prompt') await liff.permission.requestAll();
+  if (state === 'prompt') await liff.permission.requestAll().catch((e) => console.error(e));
   await liff.sendMessages([{ type: 'text', text }]);
 }

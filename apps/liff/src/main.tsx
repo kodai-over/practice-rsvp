@@ -99,8 +99,10 @@ function App() {
   }, []);
 
   const setPractices = (list: PracticeView[], fresh = false) => setPracticesState((cur) => ({ list, at: fresh ? Date.now() : cur?.at || Date.now() }));
-  const updatePractice = (v: PracticeView) => {
-    touched.current?.add(v.practice.id);
+  const updatePractice = (v: PracticeView, { revert = false } = {}) => {
+    // 失敗して元に戻したときは、起動時の一覧の最新の内容を入れてよい
+    if (revert) touched.current?.delete(v.practice.id);
+    else touched.current?.add(v.practice.id);
     setPracticesState((cur) => {
       if (!cur) return cur;
       const has = cur.list.some((x) => x.practice.id === v.practice.id);
