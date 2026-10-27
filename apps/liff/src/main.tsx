@@ -11,7 +11,7 @@ import { RecruitListPage } from './pages/RecruitList';
 import { RegisterPage } from './pages/Register';
 import { AdminPage, SettingsPage } from './pages/Settings';
 import './styles.css';
-import { AppContext, NavBar, Spinner, useRoute, useToast } from './ui';
+import { AppContext, NavBar, Spinner, go, useRoute, useToast } from './ui';
 
 function Router() {
   const { path, query } = useRoute();
@@ -99,6 +99,11 @@ function App() {
         <div class="empty">{error}</div>
       ) : me ? (
         <AppContext.Provider value={{ me, setMe, toast, practices: practices?.list ?? null, practicesAt: practices?.at ?? 0, setPractices, updatePractice }}>
+          {me.actAs && me.actAs !== 'self' && (
+            <button class="acting-banner" onClick={() => go('/settings')}>
+              {me.actAs === 'member' ? '一般メンバーとして表示中' : '確認用の予約者「admin」として操作中'}（「自分」で戻せます）
+            </button>
+          )}
           <Router />
           <NavBar />
         </AppContext.Provider>

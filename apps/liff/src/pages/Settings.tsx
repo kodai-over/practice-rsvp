@@ -1,7 +1,40 @@
 import { useEffect, useState } from 'preact/hooks';
-import { DEFAULT_STUDIOS, isAdmin, type CancelRule, type FeeDays, type FeeRule, type Member, type Role, type StudioDef } from '@studio-attendance/shared';
-import { api } from '../api';
+import { DEFAULT_STUDIOS, isAdmin, type ActAs, type CancelRule, type FeeDays, type FeeRule, type Member, type Role, type StudioDef } from '@studio-attendance/shared';
+import { api, setActAs } from '../api';
 import { Avatar, Icon, Spinner, TopBar, go, useApp, useRunner } from '../ui';
+
+const ACT_AS_LABEL: Record<ActAs, string> = { self: '自分（管理者）', member: '自分（一般メンバー）', test: '確認用の予約者「admin」' };
+
+/** 管理者が、参加者からの見え方を確かめるための切り替え */
+function ActAsSwitch() {
+  const { me, setMe, setPractices, toast } = useApp();
+  const [run, busy] = useRunner();
+  const change = async (v: ActAs) => {
+    setActAs(v);
+    const home = await run(() => api('home'));
+    if (!home) return;
+    setMe(home.me);
+    setPractices(home.practices, true);
+    toast(`${ACT_AS_LABEL[v]}として操作します`);
+  };
+  return (
+    <>
+      <div class="section-title">見え方の確認</div>
+      <section class="card">
+        <div class="muted" style={{ marginBottom: 8 }}>
+          「一般メンバー」では、入っているグループの練習だけが見えます。「admin」で予約を登録して募集し、自分に切り替えると、参加者からの見え方を確かめられます。
+        </div>
+        <div class="toggles">
+          {(['self', 'member', 'test'] as ActAs[]).map((v) => (
+            <button class="toggle" aria-pressed={me.actAs === v} disabled={busy} onClick={() => me.actAs !== v && change(v)}>
+              {ACT_AS_LABEL[v]}
+            </button>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
 
 export function SettingsPage() {
   const { me, setMe } = useApp();
@@ -50,6 +83,8 @@ export function SettingsPage() {
           </button>
         )}
       </div>
+
+      {me.canSwitch && <ActAsSwitch />}
 
       {isAdmin(me.member) && (
         <ul class="menu" style={{ marginTop: 24 }}>

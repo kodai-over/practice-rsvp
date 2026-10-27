@@ -9,7 +9,6 @@ import {
   nextStatus,
   normalizeReservation,
   recruitMessages,
-  roomInfo,
   sortPractices,
   toJstDate,
   toJstTime,
@@ -227,7 +226,10 @@ export function removeDraft(ctx: Ctx, id: string): void {
 export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInput[], groups: string[]): CreateResult {
   if (!canRegister(booker)) throw new UserError('練習を登録できません');
   const settings = ctx.store.settings();
-  const validGroups = groups.filter((g) => settings.groups.some((s) => s.id === g));
+  const known = (gs: string[]) => [...new Set(gs)].filter((g) => settings.groups.some((s) => s.id === g));
+  const validGroups = known(groups);
+  // 予約ごとに募集先を選んだときは、そちらを使う
+  const groupsOf = (input: NewPracticeInput) => (Array.isArray(input.groups) ? known(input.groups) : validGroups);
   const result: CreateResult = { created: [], extended: [], skipped: [] };
   const created: Practice[] = [];
 
@@ -246,7 +248,7 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
       const [item] = classifyFor(practices, booker, [r]);
       if (item.kind === 'new') {
         // 同じ登録内で続く予約（19-21時と21-22時など）も延長として扱えるよう、仮に積んでおく
-        practices.push({ ...draftPractice(ctx, booker, r, input, validGroups) });
+        practices.push({ ...draftPractice(ctx, booker, r, input, groupsOf(input)) });
       }
       return { input, r, item };
     });
@@ -282,15 +284,19 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
     }
   });
 
-  if (created.length > 0) result.recruited = sendRecruit(ctx, sortPractices(created), validGroups, booker.name);
+  if (created.length > 0) {
+    // グループごとに、そのグループを募集先にした練習だけをまとめて送る
+    const sorted = sortPractices(created);
+    const targets = settings.groups.map((g) => g.id).filter((g) => sorted.some((p) => p.groups.includes(g)));
+    result.recruited = targets.filter((g) => sendRecruit(ctx, sorted.filter((p) => p.groups.includes(g)), [g], booker.name).length > 0);
+  }
   return result;
 }
 
 /** 練習の募集をグループに流す（1グループにつき1メッセージ）。送れたグループを返す */
 export function sendRecruit(ctx: Ctx, practices: Practice[], groups: string[], bookerName: string): string[] {
   if (practices.length === 0 || groups.length === 0) return [];
-  const { studios } = ctx.store.settings();
-  const items = practices.map((practice) => ({ practice, bookerName, roomInfo: roomInfo(studios, practice.studio, practice.room) }));
+  const items = practices.map((practice) => ({ practice, bookerName }));
   const sent: string[] = [];
   for (const g of groups) {
     try {

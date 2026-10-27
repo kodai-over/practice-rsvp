@@ -54,16 +54,31 @@ export interface FeedbackView {
   canDelete: boolean;
 }
 
+/**
+ * 管理者が見え方を確かめるための切り替え。
+ * self: 自分（管理者）、member: 自分を一般メンバーとして、test: 確認用の予約者アカウント「admin」として操作する
+ */
+export type ActAs = 'self' | 'member' | 'test';
+export const ACT_AS: ActAs[] = ['self', 'member', 'test'];
+/** 確認用の予約者アカウントのID（LINEのユーザーではないので、このIDには何も届かない） */
+export const TEST_MEMBER_ID = 'test:admin';
+
 export interface MeView {
   member: Member;
   groups: Group[];
   settings: Settings;
+  /** いまどのアカウントとして操作しているか */
+  actAs: ActAs;
+  /** 本当は管理者で、切り替えられる */
+  canSwitch: boolean;
 }
 
 export interface NewPracticeInput extends Reservation {
   max: number | null;
   min: number | null;
   memo: string;
+  /** この予約だけの募集先。無ければ登録全体の募集先（createPractices の groups）を使う */
+  groups?: string[];
 }
 
 export interface ParseResult {

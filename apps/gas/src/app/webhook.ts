@@ -331,9 +331,7 @@ function onJoin(ctx: Ctx, ev: LineEvent): void {
       ctx.store.saveSettings(s);
     }
   });
-  safeReply(ctx, ev, [
-    textMsg('練習の募集をお手伝いするBotです。募集メッセージの「行く／保留／行かない」で出欠を出せます。「練習」と送ると今後の練習の一覧を返します。'),
-  ]);
+  // 招待されたときの案内は送らない（グループの会話を邪魔しないため）
 }
 
 function onLeave(ctx: Ctx, ev: LineEvent): void {

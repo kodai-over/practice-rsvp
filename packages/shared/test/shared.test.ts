@@ -24,6 +24,7 @@ import {
   normalizeReservation,
   parsePostback,
   perPersonFee,
+  endAfterStart,
   practiceListMessage,
   recruitMessages,
   toJstDate,
@@ -309,7 +310,15 @@ describe('Flex Message', () => {
     const json = JSON.stringify(msgs[0]);
     expect(json).toContain('"displayText":"10/21 行きます"');
     expect(json).toContain('a=rsvp&p=p0&v=1');
-    expect(json).toContain(`${appUrl}?p=p0&cal=1`);
+    expect(json).toContain(`${appUrl}?p=p0"`);
+    // 出欠は記号。ボタンは「アプリを開く」だけで、広さ・料金・カレンダーは載せない
+    expect(json).toContain('"label":"○"');
+    expect(json).toContain('"label":"△"');
+    expect(json).toContain('"label":"✕"');
+    expect(json).toContain('"label":"アプリを開く"');
+    expect(json).not.toContain('カレンダー');
+    expect(json).not.toContain('割り勘');
+    expect(json).not.toContain('広さ');
   });
 
   it('確認カード: 「登録する」がメイン。ふだんの送り先があるときだけ「登録してグループに募集」も出す', () => {
@@ -365,6 +374,19 @@ describe('Flex Message', () => {
     expect(practiceListMessage([], appUrl).type).toBe('text');
     const msg = practiceListMessage([{ practice: practice({ status: '満員' }), going: 5 }], appUrl);
     expect(JSON.stringify(msg)).toContain('5人 満員');
+    // 上限があれば「参加/上限」で出す
+    expect(JSON.stringify(practiceListMessage([{ practice: practice({ max: 12 }), going: 1 }], appUrl))).toContain('"1/12人"');
+    expect(JSON.stringify(practiceListMessage([{ practice: practice({ max: 5, status: '満員' }), going: 5 }], appUrl))).toContain('5/5人 満員');
+  });
+
+  it('開始を変えたら、終了を開始の1時間後より前にしない', () => {
+    expect(endAfterStart('21:00', '21:00')).toBe('22:00');
+    expect(endAfterStart('20:30', '21:00')).toBe('21:30');
+    expect(endAfterStart('18:00', '21:00')).toBe('21:00');
+    expect(endAfterStart('9:00', '')).toBe('10:00');
+    // 日をまたぐ時刻は入力欄で表せないので変えない
+    expect(endAfterStart('23:30', '23:45')).toBe('23:45');
+    expect(endAfterStart('', '21:00')).toBe('21:00');
   });
 
   it('postbackの往復', () => {
