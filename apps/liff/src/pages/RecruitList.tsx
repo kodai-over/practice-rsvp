@@ -28,7 +28,7 @@ export function RecruitListPage() {
   return (
     <>
       <TopBar title="募集">
-        <button class="icon-btn" aria-label="チケットを登録" onClick={() => go('/register')}>
+        <button class="icon-btn" aria-label="スタジオ予約を登録" onClick={() => go('/register')}>
           <Icon name="plus" />
         </button>
       </TopBar>
@@ -36,7 +36,8 @@ export function RecruitListPage() {
         <Spinner />
       ) : list.length === 0 ? (
         <div class="empty">
-          登録した練習はありません
+          受付中の自分の練習はありません
+          <p class="note">ほかの人の練習は「予定」で開いて「募集・ゲスト」から</p>
           <button class="btn primary" onClick={() => go('/register')}>
             <Icon name="plus" size={18} />
             登録

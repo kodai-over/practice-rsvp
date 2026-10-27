@@ -220,9 +220,10 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
       res.skipped.length && `${res.skipped.length}件は登録済みでした`,
     ].filter(Boolean);
     const names = (ids: string[]) => ids.map((g) => me.groups.find((x) => x.id === g)?.name ?? g).join('、');
-    if (res.notRecruited?.length) toast(`${parts.join('・')}。${names(res.notRecruited)}には募集を送れませんでした（アプリの「募集」から送り直せます）`, true);
+    if (res.notRecruited?.length) toast(`${parts.join('・')}。${names(res.notRecruited)}には募集を送れませんでした（練習を開いて「募集・ゲスト」から送り直せます）`, true);
     else toast(parts.join('・') || '登録しました');
-    go('/');
+    // 登録は「募集」の中にあるので、続けて募集できるよう「募集」に戻る
+    go('/recruit');
   };
 
   return (

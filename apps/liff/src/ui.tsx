@@ -151,10 +151,12 @@ export function Tabs<K extends string>({ items, value, onChange }: { items: { ke
 
 /** 画面下の浮いたナビ。どの画面からでも主な画面と要望に移れる */
 export function NavBar() {
-  const { me } = useApp();
+  const { me, practices } = useApp();
   const { path } = useRoute();
-  // 練習の画面は「予定」、募集の画面（/recruit/:id）と登録の画面は「募集」を光らせる
-  const here = path[0] === 'p' || path[0] === 'answer' ? '' : path[0] === 'register' ? 'recruit' : (path[0] ?? '');
+  // 練習の画面は「予定」、登録の画面は「募集」を光らせる。募集の画面（/recruit/:id）は、
+  // 「募集」に並ぶ自分の練習なら「募集」、予定から開いた他の人の練習なら「予定」
+  const others = path[0] === 'recruit' && path[1] && practices?.find((v) => v.practice.id === path[1])?.practice.booker !== me.member.userId;
+  const here = path[0] === 'p' || path[0] === 'answer' || others ? '' : path[0] === 'register' ? 'recruit' : (path[0] ?? '');
   const items: { to: string; key: string; icon: IconName; label: string }[] = [
     { to: '/', key: '', icon: 'ticket', label: '予定' },
     ...(canRegister(me.member) ? ([{ to: '/recruit', key: 'recruit', icon: 'send', label: '募集' }] as const) : []),
