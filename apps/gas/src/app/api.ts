@@ -5,7 +5,6 @@ import {
   canRegister,
   canRemoveAttendance,
   canSeePractice,
-  classifyReservations,
   googleCalendarUrl,
   isActive,
   isAdmin,
@@ -30,7 +29,7 @@ import {
   type StudioDef,
 } from '@studio-attendance/shared';
 import { UserError, type Ctx, type RawReservation } from './ports';
-import { buildDraft, createPractices, ensureMember, inGroupKey, loadDraft, noteGroupMember, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
+import { buildDraft, classifyFor, createPractices, ensureMember, inGroupKey, loadDraft, noteGroupMember, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
 
 type Handler<A extends ApiAction> = (ctx: Ctx, me: Member, params: ApiActions[A]['params']) => ApiActions[A]['result'];
 
@@ -241,11 +240,12 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     const d = loadDraft(ctx, id);
     if (!d || d.booker !== me.userId) return null;
     // 確認カードを出してから状態が変わっているかもしれないので分類し直す
-    return { ...d, items: classifyReservations(ctx.store.practices(), d.items.map((i) => i.reservation)) };
+    return { ...d, items: classifyFor(ctx.store.practices(), me, d.items.map((i) => i.reservation)) };
   },
 
-  classify(ctx, _me, { reservations }) {
-    return classifyReservations(ctx.store.practices(), reservations ?? []);
+  classify(ctx, me, { reservations }) {
+    if (!canRegister(me)) throw new UserError('練習を登録できません');
+    return classifyFor(ctx.store.practices(), me, reservations ?? []);
   },
 
   createPractices(ctx, me, { items, groups, draftId }) {

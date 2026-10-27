@@ -22,6 +22,11 @@ export function canEditPractice(m: Member | null, p: Practice): boolean {
   return m != null && (m.role === '管理者' || p.booker === m.userId);
 }
 
+/** 続けて取った予約で練習を延長できるのは、その練習の予約者と管理者だけ（ほかの人の予約は新しい練習になる） */
+export function canExtendPractice(m: Member | null, p: Practice): boolean {
+  return canEditPractice(m, p);
+}
+
 /** 出欠の取り消し：予約者・管理者・追加した本人・回答した本人 */
 export function canRemoveAttendance(m: Member | null, p: Practice, a: Attendance): boolean {
   if (m == null) return false;

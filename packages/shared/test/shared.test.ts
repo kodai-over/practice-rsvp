@@ -179,6 +179,8 @@ describe('状態', () => {
   });
 });
 
+const all = () => true;
+
 describe('classifyReservations', () => {
   it('新規・延長・登録済みを判定', () => {
     const existing = [practice()];
@@ -186,14 +188,14 @@ describe('classifyReservations', () => {
       { date: '2026-10-21', start: '19:00', end: '21:00', studio: 'worcle', room: 'A', fee: 6000 },
       { date: '2026-10-21', start: '21:00', end: '22:00', studio: 'worcle', room: 'A', fee: 3000 },
       { date: '2026-10-22', start: '19:00', end: '21:00', studio: 'worcle', room: 'A', fee: 6000 },
-    ]);
+    ], all);
     expect(items.map((i) => i.kind)).toEqual(['duplicate', 'extension', 'new']);
     expect(items[1].targetId).toBe('worcle-20261021-1900-A');
   });
   it('中止した練習は登録済みとみなさない', () => {
     const items = classifyReservations([practice({ status: '中止' })], [
       { date: '2026-10-21', start: '19:00', end: '21:00', studio: 'worcle', room: 'A', fee: 6000 },
-    ]);
+    ], all);
     expect(items[0].kind).toBe('new');
   });
 });
@@ -205,7 +207,7 @@ describe('classifyReservations: 同じ登録内で続く予約', () => {
       { ...base, date: '2026-10-21', start: '19:30', end: '21:00', room: '202', fee: 3300 },
       { ...base, date: '2026-10-14', start: '20:30', end: '21:00', fee: 800 },
       { ...base, date: '2026-10-14', start: '19:00', end: '20:30', fee: 2400 },
-    ]);
+    ], all);
     expect(items).toEqual([
       { kind: 'new', reservation: { ...base, date: '2026-10-14', start: '19:00', end: '21:00', fee: 3200 } },
       { kind: 'new', reservation: { ...base, date: '2026-10-21', start: '19:30', end: '21:00', room: '202', fee: 3300 } },
@@ -216,8 +218,29 @@ describe('classifyReservations: 同じ登録内で続く予約', () => {
     const items = classifyReservations([existing], [
       { ...base, date: '2026-10-14', start: '20:00', end: '21:00', fee: 1000 },
       { ...base, date: '2026-10-14', start: '21:00', end: '22:00', fee: null },
-    ]);
+    ], all);
     expect(items).toEqual([{ kind: 'extension', targetId: existing.id, reservation: { ...base, date: '2026-10-14', start: '20:00', end: '22:00', fee: null } }]);
+  });
+});
+
+describe('classifyReservations: 延長してよい練習を絞る', () => {
+  const base = { studio: '横浜', room: '301', date: '2026-10-14' };
+  const mine = practice({ ...base, start: '17:00', end: '19:00', id: makePracticeId({ ...base, start: '17:00' }), booker: 'Ume' });
+  const others = practice({ ...base, start: '19:00', end: '20:00', id: makePracticeId({ ...base, start: '19:00' }), booker: 'Uother' });
+  const canExtend = (p: { booker: string }) => p.booker === 'Ume';
+  it('延長できない練習の後に続く2枠は、1件の新規にまとめる', () => {
+    const items = classifyReservations([others], [
+      { ...base, start: '20:00', end: '21:00', fee: 1000 },
+      { ...base, start: '21:00', end: '22:00', fee: 1000 },
+    ], canExtend);
+    expect(items).toEqual([{ kind: 'new', reservation: { ...base, start: '20:00', end: '22:00', fee: 2000 } }]);
+  });
+  it('延長できる練習とできない練習が混ざっても、それぞれ判定する', () => {
+    const items = classifyReservations([mine, { ...others, start: '20:00', end: '21:00', id: makePracticeId({ ...base, start: '20:00' }) }], [
+      { ...base, start: '19:00', end: '20:00', fee: 1000 },
+      { ...base, start: '21:00', end: '22:00', fee: 1000 },
+    ], canExtend);
+    expect(items.map((i) => [i.kind, i.targetId])).toEqual([['extension', mine.id], ['new', undefined]]);
   });
 });
 
