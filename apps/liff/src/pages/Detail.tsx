@@ -3,7 +3,7 @@ import { endAfterStart, roomInfo, yen, type Answer, type PracticePatch, type Pra
 import { api } from '../api';
 import { RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';
-import { Avatar, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, go, useApp, useRunner } from '../ui';
+import { Avatar, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, useApp, useRunner } from '../ui';
 
 /** 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる） */
 export function usePractice(id: string) {
@@ -58,10 +58,9 @@ export function PracticePass({ v }: { v: PracticeView }) {
   );
 }
 
-/** 練習の画面。出欠・カレンダー・（予約者と管理者は）編集だけ */
+/** 「予定」から開く練習の画面。見るのと出欠・カレンダーだけ（編集・削除・募集は「募集」から） */
 export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null }) {
-  const { setPractices } = useApp();
-  const { v, loading, run, busy, update } = usePractice(id);
+  const { v, loading, busy, update } = usePractice(id);
   const calRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -81,13 +80,6 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
 
       <Attendees v={v} />
 
-      {(p.status === '募集中' || p.status === '満員') && (
-        <button class="btn ghost block" style={{ marginTop: 12 }} onClick={() => go(`/recruit/${encodeURIComponent(p.id)}`)}>
-          <Icon name="send" size={18} />
-          募集・ゲスト
-        </button>
-      )}
-
       <div class="sec-head" ref={calRef}>
         <Icon name="calendar" size={18} />
         カレンダー
@@ -100,21 +92,6 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
           iPhone
         </button>
       </div>
-
-      {v.canEdit && (
-        <EditForm
-          v={v}
-          busy={busy}
-          onSave={(patch) => update(() => api('updatePractice', { id, patch }), '保存しました')}
-          onDelete={async () => {
-            const list = await run(() => api('deletePractice', { id }), '削除しました');
-            if (list) {
-              setPractices(list, true);
-              go('/');
-            }
-          }}
-        />
-      )}
     </>
   );
 }
@@ -155,7 +132,8 @@ function Attendees({ v }: { v: PracticeView }) {
   );
 }
 
-function EditForm({
+/** 練習の編集（予約者と管理者）。「募集」の練習の画面に出す */
+export function EditForm({
   v,
   onSave,
   onDelete,

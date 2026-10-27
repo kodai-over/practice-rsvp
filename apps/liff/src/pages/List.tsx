@@ -36,9 +36,14 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
 
   const answer = useAnswer(run);
 
-  const active = (list ?? []).filter((v) => v.practice.status !== '中止');
+  // 「予定」に出すのは、自分に招待が来た（入っているグループに募集された）練習と、自分が招待を送った（登録した）練習。
+  // 参加リンクなどで答えた練習も出す。管理者でも、ほかの練習は「募集」で見る
+  const mine = (list ?? []).filter(
+    (v) => v.practice.booker === me.member.userId || v.practice.groups.some((g) => me.member.groups.includes(g)) || v.myAnswer != null,
+  );
+  const active = mine.filter((v) => v.practice.status !== '中止');
   const groups: Record<Tab, PracticeView[]> = {
-    all: list ?? [],
+    all: mine,
     mine: active.filter((v) => v.myAnswer === '行く'),
     todo: active.filter((v) => v.myAnswer == null || v.myAnswer === '保留'),
   };

@@ -332,7 +332,8 @@ export function warningText(p: Practice, going: number, min: number, appUrl: str
   return [
     `${practiceSummary(p)} の参加は現在${going}人です（最低人数${min}人）。`,
     'まもなくキャンセル料がかかります。キャンセルするか判断してください。',
-    appLink(appUrl, { p: p.id }),
+    // 削除は「募集」の練習の画面でするので、そこを開く
+    appLink(appUrl, { manage: p.id }),
   ].join('\n');
 }
 
