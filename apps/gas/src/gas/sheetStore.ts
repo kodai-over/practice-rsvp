@@ -12,7 +12,6 @@ import {
   rowToPractice,
   rowsToSettings,
   settingsToRows,
-  fromCell,
   toCell,
   type Row,
 } from '../app/schema';
@@ -25,7 +24,7 @@ function cellToString(header: string, v: unknown): string {
     if (header === '開始' || header === '終了') return Utilities.formatDate(v, TZ, 'HH:mm');
     return v.toISOString();
   }
-  return v == null ? '' : fromCell(String(v));
+  return v == null ? '' : String(v);
 }
 
 /** 1枚のシートを「見出し名→値」の行として読み書きする */
