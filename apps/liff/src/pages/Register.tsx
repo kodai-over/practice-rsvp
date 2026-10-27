@@ -134,7 +134,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     });
   }, [draftId]);
 
-  if (loading) return <><TopBar title="スタジオ予約登録" /><Spinner /></>;
+  if (loading) return <><TopBar title="スタジオ予約登録" back /><Spinner /></>;
 
   /** スタジオ代が空欄か自動で入れたものなら、標準料金（曜日・時間帯ごとの料金表）で入れ直す */
   const autoFee = (r: FormRow): FormRow => {
@@ -227,7 +227,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
 
   return (
     <>
-      <TopBar title="スタジオ予約登録" />
+      <TopBar title="スタジオ予約登録" back />
       {phase === 'reading' && <BusyOverlay message="読み取り中" />}
       {phase === 'saving' && <BusyOverlay message={recruiting ? '登録して募集中' : '登録中'} />}
 

@@ -3,7 +3,10 @@ import { labelDate } from '@studio-attendance/shared';
 import { api } from '../api';
 import { Icon, Spinner, Stub, TopBar, go, place, useApp, useRunner } from '../ui';
 
-/** 「募集」。受付中の練習から、募集・ゲスト追加・参加リンクの練習を選ぶ（グループへの募集は予約者と管理者だけ） */
+/**
+ * 「募集」。自分が登録した受付中の練習を並べ、押すと募集・ゲスト追加・参加リンクの画面へ。右上の＋から登録する。
+ * 他の人の練習は、予定から練習を開いて「募集・ゲスト」から
+ */
 export function RecruitListPage() {
   const { me, practices, setPractices } = useApp();
   const [run] = useRunner();
@@ -17,16 +20,23 @@ export function RecruitListPage() {
     });
   }, []);
 
-  const list = practices == null && !fresh ? null : (practices ?? []).filter((v) => (v.practice.status === '募集中' || v.practice.status === '満員'));
+  const list =
+    practices == null && !fresh
+      ? null
+      : (practices ?? []).filter((v) => v.practice.booker === me.member.userId && (v.practice.status === '募集中' || v.practice.status === '満員'));
 
   return (
     <>
-      <TopBar title="募集" />
+      <TopBar title="募集">
+        <button class="icon-btn" aria-label="チケットを登録" onClick={() => go('/register')}>
+          <Icon name="plus" />
+        </button>
+      </TopBar>
       {list == null ? (
         <Spinner />
       ) : list.length === 0 ? (
         <div class="empty">
-          募集できる練習なし
+          登録した練習はありません
           <button class="btn primary" onClick={() => go('/register')}>
             <Icon name="plus" size={18} />
             登録

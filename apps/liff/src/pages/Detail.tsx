@@ -81,6 +81,13 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
 
       <Attendees v={v} />
 
+      {(p.status === '募集中' || p.status === '満員') && (
+        <button class="btn ghost block" style={{ marginTop: 12 }} onClick={() => go(`/recruit/${encodeURIComponent(p.id)}`)}>
+          <Icon name="send" size={18} />
+          募集・ゲスト
+        </button>
+      )}
+
       <div class="sec-head" ref={calRef}>
         <Icon name="calendar" size={18} />
         カレンダー

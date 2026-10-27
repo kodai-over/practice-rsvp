@@ -153,16 +153,11 @@ export function Tabs<K extends string>({ items, value, onChange }: { items: { ke
 export function NavBar() {
   const { me } = useApp();
   const { path } = useRoute();
-  // 練習の画面は「予定」、募集の画面（/recruit/:id）は「募集」を光らせる
-  const here = path[0] === 'p' || path[0] === 'answer' ? '' : (path[0] ?? '');
+  // 練習の画面は「予定」、募集の画面（/recruit/:id）と登録の画面は「募集」を光らせる
+  const here = path[0] === 'p' || path[0] === 'answer' ? '' : path[0] === 'register' ? 'recruit' : (path[0] ?? '');
   const items: { to: string; key: string; icon: IconName; label: string }[] = [
     { to: '/', key: '', icon: 'ticket', label: '予定' },
-    ...(canRegister(me.member)
-      ? ([
-          { to: '/register', key: 'register', icon: 'plus', label: '登録' },
-          { to: '/recruit', key: 'recruit', icon: 'send', label: '募集' },
-        ] as const)
-      : []),
+    ...(canRegister(me.member) ? ([{ to: '/recruit', key: 'recruit', icon: 'send', label: '募集' }] as const) : []),
     { to: '/feedback', key: 'feedback', icon: 'chat', label: '要望' },
     { to: '/settings', key: 'settings', icon: 'user', label: '自分' },
   ];
