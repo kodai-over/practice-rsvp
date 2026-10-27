@@ -1,4 +1,5 @@
 import {
+  canExtendPractice,
   canRegister,
   canonicalizeStudio,
   classifyReservations,
@@ -16,6 +17,7 @@ import {
   type AttendeeKind,
   type CreateResult,
   type Draft,
+  type DraftItem,
   type Member,
   type NewPracticeInput,
   type Practice,
@@ -158,7 +160,7 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
     else incomplete.push(canonicalizePartial(settings.studios, partial!));
   }
   // 続いている予約をまとめ、登録済みのものを除いてから、料金が読めなかったものに標準料金を入れる
-  const classified = classifyReservations(ctx.store.practices(), complete);
+  const classified = classifyFor(ctx.store.practices(), booker, complete);
   const items = classified.filter((i) => i.kind !== 'duplicate').map((i) => ({
     ...i,
     reservation: { ...i.reservation, fee: i.reservation.fee ?? (defaultFee(settings, i.reservation) || null) },
@@ -173,6 +175,11 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
     groups: defaultGroupsFor(booker, settings.groups.map((g) => g.id)),
     createdAt: ctx.now().toISOString(),
   };
+}
+
+/** 予約を分類する。延長するのは登録する人が予約した練習（管理者ならどの練習も）だけ */
+export function classifyFor(practices: Practice[], me: Member, reservations: Reservation[]): DraftItem[] {
+  return classifyReservations(practices, reservations, (p) => canExtendPractice(me, p));
 }
 
 /** ふだんの送り先。未設定でグループが1つしかなければ、そのグループにする */
@@ -234,7 +241,7 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
     const practices = ctx.store.practices();
     // 先に全件を分類し、送り先がないまま一部だけ登録されることを防ぐ
     const plan = normalized.map(({ input, r }) => {
-      const [item] = classifyReservations(practices, [r]);
+      const [item] = classifyFor(practices, booker, [r]);
       if (item.kind === 'new') {
         // 同じ登録内で続く予約（19-21時と21-22時など）も延長として扱えるよう、仮に積んでおく
         practices.push({ ...draftPractice(ctx, booker, r, input, validGroups) });

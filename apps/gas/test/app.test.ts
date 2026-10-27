@@ -144,6 +144,53 @@ describe('スクショから募集まで', () => {
     expect(t.line.lastReplyText()).toContain('22:00までに延長');
   });
 
+  describe('延長できるのは、その練習の予約者と管理者だけ', () => {
+    const next = { ...reservation, start: '21:00', end: '22:00', fee: 3000 };
+    const nextItem = { ...next, max: null, min: null, memo: '' };
+    const NEXT_PID = 'worcle横浜-20261021-2100-A';
+    beforeEach(() => {
+      handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [{ ...reservation, max: null, min: null, memo: '' }], groups: [] });
+      inG1(t, 'U9', 'きゅう');
+    });
+
+    it('ほかの人が続きの時間を登録すると、延長せず新しい練習になる', () => {
+      const res = handleApi(t.ctx, { userId: 'U9' }, 'createPractices', { items: [nextItem], groups: [] }) as any;
+      expect(res.extended).toEqual([]);
+      expect(res.created).toEqual([NEXT_PID]);
+      expect(t.store.p.find((p) => p.id === PID)).toMatchObject({ end: '21:00', fee: 6000 });
+      expect(t.store.p.find((p) => p.id === NEXT_PID)).toMatchObject({ booker: 'U9', end: '22:00', fee: 3000 });
+    });
+
+    it('ほかの人が続けて取った2枠は、自分の登録の中ではまとめる', () => {
+      const after = { ...nextItem, start: '22:00', end: '23:00', fee: 3000 };
+      const res = handleApi(t.ctx, { userId: 'U9' }, 'createPractices', { items: [nextItem, after], groups: [] }) as any;
+      expect(res.created).toEqual([NEXT_PID]);
+      expect(t.store.p.find((p) => p.id === PID)).toMatchObject({ end: '21:00' });
+      expect(t.store.p.find((p) => p.id === NEXT_PID)).toMatchObject({ end: '23:00', fee: 6000 });
+    });
+
+    it('管理者は、ほかの人の練習も延長できる', () => {
+      const res = handleApi(t.ctx, { userId: ADMIN }, 'createPractices', { items: [nextItem], groups: [] }) as any;
+      expect(res.extended).toEqual([PID]);
+      expect(t.store.p).toHaveLength(1);
+      expect(t.store.p[0]).toMatchObject({ booker: BOOKER, end: '22:00', fee: 9000 });
+    });
+
+    it('登録画面の分類も同じ決まりにそろえる（classify・確認カード・getDraft）', () => {
+      const kinds = (userId: string) => (handleApi(t.ctx, { userId }, 'classify', { reservations: [next] }) as any[]).map((i) => i.kind);
+      expect(kinds('U9')).toEqual(['new']);
+      expect(kinds(BOOKER)).toEqual(['extension']);
+      expect(kinds(ADMIN)).toEqual(['extension']);
+
+      t.reader.result = [next];
+      handleWebhook(t.ctx, { events: [imageEvent('U9', 'm9')] });
+      expect(t.line.lastReplyText()).not.toContain('延長として更新');
+      const draftId = [...t.kv.data.keys()].at(-1)!.replace('draft:', '');
+      const d = handleApi(t.ctx, { userId: 'U9' }, 'getDraft', { id: draftId }) as any;
+      expect(d.items.map((i: any) => i.kind)).toEqual(['new']);
+    });
+  });
+
   it('料金が読めなければ標準料金（1時間あたり × 時間）、必須項目が欠けたら登録ボタンを出さない', () => {
     t.reader.result = [{ ...reservation, fee: null }, { date: '2026-10-23', start: null, end: null, studio: 'worcle横浜', room: 'B', fee: null }];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });

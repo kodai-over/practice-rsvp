@@ -127,8 +127,13 @@ export function looksLikeReservation(text: string): boolean {
  * - 同じ練習IDがあれば登録済み
  * - 既存の練習のすぐ後に続けば、その練習の延長
  * - 同じ登録内の予約のすぐ後に続けば（予約一覧の 19:00-20:30 と 20:30-21:00 など）、その予約にまとめる（料金は合計、どちらか不明なら不明）
+ * canExtend で延長してよい既存の練習を絞れる（他人の練習は延長せず新規にする）
  */
-export function classifyReservations(practices: Practice[], reservations: Reservation[]): DraftItem[] {
+export function classifyReservations(
+  practices: Practice[],
+  reservations: Reservation[],
+  canExtend: (p: Practice) => boolean = () => true,
+): DraftItem[] {
   const items: DraftItem[] = [];
   // 判定に使う練習。itemIndex があるものは、この登録で作る（または延長する）items の行
   const running: { p: Practice; itemIndex?: number }[] = practices.filter((p) => p.status !== '中止').map((p) => ({ p: { ...p } }));
@@ -140,7 +145,13 @@ export function classifyReservations(practices: Practice[], reservations: Reserv
       continue;
     }
     const prev = running.find(
-      (x) => isActive(x.p) && x.p.date === r.date && x.p.studio === r.studio && x.p.room === r.room && x.p.end === r.start,
+      (x) =>
+        isActive(x.p) &&
+        x.p.date === r.date &&
+        x.p.studio === r.studio &&
+        x.p.room === r.room &&
+        x.p.end === r.start &&
+        (x.itemIndex != null || canExtend(x.p)),
     );
     if (prev && prev.itemIndex != null) {
       const item = items[prev.itemIndex];
