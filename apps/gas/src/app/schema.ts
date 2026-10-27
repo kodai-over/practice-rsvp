@@ -27,7 +27,7 @@ export const SHEETS = {
   },
   members: {
     name: 'メンバー',
-    headers: ['LINEユーザーID', '表示名', '権限', 'ふだんの送り先グループ'],
+    headers: ['LINEユーザーID', '表示名', '権限', 'ふだんの送り先グループ', '所属グループ'],
   },
   settings: {
     name: '設定',
@@ -120,6 +120,7 @@ export function rowToMember(r: Row): Member {
     name: r['表示名'] ?? '',
     role: (r['権限'] || '一般') as Member['role'],
     defaultGroups: list(r['ふだんの送り先グループ'] ?? ''),
+    groups: list(r['所属グループ'] ?? ''),
   };
 }
 
@@ -129,6 +130,7 @@ export function memberToRow(m: Member): Row {
     表示名: m.name,
     権限: m.role,
     ふだんの送り先グループ: m.defaultGroups.join(','),
+    所属グループ: m.groups.join(','),
   };
 }
 

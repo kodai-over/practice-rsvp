@@ -96,6 +96,8 @@ export interface ApiActions {
   home: { params: Record<string, never>; result: HomeView };
   listPractices: { params: Record<string, never>; result: PracticeView[] };
   getPractice: { params: { id: string }; result: PracticeView };
+  /** グループのカードから開いたとき。合言葉が合えば、開いた人をそのグループのメンバーとして覚える */
+  openedFromGroup: { params: { id: string; group: string; key: string }; result: null };
   rsvp: { params: { id: string; answer: Answer }; result: PracticeView };
   addGuest: { params: { id: string; name: string }; result: PracticeView };
   removeAttendance: { params: { id: string; participant: string }; result: PracticeView };
@@ -112,7 +114,7 @@ export interface ApiActions {
   recruitPractice: { params: { id: string; groups: string[] }; result: PracticeView };
   setDisplayName: { params: { name: string }; result: Member };
   listMembers: { params: Record<string, never>; result: Member[] };
-  updateMember: { params: { userId: string; patch: Partial<Pick<Member, 'name' | 'role' | 'defaultGroups'>> }; result: Member };
+  updateMember: { params: { userId: string; patch: Partial<Pick<Member, 'name' | 'role' | 'defaultGroups' | 'groups'>> }; result: Member };
   listFeedback: { params: Record<string, never>; result: FeedbackView[] };
   postFeedback: { params: { text: string }; result: FeedbackView[] };
   updateFeedback: { params: { id: string; status?: FeedbackStatus; reply?: string }; result: FeedbackView[] };

@@ -15,8 +15,8 @@ const G1 = 'Cgroup1';
 function setup() {
   const t = makeTestCtx();
   t.store.m.push(
-    { userId: ADMIN, name: 'おおゆち', role: '管理者', defaultGroups: [G1] },
-    { userId: BOOKER, name: '後輩', role: '予約者', defaultGroups: [G1] },
+    { userId: ADMIN, name: 'おおゆち', role: '管理者', defaultGroups: [G1], groups: [G1] },
+    { userId: BOOKER, name: '後輩', role: '予約者', defaultGroups: [G1], groups: [G1] },
   );
   t.store.s = {
     studios: [{ name: 'worcle横浜', aliases: [], rooms: [] }],
@@ -28,6 +28,10 @@ function setup() {
   };
   return t;
 }
+
+/** グループ1に入っている一般メンバーを足す */
+const inG1 = (t: ReturnType<typeof setup>, userId: string, name: string) =>
+  t.store.m.push({ userId, name, role: '一般', defaultGroups: [], groups: [G1] });
 
 const imageEvent = (userId: string, id = 'm1', imageSet?: { id: string; index: number; total: number }): LineEvent => ({
   type: 'message',
@@ -278,6 +282,7 @@ describe('出欠', () => {
 
   it('「保留」も選べる。人数（割り勘・上限）には数えない', () => {
     t.store.p[0].max = 1;
+    inG1(t, 'U2', 'に');
     handleWebhook(t.ctx, { events: [postback('U1', `a=rsvp&p=${encodeURIComponent(PID)}&v=2`, G1)] });
     expect(t.store.a).toMatchObject([{ participant: 'U1', answer: '保留' }]);
     const v = handleApi(t.ctx, { userId: 'U2', name: 'に' }, 'rsvp', { id: PID, answer: '行く' }) as any;
@@ -349,6 +354,7 @@ describe('出欠', () => {
   });
 
   it('アプリ: 割り勘・ゲスト・権限', () => {
+    inG1(t, 'U1', 'いち');
     handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'rsvp', { id: PID, answer: '行く' });
     const v = handleApi(t.ctx, { userId: 'U1' }, 'addGuest', { id: PID, name: 'ゲストさん' }) as any;
     expect(v.goingCount).toBe(2);
@@ -388,7 +394,8 @@ describe('出欠', () => {
     expect(t.store.getPractice(only.created[0])).toMatchObject({ fee: 6000, max: 8, memo: 'ショーケースの通し', booker: 'U9', groups: [] });
     // 登録した本人は修正・中止ができ、他の一般メンバーはできない
     expect((handleApi(t.ctx, { userId: 'U9' }, 'getPractice', { id: only.created[0] }) as any).canEdit).toBe(true);
-    expect((handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'getPractice', { id: only.created[0] }) as any).canEdit).toBe(false);
+    // どこにも募集していない練習は、他の一般メンバーには見えない
+    expect(() => handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'getPractice', { id: only.created[0] })).toThrow('練習が見つかりません');
 
     const withGroup = handleApi(t.ctx, { userId: 'U9' }, 'createPractices', { items: [{ ...item, date: '2026-10-31' }], groups: [G1] }) as any;
     expect(t.store.getPractice(withGroup.created[0])?.groups).toEqual([G1]);
@@ -646,5 +653,107 @@ describe('設定シート', () => {
     expect(zero.fees).toEqual(DEFAULT_FEES);
     const custom = rowsToSettings([{ 種別: '標準料金', キー1: 'worcle', キー2: '', 値: '1000' }]);
     expect(custom.fees).toEqual([{ studio: 'worcle', room: '', days: '', from: '', to: '', fee: 1000 }]);
+  });
+});
+
+describe('見える練習', () => {
+  const G2 = 'Cgroup2';
+  let t: ReturnType<typeof setup>;
+  const member = (userId: string, groups: string[]) => t.store.m.push({ userId, name: userId, role: '一般', defaultGroups: [], groups });
+  const ids = (userId: string) => (handleApi(t.ctx, { userId }, 'listPractices', {}) as any[]).map((v) => v.practice.id);
+  const item = { ...reservation, date: '2026-10-30', max: null, min: null, memo: '' };
+  const groupEvent = (type: string, groupId: string, extra: Partial<LineEvent> = {}): LineEvent => ({ type, source: { type: 'group', groupId }, ...extra });
+
+  beforeEach(() => {
+    t = setup();
+    t.store.s.groups.push({ id: G2, name: 'チームB' });
+    // グループ1に B・C、グループ2に C・D がいる。予約者（A）は両方に入っている
+    t.store.m.find((m) => m.userId === BOOKER)!.groups = [G1, G2];
+    member('UB', [G1]);
+    member('UC', [G1, G2]);
+    member('UD', [G2]);
+  });
+
+  it('グループ1にだけ募集した練習は、グループ2にしかいない人には見えない。あとでグループ2にも流すと見える', () => {
+    const { created } = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [G1] }) as any;
+    const id = created[0];
+    expect(ids('UB')).toContain(id);
+    expect(ids('UC')).toContain(id);
+    expect(ids('UD')).not.toContain(id);
+    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'getPractice', { id })).toThrow('練習が見つかりません');
+    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'rsvp', { id, answer: '行く' })).toThrow('練習が見つかりません');
+    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'addGuest', { id, name: 'ゲスト' })).toThrow('練習が見つかりません');
+    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'appendMemo', { id, text: 'メモ' })).toThrow('練習が見つかりません');
+    expect(t.store.a.filter((a) => a.participant === 'UD')).toEqual([]);
+    // 管理者は全部見える
+    expect(ids(ADMIN)).toContain(id);
+
+    handleApi(t.ctx, { userId: BOOKER }, 'recruitPractice', { id, groups: [G2] });
+    expect(ids('UD')).toContain(id);
+  });
+
+  it('どこにも募集していない練習は、予約者と管理者だけに見える', () => {
+    const { created } = handleApi(t.ctx, { userId: 'UB' }, 'createPractices', { items: [item], groups: [] }) as any;
+    expect(ids('UB')).toContain(created[0]);
+    expect(ids(ADMIN)).toContain(created[0]);
+    expect(ids('UC')).not.toContain(created[0]);
+  });
+
+  it('出欠に関わった練習は、グループを抜けても見える', () => {
+    const { created } = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [G1] }) as any;
+    handleApi(t.ctx, { userId: 'UB' }, 'rsvp', { id: created[0], answer: '行く' });
+    handleWebhook(t.ctx, { events: [groupEvent('memberLeft', G1, { left: { members: [{ type: 'user', userId: 'UB' }] } })] });
+    expect(t.store.getMember('UB')?.groups).toEqual([]);
+    expect(ids('UB')).toContain(created[0]);
+  });
+
+  it('個別トークの「練習」も、その人に見える練習だけを返す', () => {
+    handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [G1] });
+    const text = (userId: string): LineEvent => ({ type: 'message', replyToken: 'rt', source: { type: 'user', userId }, message: { id: 'x', type: 'text', text: '練習' } });
+    handleWebhook(t.ctx, { events: [text('UB')] });
+    expect(t.line.lastReplyText()).toContain('10/30');
+    handleWebhook(t.ctx, { events: [text('UD')] });
+    expect(t.line.lastReplyText()).not.toContain('10/30');
+  });
+
+  it('グループでの発言・ボタン・参加で、入っているグループを覚える。抜けたら外す', () => {
+    t.line.profiles['Unew'] = 'しん';
+    handleWebhook(t.ctx, { events: [groupEvent('message', G2, { source: { type: 'group', groupId: G2, userId: 'Unew' }, message: { id: 'm', type: 'text', text: 'こんにちは' } })] });
+    expect(t.store.getMember('Unew')).toMatchObject({ name: 'しん', role: '一般', groups: [G2] });
+    handleWebhook(t.ctx, { events: [postback('Unew', `a=rsvp&p=x&v=1`, G1)] });
+    expect(t.store.getMember('Unew')?.groups).toEqual([G2, G1]);
+
+    handleWebhook(t.ctx, { events: [groupEvent('memberJoined', G2, { joined: { members: [{ type: 'user', userId: 'Ujoin' }] } })] });
+    expect(t.store.getMember('Ujoin')?.groups).toEqual([G2]);
+    handleWebhook(t.ctx, { events: [groupEvent('memberLeft', G2, { left: { members: [{ type: 'user', userId: 'Ujoin' }] } })] });
+    expect(t.store.getMember('Ujoin')?.groups).toEqual([]);
+
+    // 設定に無いグループ（Botが外れたグループなど）の発言では覚えない
+    handleWebhook(t.ctx, { events: [groupEvent('message', 'Cunknown', { source: { type: 'group', groupId: 'Cunknown', userId: 'Uzz' }, message: { id: 'm', type: 'text', text: 'やあ' } })] });
+    expect(t.store.getMember('Uzz')).toBeNull();
+  });
+
+  it('グループのカードから開いた人は、合言葉が合えばそのグループのメンバーとして覚える', () => {
+    const { created } = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item], groups: [G1] }) as any;
+    const p = t.store.getPractice(created[0])!;
+    // 送り先ごとのカードに、そのグループと合言葉が入っている
+    const card = JSON.stringify(t.line.pushes.find((x) => x.to === G1));
+    expect(card).toContain(`g=${G1}`);
+    expect(card).toContain(`k=${p.joinKey}`);
+
+    member('UE', []);
+    handleApi(t.ctx, { userId: 'UE' }, 'openedFromGroup', { id: p.id, group: G1, key: 'wrong' });
+    handleApi(t.ctx, { userId: 'UE' }, 'openedFromGroup', { id: p.id, group: G2, key: p.joinKey });
+    expect(t.store.getMember('UE')?.groups).toEqual([]);
+    handleApi(t.ctx, { userId: 'UE' }, 'openedFromGroup', { id: p.id, group: G1, key: p.joinKey });
+    expect(t.store.getMember('UE')?.groups).toEqual([G1]);
+    expect(ids('UE')).toContain(p.id);
+  });
+
+  it('管理者は入っているグループを直せる。今は無いグループの記録は残す', () => {
+    t.store.m.find((m) => m.userId === 'UD')!.groups = [G2, 'Cold'];
+    const m = handleApi(t.ctx, { userId: ADMIN }, 'updateMember', { userId: 'UD', patch: { groups: [G1, 'Cfake'] } }) as any;
+    expect(m.groups).toEqual([G1, 'Cold']);
+    expect(() => handleApi(t.ctx, { userId: 'UB' }, 'updateMember', { userId: 'UD', patch: { groups: [G1] } })).toThrow('管理者だけ');
   });
 });

@@ -10,10 +10,10 @@ import { route } from '../../gas/src/app/router';
 const today = toJstDate(new Date());
 const store = new MemoryStore();
 store.m = [
-  { userId: 'Ume', name: 'おおゆち', role: '管理者', defaultGroups: ['G1'] },
-  { userId: 'U2', name: 'さくら', role: '予約者', defaultGroups: ['G2'] },
-  { userId: 'U3', name: 'けんた', role: '一般', defaultGroups: [] },
-  { userId: 'U4', name: 'みお', role: '一般', defaultGroups: [] },
+  { userId: 'Ume', name: 'おおゆち', role: '管理者', defaultGroups: ['G1'], groups: ['G1'] },
+  { userId: 'U2', name: 'さくら', role: '予約者', defaultGroups: ['G2'], groups: ['G2'] },
+  { userId: 'U3', name: 'けんた', role: '一般', defaultGroups: [], groups: [] },
+  { userId: 'U4', name: 'みお', role: '一般', defaultGroups: [], groups: [] },
 ];
 store.s = {
   studios: DEFAULT_STUDIOS,

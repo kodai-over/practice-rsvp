@@ -4,6 +4,7 @@ import {
   canEditPractice,
   canRegister,
   canRemoveAttendance,
+  canSeePractice,
   classifyReservations,
   googleCalendarUrl,
   isActive,
@@ -29,7 +30,7 @@ import {
   type StudioDef,
 } from '@studio-attendance/shared';
 import { UserError, type Ctx, type RawReservation } from './ports';
-import { buildDraft, createPractices, ensureMember, loadDraft, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
+import { buildDraft, createPractices, ensureMember, loadDraft, noteGroupMember, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
 
 type Handler<A extends ApiAction> = (ctx: Ctx, me: Member, params: ApiActions[A]['params']) => ApiActions[A]['result'];
 
@@ -109,8 +110,21 @@ function getPracticeOrThrow(ctx: Ctx, id: string): Practice {
   return p;
 }
 
+/** 出欠に関わっている（本人が答えた・ゲストを足した）か */
+const involved = (att: Attendance[], p: Practice, me: Member) =>
+  att.some((a) => a.practiceId === p.id && (a.participant === me.userId || a.addedBy === me.userId));
+
+const visibleTo = (ctx: Ctx, me: Member, p: Practice, att?: Attendance[]) => canSeePractice(me, p, involved(att ?? ctx.store.attendance(p.id), p, me));
+
+/** 見えない練習は、無いものとして扱う */
+function getVisibleOrThrow(ctx: Ctx, me: Member, id: string): Practice {
+  const p = getPracticeOrThrow(ctx, id);
+  if (!visibleTo(ctx, me, p)) throw new UserError('練習が見つかりません');
+  return p;
+}
+
 function view(ctx: Ctx, id: string, me: Member): PracticeView {
-  return practiceView(ctx, getPracticeOrThrow(ctx, id), me);
+  return practiceView(ctx, getVisibleOrThrow(ctx, me, id), me);
 }
 
 const requireAdmin = (me: Member) => {
@@ -144,7 +158,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     const att = ctx.store.attendance();
     const members = ctx.store.members();
     const settings = ctx.store.settings();
-    return sortPractices(ctx.store.practices().filter((p) => p.date >= today && p.status !== '終了')).map((p) =>
+    return sortPractices(ctx.store.practices().filter((p) => p.date >= today && p.status !== '終了' && visibleTo(ctx, me, p, att))).map((p) =>
       practiceView(ctx, p, me, att, members, settings),
     );
   },
@@ -153,14 +167,25 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     return view(ctx, id, me);
   },
 
+  openedFromGroup(ctx, me, { id, group, key }) {
+    const p = ctx.store.getPractice(id);
+    // 合言葉は募集カードと参加リンクにしか出ないので、合っていればそのグループのカードから開いたとみなす
+    if (p && typeof key === 'string' && key && key === p.joinKey && typeof group === 'string' && p.groups.includes(group)) {
+      noteGroupMember(ctx, group, me.userId);
+    }
+    return null;
+  },
+
   rsvp(ctx, me, { id, answer }) {
     if (!isAnswer(answer)) throw new UserError('回答が不正です');
+    getVisibleOrThrow(ctx, me, id);
     const res = recordAnswer(ctx, id, { participant: me.userId, name: me.name, kind: 'メンバー', via: 'アプリ', addedBy: me.userId }, answer);
     if (!res.ok) throw new UserError(res.reason);
     return view(ctx, id, me);
   },
 
   addGuest(ctx, me, { id, name }) {
+    getVisibleOrThrow(ctx, me, id);
     const res = recordAnswer(
       ctx,
       id,
@@ -173,7 +198,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
 
   removeAttendance(ctx, me, { id, participant }) {
     ctx.withLock(() => {
-      const p = getPracticeOrThrow(ctx, id);
+      const p = getVisibleOrThrow(ctx, me, id);
       const a = ctx.store.attendance(id).find((x) => x.participant === participant);
       if (!a) return;
       if (!canRemoveAttendance(me, p, a)) throw new UserError('この出欠は取り消せません');
@@ -187,7 +212,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     const t = typeof text === 'string' ? text.trim().slice(0, 300) : '';
     if (!t) throw new UserError('メモを入力してください');
     ctx.withLock(() => {
-      const p = getPracticeOrThrow(ctx, id);
+      const p = getVisibleOrThrow(ctx, me, id);
       ctx.store.savePractice({ ...p, memo: [p.memo, `${t}（${me.name}）`].filter(Boolean).join('\n') });
     });
     return view(ctx, id, me);
@@ -299,10 +324,10 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
         if (m.role === '管理者' && patch.role !== '管理者' && admins.length <= 1) throw new UserError('管理者が1人もいなくなります');
         next.role = patch.role;
       }
-      if (patch.defaultGroups !== undefined) {
-        const ids = new Set(ctx.store.settings().groups.map((g) => g.id));
-        next.defaultGroups = patch.defaultGroups.filter((g) => ids.has(g));
-      }
+      const ids = new Set(ctx.store.settings().groups.map((g) => g.id));
+      if (patch.defaultGroups !== undefined) next.defaultGroups = patch.defaultGroups.filter((g) => ids.has(g));
+      // 今は無いグループの記録は残す（招待し直したときに、また見えるように）
+      if (patch.groups !== undefined) next.groups = [...new Set([...patch.groups.filter((g) => ids.has(g)), ...m.groups.filter((g) => !ids.has(g))])];
       ctx.store.saveMember(next);
       return next;
     });

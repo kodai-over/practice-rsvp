@@ -9,6 +9,14 @@ export function isAdmin(m: Member | null): boolean {
   return m != null && m.role === '管理者';
 }
 
+/**
+ * 練習が見えるのは、管理者・予約者・募集を送ったグループに入っている人・出欠に関わった人（involved）だけ。
+ * 例: グループ1にだけ募集した練習は、グループ2にしかいない人には見えない
+ */
+export function canSeePractice(m: Member | null, p: Practice, involved = false): boolean {
+  return m != null && (m.role === '管理者' || p.booker === m.userId || involved || p.groups.some((g) => m.groups.includes(g)));
+}
+
 /** 練習の修正・中止・金額調整ができるのは、その練習の予約者と管理者だけ */
 export function canEditPractice(m: Member | null, p: Practice): boolean {
   return m != null && (m.role === '管理者' || p.booker === m.userId);

@@ -44,6 +44,8 @@ export interface Member {
   name: string;
   role: Role;
   defaultGroups: string[];
+  /** 入っているグループ。グループでの発言・出欠・参加から覚え、管理画面でも直せる（古い行には無い） */
+  groups: string[];
 }
 
 /** 標準料金の曜日の区分。'' は毎日 */

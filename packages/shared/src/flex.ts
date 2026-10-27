@@ -17,6 +17,14 @@ export function appLink(appUrl: string, params: Record<string, string>): string 
   return q ? `${appUrl}${appUrl.includes('?') ? '&' : '?'}${q}` : appUrl;
 }
 
+/**
+ * グループに送るカードから練習を開くリンク。どのグループから開いたかと練習の合言葉を付け、
+ * 開いた人をそのグループのメンバーとして覚えられるようにする（group が無ければ練習IDだけ）
+ */
+export function practiceLink(appUrl: string, p: Pick<Practice, 'id' | 'joinKey'>, group?: string, extra: Record<string, string> = {}): string {
+  return appLink(appUrl, group ? { p: p.id, ...extra, g: group, k: p.joinKey } : { p: p.id, ...extra });
+}
+
 export function encodePostback(params: Record<string, string>): string {
   return Object.entries(params)
     .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
@@ -160,7 +168,7 @@ export interface RecruitInput {
   roomInfo?: string | null;
 }
 
-function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appUrl: string): Node {
+function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appUrl: string, group?: string): Node {
   const d = shortDate(p.date);
   return {
     type: 'bubble',
@@ -216,21 +224,21 @@ function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appU
           type: 'button',
           style: 'link',
           height: 'sm',
-          action: { type: 'uri', label: 'カレンダーに追加', uri: appLink(appUrl, { p: p.id, cal: '1' }) },
+          action: { type: 'uri', label: 'カレンダーに追加', uri: practiceLink(appUrl, p, group, { cal: '1' }) },
         },
         {
           type: 'button',
           style: 'link',
           height: 'sm',
-          action: { type: 'uri', label: '参加状況を見る', uri: appLink(appUrl, { p: p.id }) },
+          action: { type: 'uri', label: '参加状況を見る', uri: practiceLink(appUrl, p, group) },
         },
       ],
     },
   };
 }
 
-/** 1回の登録につき1メッセージ（カルーセルは12枚まで。超えたら複数メッセージに分ける） */
-export function recruitMessages(items: RecruitInput[], appUrl: string): LineMessage[] {
+/** 1回の登録につき1メッセージ（カルーセルは12枚まで。超えたら複数メッセージに分ける）。group は送り先のグループ */
+export function recruitMessages(items: RecruitInput[], appUrl: string, group?: string): LineMessage[] {
   const messages: LineMessage[] = [];
   for (let i = 0; i < items.length; i += 12) {
     const chunk = items.slice(i, i + 12);
@@ -238,7 +246,7 @@ export function recruitMessages(items: RecruitInput[], appUrl: string): LineMess
     messages.push({
       type: 'flex',
       altText: `練習募集: ${dates}`,
-      contents: { type: 'carousel', contents: chunk.map((c) => recruitBubble(c, appUrl)) },
+      contents: { type: 'carousel', contents: chunk.map((c) => recruitBubble(c, appUrl, group)) },
     });
   }
   return messages;
@@ -251,7 +259,8 @@ export interface ListItem {
   going: number;
 }
 
-export function practiceListMessage(items: ListItem[], appUrl: string): LineMessage {
+/** group はグループでの「練習」への応答のときのグループ */
+export function practiceListMessage(items: ListItem[], appUrl: string, group?: string): LineMessage {
   if (items.length === 0) {
     return { type: 'text', text: `今後の練習はまだありません。\n${appUrl}` };
   }
@@ -260,7 +269,7 @@ export function practiceListMessage(items: ListItem[], appUrl: string): LineMess
     type: 'box',
     layout: 'horizontal',
     spacing: 'sm',
-    action: { type: 'uri', label: '詳細', uri: appLink(appUrl, { p: p.id }) },
+    action: { type: 'uri', label: '詳細', uri: practiceLink(appUrl, p, group) },
     contents: [
       {
         type: 'box',
