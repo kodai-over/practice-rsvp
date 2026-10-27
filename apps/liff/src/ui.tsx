@@ -307,7 +307,6 @@ export function BusyOverlay({ message, note }: { message: string; note?: string 
   );
 }
 
-/** 金額。1人あたりが出ていればそれを、なければ合計を */
 /** 一覧のチケットの金額。合計だけを出す（1人あたりは練習の画面で） */
 export const Fee = ({ v }: { v: PracticeView }) => (
   <span class="fee">

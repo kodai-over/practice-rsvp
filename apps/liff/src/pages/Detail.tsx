@@ -124,11 +124,11 @@ function Attendees({ v }: { v: PracticeView }) {
       <div class="sec-head">
         <Icon name="people" size={18} />
         参加メンバー
-        <span class="n">{v.goingCount}</span>
+        <span class="n">{v.going.length + v.maybe.length + v.notGoing.length}</span>
       </div>
       {lists.map(({ label, people }) =>
         people.length === 0 ? null : (
-          <div style={{ marginBottom: 10 }}>
+          <div key={label} style={{ marginBottom: 10 }}>
             <div class="muted" style={{ marginBottom: 4 }}>
               {label}（{people.length}）
             </div>

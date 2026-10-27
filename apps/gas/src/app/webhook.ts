@@ -258,7 +258,7 @@ function onRsvp(ctx: Ctx, ev: LineEvent, userId: string, practiceId: string, ans
   }
 }
 
-/** 確認カードの「登録する」（recruit=false）と「登録してグループに募集」（recruit=true） */
+/** 確認カードの「登録のみ」（recruit=false）。以前のカードの「登録する」「登録してグループに募集」（recruit=true）もここに来る */
 function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string, recruit: boolean): void {
   const draft = loadDraft(ctx, draftId);
   if (!draft || draft.booker !== userId) {

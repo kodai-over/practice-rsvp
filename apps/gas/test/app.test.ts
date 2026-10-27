@@ -61,22 +61,21 @@ describe('スクショから募集まで', () => {
     t = setup();
   });
 
-  it('一般メンバー（未登録の人も）スクショから登録できる。送り先はグループが1つならそこ', () => {
+  it('一般メンバー（未登録の人も）スクショから登録できる。「登録して募集」はアプリを開く', () => {
     t.reader.result = [reservation];
     t.line.profiles['Ustranger'] = 'はじめて';
     handleWebhook(t.ctx, { events: [imageEvent('Ustranger')] });
     expect(t.store.m.find((m) => m.userId === 'Ustranger')).toMatchObject({ name: 'はじめて', role: '一般' });
     const card = t.line.lastReplyText();
     expect(card).toContain('予約内容の確認');
-    expect(card).toContain('チームA');
-    // グループが1つなら「登録して募集」でそのまま募集できる
-    expect(card).toContain('"label":"登録して募集","data":"a=confirm');
+    // グループが1つでも、アプリで内容を確かめてから募集する
+    expect(card).toMatch(/"label":"登録して募集","uri":"[^"]+recruit=1"/);
     expect(card).toContain('"label":"登録のみ"');
     expect(card).toContain('"label":"やめる"');
     expect(card).not.toContain('修正して登録');
   });
 
-  it('グループが複数なら「登録して募集」でアプリを開き、予約ごとに募集先を選ぶ', () => {
+  it('グループが複数でも「登録して募集」でアプリを開き、予約ごとに募集先を選ぶ', () => {
     t.store.s.groups.push({ id: 'C2', name: 'チームB' });
     t.reader.result = [reservation];
     handleWebhook(t.ctx, { events: [imageEvent('Ustranger')] });
@@ -116,12 +115,11 @@ describe('スクショから募集まで', () => {
     );
   });
 
-  it('確認カード → 登録してグループに募集 → グループに募集が1メッセージで流れる', () => {
+  it('以前の確認カードの「登録してグループに募集」も動く → グループに募集が1メッセージで流れる', () => {
     t.reader.result = [reservation, { ...reservation, date: '2026-10-22' }];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
     const card = t.line.lastReplyText();
     expect(card).toContain('予約内容の確認');
-    expect(card).toContain('チームA');
     const draftId = [...t.kv.data.keys()][0].replace('draft:', '');
 
     handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}&r=1`)] });
@@ -945,6 +943,45 @@ describe('予約ごとの募集先', () => {
     expect(d.items).toHaveLength(1);
     expect(d.items[0].reservation).toMatchObject({ start: '19:00', end: '22:00' });
     expect(d.items[0].parts.map((r: any) => [r.start, r.end])).toEqual([['19:00', '21:00'], ['21:00', '22:00']]);
+  });
+
+  it('3件続く予約も、募集先が同じなら1つに、途中で変われば分ける。既存の練習に続く2件は1つの延長にする', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: G2, name: 'チームB' });
+    const slot = (date: string, start: string, end: string, groups: string[]) => ({ ...reservation, date, start, end, fee: 1000, max: null, min: null, memo: '', groups });
+    handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [slot('2026-10-28', '19:00', '20:00', [G1]), slot('2026-10-28', '20:00', '21:00', [G1]), slot('2026-10-28', '21:00', '22:00', [G1])], groups: [] });
+    expect(t.store.p.map((p) => [p.start, p.end, p.fee])).toEqual([['19:00', '22:00', 3000]]);
+
+    handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [slot('2026-10-29', '19:00', '20:00', [G1]), slot('2026-10-29', '20:00', '21:00', [G1]), slot('2026-10-29', '21:00', '22:00', [G2])], groups: [] });
+    expect(t.store.p.filter((p) => p.date === '2026-10-29').map((p) => [p.start, p.end, p.groups])).toEqual([['19:00', '21:00', [G1]], ['21:00', '22:00', [G2]]]);
+
+    // 既存の 19-20 に続く 20-21・21-22 は、1つの延長にまとめる
+    const res = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [slot('2026-10-30', '20:00', '21:00', []), slot('2026-10-30', '21:00', '22:00', [])], groups: [] }) as any;
+    expect(res.created).toHaveLength(1); // 先にない日なので新規
+    const ext = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [slot('2026-10-30', '22:00', '23:00', []), slot('2026-10-30', '23:00', '23:30', [])], groups: [] }) as any;
+    expect(ext).toMatchObject({ created: [], extended: [res.created[0]] });
+    expect(t.store.getPractice(res.created[0])).toMatchObject({ start: '20:00', end: '23:30', fee: 4000 });
+  });
+
+  it('まとめた予約の料金が読めなくても、分け直す前後どちらにも標準料金が入る。古い下書き（parts なし）も開ける', () => {
+    const t = setup();
+    t.reader.result = [
+      { ...reservation, start: '19:00', end: '21:00', fee: null },
+      { ...reservation, start: '21:00', end: '22:00', fee: null },
+    ];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
+    const key = [...t.kv.data.keys()][0];
+    const d = handleApi(t.ctx, { userId: BOOKER }, 'getDraft', { id: key.replace('draft:', '') }) as any;
+    // 標準料金 1500円/30分
+    expect(d.items[0].parts.map((r: any) => r.fee)).toEqual([6000, 3000]);
+    expect(d.items[0].reservation.fee).toBe(9000);
+
+    const old = JSON.parse(t.kv.data.get(key)!);
+    old.items = old.items.map(({ parts, ...i }: any) => i);
+    t.kv.data.set(key, JSON.stringify(old));
+    const d2 = handleApi(t.ctx, { userId: BOOKER }, 'getDraft', { id: key.replace('draft:', '') }) as any;
+    expect(d2.items).toHaveLength(1);
+    expect(d2.items[0].reservation).toMatchObject({ start: '19:00', end: '22:00', fee: 9000 });
   });
 
   it('送れなかったグループは練習の送り先から外し、あとから送り直せる', () => {

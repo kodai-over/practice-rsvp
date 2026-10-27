@@ -339,14 +339,13 @@ describe('Flex Message', () => {
       pastCount: 0,
       createdAt: '',
     };
-    // グループが1つなら、そのグループにそのまま募集する
+    // 「登録して募集」はアプリを開き、内容を確かめて予約ごとに募集先を選ぶ
     const one = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'] }, groups: settings.groups, practices: [], appUrl }));
-    expect(one).toContain('"label":"登録して募集","data":"a=confirm&d=d1&r=1"');
+    expect(one).toContain(`"label":"登録して募集","uri":"${appUrl}?draft=d1&recruit=1"`);
     expect(one).toContain('"label":"登録のみ","data":"a=confirm&d=d1"');
     expect(one).toContain('"label":"やめる"');
-    expect(one).toContain('チームA');
     expect(one).not.toContain('修正して登録');
-    // 2つ以上なら、アプリで予約ごとに募集先を選ぶ
+    // グループが2つ以上でも同じ
     const two = JSON.stringify(confirmCard({ draft: { ...base, groups: [] }, groups: [...settings.groups, { id: 'G2', name: 'チームB' }], practices: [], appUrl }));
     expect(two).toContain(`"label":"登録して募集","uri":"${appUrl}?draft=d1&recruit=1"`);
     expect(two).toContain('"label":"登録のみ"');

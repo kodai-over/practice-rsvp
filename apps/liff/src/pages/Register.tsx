@@ -105,7 +105,16 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
   };
   /** まとめた予約を、まとめる前の予約に分ける（続けて取った予約を別々の募集先に送るとき） */
   const splitRow = (r: FormRow) =>
-    setRows((rs) => rs.flatMap((x) => (x.key === r.key && r.parts ? r.parts.map((p, i) => fromReservation(p, i === 0 && r.kind === 'extension' ? 'extension' : undefined, r.groups)) : [x])));
+    setRows((rs) =>
+      rs.flatMap((x) => {
+        if (x.key !== r.key || !r.parts) return [x];
+        return r.parts.map((p, i) => {
+          // 1つ目が既存の練習の延長なら、それは延長のまま（募集は送らない）
+          const ext = i === 0 && r.kind === 'extension';
+          return { ...fromReservation(p, ext ? 'extension' : undefined, ext ? [] : r.groups), max: r.max, min: r.min, memo: r.memo };
+        });
+      }),
+    );
   const [loading, setLoading] = useState(!!draftId);
   const [run, busy] = useRunner();
   const [pasted, setPasted] = useState('');
@@ -119,8 +128,9 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
         toast('確認カードの期限が切れています。もう一度入力してください', true);
         return;
       }
-      const g = recruit ? d.groups : [];
-      setRows([...d.items.map((i) => fromReservation(i.reservation, i.kind, g, i.parts)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete', g))]);
+      // 「登録して募集」から開いたら、新しく登録する予約にふだんの送り先を入れておく（延長には募集を送らない）
+      const g = (kind: string) => (recruit && kind !== 'extension' && kind !== 'duplicate' ? d.groups : []);
+      setRows([...d.items.map((i) => fromReservation(i.reservation, i.kind, g(i.kind), i.parts)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete', g('incomplete')))]);
     });
   }, [draftId]);
 
@@ -136,7 +146,9 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     setRows((rs) =>
       rs.map((r) => {
         if (r.key !== key) return r;
-        const next = { ...r, [k]: value, kind: r.kind === 'incomplete' ? ('incomplete' as const) : undefined };
+        // 日時・場所・料金を変えたら、延長などの判定とまとめる前の予約（「分ける」）は使えないので外す。人数・メモだけなら残す
+        const structural = k === 'date' || k === 'start' || k === 'end' || k === 'room' || k === 'fee';
+        const next = structural ? { ...r, [k]: value, kind: r.kind === 'incomplete' ? ('incomplete' as const) : undefined, parts: undefined } : { ...r, [k]: value };
         // 開始を変えたら、終了が開始の1時間後より前にならないようにそろえる
         if (k === 'start') next.end = endAfterStart(value, r.end);
         return k === 'fee' ? { ...next, feeAuto: false } : k === 'date' || k === 'start' || k === 'end' || k === 'room' ? autoFee(next) : next;
@@ -267,7 +279,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
               <StudioSelect
                 studios={me.settings.studios}
                 value={r.studio}
-                onChange={(v) => setRows((rs) => rs.map((x) => (x.key === r.key ? autoFee({ ...x, studio: v, room: v === x.studio ? x.room : '', kind: x.kind === 'incomplete' ? 'incomplete' : undefined }) : x)))}
+                onChange={(v) => setRows((rs) => rs.map((x) => (x.key === r.key ? autoFee({ ...x, studio: v, room: v === x.studio ? x.room : '', kind: x.kind === 'incomplete' ? 'incomplete' : undefined, parts: undefined }) : x)))}
               />
             </div>
             <div class="field">
@@ -343,6 +355,11 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
         </>
       )}
 
+      {recruit && !recruiting && me.groups.length > 0 && (
+        <div class="muted" style={{ marginTop: 12 }}>
+          募集するときは、予約ごとの「募集先」でグループを選んでください（選ばなければ登録だけ）
+        </div>
+      )}
       <button class="btn primary block submit" disabled={busy} onClick={submit}>
         {recruiting ? <><Icon name="send" size={18} />登録して募集</> : <><Icon name="check" size={18} />登録</>}
       </button>

@@ -160,10 +160,7 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
   }
   // 続いている予約をまとめ、登録済みのものを除いてから、料金が読めなかったものに標準料金を入れる
   const classified = classifyFor(ctx.store.practices(), booker, complete);
-  const items = classified.filter((i) => i.kind !== 'duplicate').map((i) => ({
-    ...i,
-    reservation: { ...i.reservation, fee: i.reservation.fee ?? (defaultFee(settings, i.reservation) || null) },
-  }));
+  const items = classified.filter((i) => i.kind !== 'duplicate').map((i) => withDefaultFee(settings, i));
   return {
     id: ctx.uuid(),
     booker: booker.userId,
@@ -179,6 +176,15 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
 /** 予約を分類する。延長するのは登録する人が予約した練習（管理者ならどの練習も）だけ */
 export function classifyFor(practices: Practice[], me: Member, reservations: Reservation[]): DraftItem[] {
   return classifyReservations(practices, reservations, (p) => canExtendPractice(me, p));
+}
+
+/** 料金を読み取れなかった予約に標準料金を入れる。まとめる前の予約（parts）にも入れ、分け直しても空にならないようにする */
+export function withDefaultFee<T extends { reservation: Reservation; parts?: Reservation[] }>(settings: Settings, item: T): T {
+  const fill = (r: Reservation): Reservation => ({ ...r, fee: r.fee ?? (defaultFee(settings, r) || null) });
+  const parts = item.parts?.map(fill);
+  // まとめた予約の料金は、まとめる前の料金の合計にそろえる
+  const fee = parts && parts.every((p) => p.fee != null) ? parts.reduce((n, p) => n + p.fee!, 0) : fill(item.reservation).fee;
+  return { ...item, reservation: { ...item.reservation, fee }, ...(parts ? { parts } : {}) };
 }
 
 /** ふだんの送り先。未設定でグループが1つしかなければ、そのグループにする */
@@ -259,6 +265,11 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
         const d = draftPractice(ctx, booker, r, input, groupsOf(input));
         practices.push(d);
         batch.add(d.id);
+      } else if (item.kind === 'extension') {
+        // その場で終了を伸ばし、さらに続く予約（3件目など）も同じ練習の延長と判定できるようにする
+        const target = practices.find((p) => p.id === item.targetId)!;
+        target.end = r.end;
+        target.fee += r.fee;
       }
       return { input, r, item };
     });
@@ -266,13 +277,10 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
       if (item.kind === 'duplicate') {
         result.skipped.push(item.targetId!);
       } else if (item.kind === 'extension') {
-        const target = practices.find((p) => p.id === item.targetId)!;
-        target.end = r.end;
-        target.fee += r.fee;
-        // 同じ登録の中でまとめるのは募集先が同じ予約だけ（上の分類で分けてある）
-        if (!created.includes(target)) {
-          ctx.store.savePractice(target);
-          result.extended.push(target.id);
+        // この登録で作る練習の延長は、作るときに一緒に保存する
+        if (!batch.has(item.targetId!) && !result.extended.includes(item.targetId!)) {
+          ctx.store.savePractice(practices.find((p) => p.id === item.targetId)!);
+          result.extended.push(item.targetId!);
         }
       } else {
         created.push(practices.find((p) => p.id === makePracticeId(r))!);

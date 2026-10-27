@@ -32,7 +32,7 @@ import {
   type StudioDef,
 } from '@studio-attendance/shared';
 import { UserError, type Ctx, type RawReservation } from './ports';
-import { buildDraft, classifyFor, createPractices, ensureMember, inGroupKey, loadDraft, noteGroupMember, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
+import { buildDraft, classifyFor, createPractices, ensureMember, inGroupKey, loadDraft, noteGroupMember, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit, withDefaultFee } from './practices';
 
 /** 誰として操作しているか（管理者の見え方の切り替え） */
 interface Acting {
@@ -279,7 +279,8 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     if (!d || d.booker !== me.userId) return null;
     // 確認カードを出してから状態が変わっているかもしれないので分類し直す
     // まとめる前の予約から分類し直し、アプリで分け直せるよう parts を残す
-    return { ...d, items: classifyFor(ctx.store.practices(), me, d.items.flatMap((i) => i.parts ?? [i.reservation])) };
+    const settings = ctx.store.settings();
+    return { ...d, items: classifyFor(ctx.store.practices(), me, d.items.flatMap((i) => i.parts ?? [i.reservation])).map((i) => withDefaultFee(settings, i)) };
   },
 
   classify(ctx, me, { reservations }) {

@@ -103,8 +103,6 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
   }
   const canRegister = draft.incomplete.length === 0 && draft.items.some((i) => i.kind !== 'duplicate');
   const canRecruit = canRegister && groups.length > 0 && draft.items.some((i) => i.kind === 'new');
-  // グループが1つだけなら、そこにそのまま募集する。2つ以上なら、アプリで予約ごとに募集先を選んでもらう
-  const single = groups.length === 1 ? groups[0] : null;
 
   const buttons: Node[] = [];
   if (canRecruit) {
@@ -112,9 +110,8 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
       type: 'button',
       style: 'primary',
       color: GREEN,
-      action: single
-        ? { type: 'postback', label: '登録して募集', data: encodePostback({ a: 'confirm', d: draft.id, r: '1' }), displayText: '登録して募集' }
-        : { type: 'uri', label: '登録して募集', uri: appLink(appUrl, { draft: draft.id, recruit: '1' }) },
+      // アプリで内容を確かめ、予約ごとに募集先を選んでから送る（読み間違いのまま募集が流れないように）
+      action: { type: 'uri', label: '登録して募集', uri: appLink(appUrl, { draft: draft.id, recruit: '1' }) },
     });
   }
   if (canRegister) {
@@ -140,11 +137,9 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
   });
   const note = !canRegister
     ? []
-    : canRecruit && single
-      ? [{ type: 'separator' }, row('募集先', `${single.name}（「登録して募集」のとき）`)]
-      : canRecruit
-        ? [text('「登録して募集」では、アプリで予約ごとに募集先を選べます。', { size: 'xs', color: GRAY })]
-        : [];
+    : canRecruit
+      ? [text('「登録して募集」ではアプリが開き、内容を確かめて予約ごとに募集先を選べます。', { size: 'xs', color: GRAY })]
+      : [text('グループへの募集は、登録したあとアプリの練習画面からもできます。', { size: 'xs', color: GRAY })];
 
   return {
     type: 'flex',
