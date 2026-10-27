@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { addDays, defaultFee, labelDate, skippedNote, toJstDate, type DraftItemKind, type NewPracticeInput, type Reservation } from '@studio-attendance/shared';
+import { addDays, defaultFee, endAfterStart, labelDate, skippedNote, toJstDate, type DraftItemKind, type NewPracticeInput, type Reservation } from '@studio-attendance/shared';
 import { api } from '../api';
 import { RoomInfo, RoomSelect, StudioSelect } from '../components/StudioRoom';
 import { BusyOverlay, Icon, Spinner, TopBar, go, useApp, useRunner } from '../ui';
@@ -18,11 +18,12 @@ interface FormRow {
   kind?: DraftItemKind | 'incomplete';
   /** スタジオ代を標準料金から自動で入れた（手で直したら false） */
   feeAuto?: boolean;
+  /** 予約ごとに募集先を選ぶときの、この予約の募集先 */
+  groups: string[];
 }
 
 let seq = 0;
-const emptyRow = (over: Partial<FormRow> = {}): FormRow => ({
-  key: ++seq,
+const emptyRow = (over: Partial<Omit<FormRow, 'key'>> = {}): FormRow => ({
   date: '',
   start: '19:00',
   end: '21:00',
@@ -32,7 +33,9 @@ const emptyRow = (over: Partial<FormRow> = {}): FormRow => ({
   max: '',
   min: '',
   memo: '',
+  groups: [],
   ...over,
+  key: ++seq,
 });
 const fromReservation = (r: Partial<Reservation>, kind: FormRow['kind']): FormRow =>
   emptyRow({ date: r.date ?? '', start: r.start ?? '', end: r.end ?? '', studio: r.studio ?? '', room: r.room ?? '', fee: r.fee != null ? String(r.fee) : '', kind });
@@ -88,6 +91,23 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
   const [rows, setRows] = useState<FormRow[]>(() => [emptyRow({ date: addDays(toJstDate(new Date()), 7) })]);
   // 登録がメイン。グループへの募集は、選んだときだけ
   const [groups, setGroups] = useState<string[]>([]);
+  // 予約が2件以上あるときは、予約ごとに募集先を選べる（1件目はグループ1だけ、2件目はグループ2だけ、など）
+  const [perRow, setPerRow] = useState(false);
+  const eachRow = perRow && rows.length > 1;
+  // 延長（既存の練習を伸ばす）と登録済みの予約には募集を送らないので、選べるのは新しく登録する予約だけ
+  const pickable = (r: FormRow) => r.kind !== 'duplicate' && r.kind !== 'extension';
+  const recruiting = eachRow ? rows.some((r) => pickable(r) && r.groups.length > 0) : groups.length > 0;
+  /** 入力欄を入れ替えるとき（読み取り・下書き）。予約ごとに選んでいたら、まとめての募集先を入れておく */
+  const replaceRows = (next: FormRow[]) => setRows(perRow ? next.map((r) => ({ ...r, groups: [...groups] })) : next);
+  const removeRow = (key: number) => {
+    const rest = rows.filter((x) => x.key !== key);
+    // 1件になったら「まとめて」に戻し、その予約で選んでいた募集先を引き継ぐ
+    if (perRow && rest.length === 1) {
+      setPerRow(false);
+      setGroups(rest[0].groups);
+    }
+    setRows(rest);
+  };
   const [loading, setLoading] = useState(!!draftId);
   const [run, busy] = useRunner();
   const [pasted, setPasted] = useState('');
@@ -101,7 +121,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         toast('確認カードの期限が切れています。もう一度入力してください', true);
         return;
       }
-      setRows([...d.items.map((i) => fromReservation(i.reservation, i.kind)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete'))]);
+      replaceRows([...d.items.map((i) => fromReservation(i.reservation, i.kind)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete'))]);
     });
   }, [draftId]);
 
@@ -118,6 +138,8 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
       rs.map((r) => {
         if (r.key !== key) return r;
         const next = { ...r, [k]: value, kind: r.kind === 'incomplete' ? ('incomplete' as const) : undefined };
+        // 開始を変えたら、終了が開始の1時間後より前にならないようにそろえる
+        if (k === 'start') next.end = endAfterStart(value, r.end);
         return k === 'fee' ? { ...next, feeAuto: false } : k === 'date' || k === 'start' || k === 'end' || k === 'room' ? autoFee(next) : next;
       }),
     );
@@ -135,7 +157,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
       toast(`新しく登録する予約はありませんでした。${skipped || '手で入力してください。'}`, true);
       return false;
     }
-    setRows(next);
+    replaceRows(next);
     toast(`${next.length}件を読み取りました。${skipped}内容を確かめてください`);
     return true;
   };
@@ -168,19 +190,23 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         max: r.max.trim() ? Number(r.max) : null,
         min: r.min.trim() ? Number(r.min) : null,
         memo: r.memo,
+        ...(eachRow ? { groups: pickable(r) ? r.groups : [] } : {}),
       }));
     if (items.length === 0) return toast('登録する練習がありません', true);
+    if (me.actAs === 'test' && recruiting && !confirm('確認用アカウント「admin」として、グループに募集を送ります。よろしいですか？')) return;
     setPhase('saving');
-    const res = await run(() => api('createPractices', { items, groups, draftId: draftId ?? undefined }));
+    const res = await run(() => api('createPractices', { items, groups: eachRow ? [] : groups, draftId: draftId ?? undefined }));
     setPhase(null);
     if (!res) return;
     if (res.practices) setPractices(res.practices, true); // 一覧を取り直さずにすぐ反映
     const parts = [
-      res.created.length && (groups.length ? `${res.created.length}件を登録して募集しました` : `${res.created.length}件を登録しました`),
+      res.created.length && (res.recruited?.length ? `${res.created.length}件を登録して募集しました` : `${res.created.length}件を登録しました`),
       res.extended.length && `${res.extended.length}件を延長しました`,
       res.skipped.length && `${res.skipped.length}件は登録済みでした`,
     ].filter(Boolean);
-    toast(parts.join('・') || '登録しました');
+    const names = (ids: string[]) => ids.map((g) => me.groups.find((x) => x.id === g)?.name ?? g).join('、');
+    if (res.notRecruited?.length) toast(`${parts.join('・')}。${names(res.notRecruited)}には募集を送れませんでした（アプリの「募集」から送り直せます）`, true);
+    else toast(parts.join('・') || '登録しました');
     go('/');
   };
 
@@ -188,7 +214,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
     <>
       <TopBar title="スタジオ予約登録" />
       {phase === 'reading' && <BusyOverlay message="読み取り中" />}
-      {phase === 'saving' && <BusyOverlay message={groups.length ? '登録して募集中' : '登録中'} />}
+      {phase === 'saving' && <BusyOverlay message={recruiting ? '登録して募集中' : '登録中'} />}
 
       <div class="sources">
         <label class="source primary">
@@ -218,7 +244,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
               <span class="grow">{r.date ? labelDate(r.date) : String(i + 1).padStart(2, '0')}</span>
               {r.kind && KIND_TAG[r.kind] && <span class={`tag ${KIND_TAG[r.kind].cls}`}>{KIND_TAG[r.kind].label}</span>}
               {rows.length > 1 && (
-                <button class="icon-btn" aria-label="この予約を削除" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
+                <button class="icon-btn" aria-label="この予約を削除" onClick={() => removeRow(r.key)}>
                   <Icon name="x" size={18} />
                 </button>
               )}
@@ -276,11 +302,17 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
                 <input type="text" placeholder="例：ショーケースの通し" value={r.memo} onInput={(e) => update(r.key, 'memo', e.currentTarget.value)} />
               </label>
             </details>
+            {eachRow && pickable(r) && (
+              <div class="field">
+                <span>この予約の募集先</span>
+                <GroupToggles groups={me.groups} defaults={me.member.defaultGroups} value={r.groups} onChange={(g) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, groups: g } : x)))} />
+              </div>
+            )}
           </section>
         );
       })}
 
-      <button class="add-row" onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), key: undefined, kind: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
+      <button class="add-row" onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), kind: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
         <Icon name="plus" size={18} />
         予約を追加
       </button>
@@ -291,20 +323,49 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
             <Icon name="send" size={18} />
             募集も送る
           </div>
-          <div class="toggles">
-            {me.groups.map((g) => (
-              <button class="toggle" aria-pressed={groups.includes(g.id)} onClick={() => setGroups(groups.includes(g.id) ? groups.filter((x) => x !== g.id) : [...groups, g.id])}>
-                {g.name}
-                {me.member.defaultGroups.includes(g.id) && <span class="dot" title="ふだんの送り先" />}
+          {rows.length > 1 && (
+            <div class="toggles" role="group" aria-label="募集先の選び方" style={{ marginBottom: 10 }}>
+              <button class="toggle" aria-pressed={!perRow} onClick={() => setPerRow(false)}>
+                まとめて選ぶ
               </button>
-            ))}
-          </div>
+              <button
+                class="toggle"
+                aria-pressed={perRow}
+                onClick={() => {
+                  // はじめて切り替えたときは、まとめて選んでいた募集先を各予約に入れておく（予約ごとに選んだ内容は消さない）
+                  if (!perRow && rows.every((r) => r.groups.length === 0)) setRows((rs) => rs.map((r) => ({ ...r, groups: [...groups] })));
+                  setPerRow(true);
+                }}
+              >
+                予約ごとに選ぶ
+              </button>
+            </div>
+          )}
+          {eachRow ? (
+            <div class="muted">それぞれの予約の「この予約の募集先」で選んでください</div>
+          ) : (
+            <GroupToggles groups={me.groups} defaults={me.member.defaultGroups} value={groups} onChange={setGroups} />
+          )}
         </>
       )}
 
       <button class="btn primary block submit" disabled={busy} onClick={submit}>
-        {groups.length ? <><Icon name="send" size={18} />登録して募集</> : <><Icon name="check" size={18} />登録</>}
+        {recruiting ? <><Icon name="send" size={18} />登録して募集</> : <><Icon name="check" size={18} />登録</>}
       </button>
     </>
+  );
+}
+
+/** 募集先のグループを選ぶチップ。点はふだんの送り先 */
+function GroupToggles({ groups, defaults, value, onChange }: { groups: { id: string; name: string }[]; defaults: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  return (
+    <div class="toggles">
+      {groups.map((g) => (
+        <button class="toggle" aria-pressed={value.includes(g.id)} onClick={() => onChange(value.includes(g.id) ? value.filter((x) => x !== g.id) : [...value, g.id])}>
+          {g.name}
+          {defaults.includes(g.id) && <span class="dot" title="ふだんの送り先" />}
+        </button>
+      ))}
+    </div>
   );
 }

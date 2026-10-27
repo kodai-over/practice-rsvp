@@ -67,6 +67,19 @@ export function minutes(time: string): number {
   return hh * 60 + mm;
 }
 
+/**
+ * 開始を変えたときの終了。終了が開始の1時間後より前なら、開始の1時間後にする（例: 19:00〜21:00 の開始を 21:00 にすると 22:00）。
+ * 1時間後が日をまたぐときは、入力欄で表せないので変えない
+ */
+export function endAfterStart(start: string, end: string, min = 60): string {
+  const s = normalizeTime(start);
+  if (!s) return end;
+  const e = normalizeTime(end);
+  if (e && minutes(e) >= minutes(s) + min) return end;
+  const t = minutes(s) + min;
+  return t < 24 * 60 ? `${pad(Math.floor(t / 60))}:${pad(t % 60)}` : end;
+}
+
 /** n番目の月曜日（ハッピーマンデー）の日 */
 function nthMonday(y: number, m: number, n: number): number {
   const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();

@@ -1,4 +1,4 @@
-import { cancelWarningAt, findCancelRule, goingList, isActive, toJstDate, warningText } from '@studio-attendance/shared';
+import { cancelWarningAt, findCancelRule, goingList, isActive, toJstDate, warningText, TEST_MEMBER_ID } from '@studio-attendance/shared';
 import type { Ctx } from './ports';
 
 /**
@@ -31,7 +31,8 @@ export function hourlyJob(ctx: Ctx): void {
       if (new Date(p.createdAt) >= warnAt) continue;
       const going = goingList(att, p.id).length;
       const min = p.min ?? settings.minDefault;
-      if (going < min) warnings.push({ to: p.booker, text: warningText(p, going, min, ctx.config.appUrl) });
+      // 確認用アカウントはLINEのユーザーではないので送らない
+      if (going < min && p.booker !== TEST_MEMBER_ID) warnings.push({ to: p.booker, text: warningText(p, going, min, ctx.config.appUrl) });
     }
   });
 

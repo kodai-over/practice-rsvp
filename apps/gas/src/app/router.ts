@@ -35,7 +35,7 @@ export function route(ctx: Ctx, raw: string, verify: Verifiers): ApiResponse<unk
       case 'api': {
         const auth = typeof req.idToken === 'string' ? verify.idToken(req.idToken) : null;
         if (!auth) return { ok: false, error: 'ログインの有効期限が切れました。アプリを開き直してください。' };
-        return { ok: true, data: handleApi(ctx, auth, String(req.action), req.params) };
+        return { ok: true, data: handleApi(ctx, { ...auth, actAs: req.actAs }, String(req.action), req.params) };
       }
       case 'join':
         return { ok: true, data: handleJoin(ctx, String(req.action), (req.params ?? {}) as Record<string, unknown>) };

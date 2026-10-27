@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { roomInfo, yen, type Answer, type PracticePatch, type PracticeView } from '@studio-attendance/shared';
+import { endAfterStart, roomInfo, yen, type Answer, type PracticePatch, type PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
 import { RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';
@@ -147,7 +147,7 @@ function EditForm({
         <div class="grid2">
           <label class="field">
             <span>開始</span>
-            <input type="time" value={f.start} onInput={set('start')} />
+            <input type="time" value={f.start} onInput={(e) => setF({ ...f, start: e.currentTarget.value, end: endAfterStart(e.currentTarget.value, f.end) })} />
           </label>
           <label class="field">
             <span>終了</span>

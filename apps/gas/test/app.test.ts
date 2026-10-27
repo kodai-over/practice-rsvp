@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleApi } from '../src/app/api';
 import { backfillGroupMembers } from '../src/app/practices';
-import { DEFAULT_FEES } from '@studio-attendance/shared';
+import { DEFAULT_FEES, TEST_MEMBER_ID } from '@studio-attendance/shared';
 import { INITIAL_SETTINGS, rowsToSettings, settingsToRows, toCell } from '../src/app/schema';
 import { handleJoin } from '../src/app/join';
 import { route } from '../src/app/router';
@@ -567,6 +567,8 @@ describe('ルーター', () => {
     const t = setup();
     handleWebhook(t.ctx, { events: [{ type: 'join', replyToken: 'rt', source: { type: 'group', groupId: 'Cnew' } }] });
     expect(t.store.s.groups.find((g) => g.id === 'Cnew')?.name).toBe('名前-Cnew');
+    // 招待されたときの案内は送らない
+    expect(t.line.replies).toHaveLength(0);
   });
 
   it('毎時の処理でグループ名をLINE側の名前にそろえる', () => {
@@ -871,5 +873,118 @@ describe('見える練習', () => {
     const m = handleApi(t.ctx, { userId: ADMIN }, 'updateMember', { userId: 'UD', patch: { groups: [G1, 'Cfake'] } }) as any;
     expect(m.groups).toEqual([G1, 'Cold']);
     expect(() => handleApi(t.ctx, { userId: 'UB' }, 'updateMember', { userId: 'UD', patch: { groups: [G1] } })).toThrow('管理者だけ');
+  });
+});
+
+describe('予約ごとの募集先', () => {
+  const G2 = 'Cgroup2';
+  it('予約ごとに募集先を選ぶと、グループごとにその予約だけを送る。まとめて選ぶのも今までどおり', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: G2, name: 'チームB' });
+    const item = (date: string, groups?: string[]) => ({ ...reservation, date, max: null, min: null, memo: '', ...(groups ? { groups } : {}) });
+    const res = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item('2026-10-28', [G1]), item('2026-10-29', [G2]), item('2026-10-30', [])], groups: [] }) as any;
+    expect(res.created).toHaveLength(3);
+    expect(res.recruited).toEqual([G1, G2]);
+    const sentTo = (g: string) => JSON.stringify(t.line.pushes.filter((p) => p.to === g));
+    expect(sentTo(G1)).toContain('10/28');
+    expect(sentTo(G1)).not.toContain('10/29');
+    expect(sentTo(G2)).toContain('10/29');
+    expect(sentTo(G2)).not.toContain('10/28');
+    expect(JSON.stringify(t.line.pushes)).not.toContain('10/30');
+    expect(t.store.p.map((p) => p.groups)).toEqual([[G1], [G2], []]);
+
+    // まとめて選ぶと、どの予約も同じグループに1通で送る
+    const before = t.line.pushes.length;
+    handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [item('2026-11-04'), item('2026-11-05')], groups: [G1, G2] });
+    expect(t.line.pushes.slice(before).map((p) => p.to)).toEqual([G1, G2]);
+    expect(JSON.stringify(t.line.pushes[before])).toContain('11/4');
+    expect(JSON.stringify(t.line.pushes[before])).toContain('11/5');
+  });
+
+  it('同じ登録で1つの練習にまとまる予約は、それぞれで選んだ募集先にどれも送る', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: G2, name: 'チームB' });
+    const items = [
+      { ...reservation, date: '2026-10-28', start: '19:00', end: '21:00', max: null, min: null, memo: '', groups: [G1] },
+      { ...reservation, date: '2026-10-28', start: '21:00', end: '22:00', max: null, min: null, memo: '', groups: [G2] },
+    ];
+    const res = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items, groups: [] }) as any;
+    expect(res.created).toHaveLength(1);
+    expect(t.store.p[0]).toMatchObject({ end: '22:00', groups: [G1, G2] });
+    expect(res.recruited).toEqual([G1, G2]);
+  });
+
+  it('送れなかったグループは練習の送り先から外し、あとから送り直せる', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: G2, name: 'チームB' });
+    t.line.failPushTo = [G2];
+    const res = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [{ ...reservation, date: '2026-10-28', max: null, min: null, memo: '' }], groups: [G1, G2] }) as any;
+    expect(res.recruited).toEqual([G1]);
+    expect(res.notRecruited).toEqual([G2]);
+    expect(t.store.p[0].groups).toEqual([G1]);
+    t.line.failPushTo = [];
+    handleApi(t.ctx, { userId: BOOKER }, 'recruitPractice', { id: res.created[0], groups: [G2] });
+    expect(t.store.p[0].groups).toEqual([G1, G2]);
+  });
+});
+
+describe('管理者の見え方の切り替え', () => {
+  const as = (t: ReturnType<typeof setup>, userId: string, actAs: string, action: string, params: object = {}) =>
+    handleApi(t.ctx, { userId, actAs }, action, params) as any;
+  const item = { ...reservation, date: '2026-10-30', max: null, min: null, memo: '' };
+
+  it('確認用の「admin」で登録し、自分を一般メンバーにすると、参加者からの見え方になる', () => {
+    const t = setup();
+    t.store.m.find((m) => m.userId === ADMIN)!.groups = [];
+    const { created } = as(t, ADMIN, 'test', 'createPractices', { items: [item], groups: [G1] });
+    expect(t.store.getPractice(created[0])?.booker).toBe(TEST_MEMBER_ID);
+    // 確認用アカウントは予約者。管理操作はできない
+    expect(t.store.getMember(TEST_MEMBER_ID)).toMatchObject({ role: '予約者' });
+    expect(() => as(t, ADMIN, 'test', 'listMembers')).toThrow('管理者だけ');
+
+    const me = as(t, ADMIN, 'member', 'me');
+    expect(me).toMatchObject({ actAs: 'member', canSwitch: true, member: { role: '一般' } });
+    // グループ1に入っていないので見えない。入ると見える
+    expect(as(t, ADMIN, 'member', 'listPractices').map((v: any) => v.practice.id)).not.toContain(created[0]);
+    t.store.m.find((m) => m.userId === ADMIN)!.groups = [G1];
+    const v = as(t, ADMIN, 'member', 'getPractice', { id: created[0] });
+    expect(v.canEdit).toBe(false);
+    expect(() => as(t, ADMIN, 'member', 'listMembers')).toThrow('管理者だけ');
+    // 自分に戻すと管理者のまま
+    expect(as(t, ADMIN, 'self', 'me')).toMatchObject({ actAs: 'self', member: { role: '管理者' } });
+  });
+
+  it('一般メンバーとして見ているときに名前を変えても、権限は管理者のまま', () => {
+    const t = setup();
+    as(t, ADMIN, 'member', 'setDisplayName', { name: 'こうだい' });
+    expect(t.store.getMember(ADMIN)).toMatchObject({ name: 'こうだい', role: '管理者' });
+  });
+
+  it('管理者でない人の切り替えは無視する。確認用アカウントは管理者の数に入れない', () => {
+    const t = setup();
+    expect(as(t, BOOKER, 'test', 'me')).toMatchObject({ actAs: 'self', canSwitch: false, member: { userId: BOOKER } });
+    expect(as(t, BOOKER, 'member', 'me')).toMatchObject({ actAs: 'self', member: { role: '予約者' } });
+    expect(t.store.getMember(TEST_MEMBER_ID)).toBeNull();
+    as(t, ADMIN, 'test', 'me');
+    // 確認用アカウントを管理者にしても、本物の管理者を外すことはできず、確認用アカウントは外せる
+    as(t, ADMIN, 'self', 'updateMember', { userId: TEST_MEMBER_ID, patch: { role: '管理者' } });
+    expect(() => as(t, ADMIN, 'self', 'updateMember', { userId: ADMIN, patch: { role: '一般' } })).toThrow('管理者が1人もいなくなります');
+    expect(as(t, ADMIN, 'self', 'updateMember', { userId: TEST_MEMBER_ID, patch: { role: '一般' } }).role).toBe('一般');
+  });
+
+  it('切り替えていても、カードから開いた所属は本人に付ける。確認用アカウントにはキャンセル期限前の警告を送らない', () => {
+    const t = setup();
+    t.store.s.groups[0].key = 'k1';
+    t.store.m.find((m) => m.userId === ADMIN)!.groups = [];
+    as(t, ADMIN, 'test', 'openedFromGroup', { group: G1, key: 'k1' });
+    expect(t.store.getMember(ADMIN)?.groups).toEqual([G1]);
+    expect(t.store.getMember(TEST_MEMBER_ID)?.groups).toEqual([]);
+
+    as(t, ADMIN, 'test', 'createPractices', { items: [item], groups: [] });
+    t.line.pushes = [];
+    t.clock.now = new Date('2026-10-26T01:00:00Z');
+    hourlyJob(t.ctx);
+    expect(t.store.p.find((p) => p.booker === TEST_MEMBER_ID)?.warned).toBe(true); // 警告の時刻は来ている
+    expect(t.line.pushes.filter((p) => p.to === TEST_MEMBER_ID)).toEqual([]);
   });
 });

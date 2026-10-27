@@ -15,6 +15,9 @@ import {
   sortPractices,
   toJstDate,
   appLink,
+  ACT_AS,
+  TEST_MEMBER_ID,
+  type ActAs,
   type ApiAction,
   type ApiActions,
   type Attendance,
@@ -31,15 +34,49 @@ import {
 import { UserError, type Ctx, type RawReservation } from './ports';
 import { buildDraft, classifyFor, createPractices, ensureMember, inGroupKey, loadDraft, noteGroupMember, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
 
-type Handler<A extends ApiAction> = (ctx: Ctx, me: Member, params: ApiActions[A]['params']) => ApiActions[A]['result'];
+/** 誰として操作しているか（管理者の見え方の切り替え） */
+interface Acting {
+  actAs: ActAs;
+  /** 本人（切り替える前）が管理者 */
+  canSwitch: boolean;
+  /** 切り替える前の本人のID */
+  realUserId: string;
+}
+
+type Handler<A extends ApiAction> = (ctx: Ctx, me: Member, params: ApiActions[A]['params'], acting?: Acting) => ApiActions[A]['result'];
 
 /** LINE内アプリからの呼び出し。userId はIDトークンの検証で得たもの */
-export function handleApi(ctx: Ctx, auth: { userId: string; name?: string }, action: string, params: unknown): unknown {
+export function handleApi(ctx: Ctx, auth: { userId: string; name?: string; actAs?: unknown }, action: string, params: unknown): unknown {
   const handler = (handlers as Record<string, Handler<ApiAction>>)[action];
   if (!handler) throw new UserError(`不明な操作です: ${action}`);
   // 登録済みならロックを取らない（起動を速くするため）。未登録のときだけロックして登録する
-  const me = ctx.store.getMember(auth.userId) ?? ctx.withLock(() => ensureMember(ctx, auth.userId, { name: auth.name }));
-  return handler(ctx, me, (params ?? {}) as never);
+  const real = ctx.store.getMember(auth.userId) ?? ctx.withLock(() => ensureMember(ctx, auth.userId, { name: auth.name }));
+  const { me, acting } = actingAs(ctx, real, auth.actAs);
+  return handler(ctx, me, (params ?? {}) as never, acting);
+}
+
+/**
+ * 管理者だけが切り替えられる。一般メンバーとしては権限を一般にし、確認用アカウントでは「admin」として操作する。
+ * 管理者でない人が送ってきた切り替えは無視する
+ */
+function actingAs(ctx: Ctx, real: Member, requested: unknown): { me: Member; acting: Acting } {
+  const canSwitch = isAdmin(real);
+  const actAs: ActAs = canSwitch && ACT_AS.includes(requested as ActAs) ? (requested as ActAs) : 'self';
+  const acting = { actAs, canSwitch, realUserId: real.userId };
+  if (actAs === 'member') return { me: { ...real, role: '一般' }, acting };
+  if (actAs === 'test') {
+    const test =
+      ctx.store.getMember(TEST_MEMBER_ID) ??
+      ctx.withLock(() => {
+        // 予約者として登録・募集を試すためのアカウント。管理操作はできない
+        const m: Member = { userId: TEST_MEMBER_ID, name: 'admin（確認用）', role: '予約者', defaultGroups: [], groups: [] };
+        if (!ctx.store.getMember(TEST_MEMBER_ID)) ctx.store.saveMember(m);
+        return ctx.store.getMember(TEST_MEMBER_ID) ?? m;
+      });
+    // 管理画面で権限を変えられていても、確認用アカウントとしては予約者で操作する
+    return { me: { ...test, role: '予約者' }, acting };
+  }
+  return { me: real, acting };
 }
 
 // ---------------------------------------------------------------- 表示用データ
@@ -146,13 +183,13 @@ const publicSettings = (s: Settings): Settings => ({ ...s, groups: s.groups.map(
 // ---------------------------------------------------------------- 各操作
 
 const handlers: { [A in ApiAction]: Handler<A> } = {
-  me(ctx, me) {
+  me(ctx, me, _params, acting = { actAs: 'self', canSwitch: isAdmin(me), realUserId: me.userId }) {
     const pub = publicSettings(ctx.store.settings());
-    return { member: me, groups: pub.groups, settings: pub };
+    return { member: me, groups: pub.groups, settings: pub, actAs: acting.actAs, canSwitch: acting.canSwitch };
   },
 
-  home(ctx, me) {
-    return { me: handlers.me(ctx, me, {}), practices: handlers.listPractices(ctx, me, {}) };
+  home(ctx, me, _params, acting) {
+    return { me: handlers.me(ctx, me, {}, acting), practices: handlers.listPractices(ctx, me, {}, acting) };
   },
 
   listPractices(ctx, me) {
@@ -169,10 +206,11 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     return view(ctx, id, me);
   },
 
-  openedFromGroup(ctx, me, { group, key }) {
+  openedFromGroup(ctx, me, { group, key }, acting) {
     const g = ctx.store.settings().groups.find((x) => x.id === group);
     // グループの合言葉はそのグループに送ったカードにしか出ないので、合っていればそのグループのカードから開いたとみなす
-    if (g?.key && typeof key === 'string' && key === g.key) noteGroupMember(ctx, g.id, me.userId);
+    // 切り替えていても、カードを開いたのは本人なので本人の所属として覚える
+    if (g?.key && typeof key === 'string' && key === g.key) noteGroupMember(ctx, g.id, acting?.realUserId ?? me.userId);
     return null;
   },
 
@@ -303,9 +341,10 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
   },
 
   setDisplayName(ctx, me, { name }) {
-    const m = { ...me, name: cleanName(name, 20) };
-    ctx.withLock(() => ctx.store.saveMember(m));
-    return m;
+    const n = cleanName(name, 20);
+    // 一般メンバーとして見ているときの権限（一般）を保存しないよう、シートの行に名前だけ入れる
+    ctx.withLock(() => ctx.store.saveMember({ ...(ctx.store.getMember(me.userId) ?? me), name: n }));
+    return { ...me, name: n };
   },
 
   listMembers(ctx, me) {
@@ -322,8 +361,9 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       if (patch.name !== undefined) next.name = cleanName(patch.name, 20);
       if (patch.role !== undefined) {
         if (!(['管理者', '予約者', '一般'] as Role[]).includes(patch.role)) throw new UserError('権限が不正です');
-        const admins = ctx.store.members().filter((x) => x.role === '管理者');
-        if (m.role === '管理者' && patch.role !== '管理者' && admins.length <= 1) throw new UserError('管理者が1人もいなくなります');
+        // 確認用アカウントは数えない（本物の管理者がいなくならないように）
+        const admins = ctx.store.members().filter((x) => x.role === '管理者' && x.userId !== TEST_MEMBER_ID);
+        if (m.role === '管理者' && m.userId !== TEST_MEMBER_ID && patch.role !== '管理者' && admins.length <= 1) throw new UserError('管理者が1人もいなくなります');
         next.role = patch.role;
       }
       const ids = new Set(ctx.store.settings().groups.map((g) => g.id));

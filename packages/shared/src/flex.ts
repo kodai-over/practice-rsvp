@@ -170,11 +170,10 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
 export interface RecruitInput {
   practice: Practice;
   bookerName: string;
-  /** 部屋の広さなどの補足 */
-  roomInfo?: string | null;
 }
 
-function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appUrl: string, group?: LinkGroup): Node {
+/** 募集カード。広さ・料金はアプリの練習の画面で見る。出欠はアプリと同じ記号（○行く △保留 ✕行かない） */
+function recruitBubble({ practice: p, bookerName }: RecruitInput, appUrl: string, group?: LinkGroup): Node {
   const d = shortDate(p.date);
   return {
     type: 'bubble',
@@ -188,9 +187,7 @@ function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appU
         text(timeRange(p), { size: 'md' }),
         { type: 'separator', margin: 'md' },
         row('場所', place(p)),
-        ...(roomInfo ? [row('広さ', roomInfo)] : []),
         row('予約者', bookerName),
-        row('料金', `${yen(p.fee)}を参加人数で割り勘`),
         ...(p.max ? [row('上限', `${p.max}人`)] : []),
         ...(p.memo ? [row('メモ', p.memo)] : []),
       ],
@@ -210,33 +207,28 @@ function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appU
               style: 'primary',
               color: GREEN,
               height: 'sm',
-              action: { type: 'postback', label: '行く', data: encodePostback({ a: 'rsvp', p: p.id, v: '1' }), displayText: `${d} 行きます` },
+              action: { type: 'postback', label: '○', data: encodePostback({ a: 'rsvp', p: p.id, v: '1' }), displayText: `${d} 行きます` },
             },
             {
               type: 'button',
               style: 'secondary',
               height: 'sm',
-              action: { type: 'postback', label: '保留', data: encodePostback({ a: 'rsvp', p: p.id, v: '2' }), displayText: `${d} 保留にします` },
+              action: { type: 'postback', label: '△', data: encodePostback({ a: 'rsvp', p: p.id, v: '2' }), displayText: `${d} 保留にします` },
             },
             {
               type: 'button',
               style: 'secondary',
               height: 'sm',
-              action: { type: 'postback', label: '行かない', data: encodePostback({ a: 'rsvp', p: p.id, v: '0' }), displayText: `${d} 行きません` },
+              action: { type: 'postback', label: '✕', data: encodePostback({ a: 'rsvp', p: p.id, v: '0' }), displayText: `${d} 行きません` },
             },
           ],
         },
+        // 参加状況・広さ・料金・カレンダーへの追加は、アプリの練習の画面で
         {
           type: 'button',
           style: 'link',
           height: 'sm',
-          action: { type: 'uri', label: 'カレンダーに追加', uri: practiceLink(appUrl, p, group, { cal: '1' }) },
-        },
-        {
-          type: 'button',
-          style: 'link',
-          height: 'sm',
-          action: { type: 'uri', label: '参加状況を見る', uri: practiceLink(appUrl, p, group) },
+          action: { type: 'uri', label: 'アプリを開く', uri: practiceLink(appUrl, p, group) },
         },
       ],
     },
@@ -286,7 +278,8 @@ export function practiceListMessage(items: ListItem[], appUrl: string, group?: L
           text(place(p), { size: 'xs', color: GRAY }),
         ],
       },
-      text(p.status === '満員' ? `${going}人 満員` : `${going}人`, {
+      // 上限があれば「1/12人」のように出す
+      text(`${p.max ? `${going}/${p.max}` : going}人${p.status === '満員' ? ' 満員' : ''}`, {
         size: 'sm',
         flex: 2,
         align: 'end',

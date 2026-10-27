@@ -1,4 +1,4 @@
-import type { ApiAction, ApiActions, ApiResponse, JoinActions } from '@studio-attendance/shared';
+import type { ActAs, ApiAction, ApiActions, ApiResponse, JoinActions } from '@studio-attendance/shared';
 
 export const MOCK = import.meta.env.MODE === 'mock' || import.meta.env.VITE_MOCK === '1';
 const GAS_URL = import.meta.env.VITE_GAS_URL as string;
@@ -35,9 +35,31 @@ async function post<T>(body: Record<string, unknown>): Promise<T> {
   return res.data;
 }
 
+const ACT_AS_KEY = 'pb:actAs';
+
+/**
+ * 管理者の見え方の切り替え。アプリを閉じると自分に戻るよう、開いている間だけ覚える（サーバーは管理者からのときだけ受け付ける）
+ */
+export function getActAs(): ActAs {
+  try {
+    return (sessionStorage.getItem(ACT_AS_KEY) as ActAs | null) ?? 'self';
+  } catch {
+    return 'self';
+  }
+}
+
+export function setActAs(v: ActAs) {
+  try {
+    if (v === 'self') sessionStorage.removeItem(ACT_AS_KEY);
+    else sessionStorage.setItem(ACT_AS_KEY, v);
+  } catch {
+    /* 覚えられなくても、この画面の間は切り替わらないだけ */
+  }
+}
+
 /** LINE内アプリの操作。IDトークンを毎回付け、サーバー側で本人を確かめる */
 export function api<A extends ApiAction>(action: A, params: ApiActions[A]['params'] = {} as ApiActions[A]['params']) {
-  return ready.then(() => post<ApiActions[A]['result']>({ kind: 'api', idToken: idTokenProvider(), action, params }));
+  return ready.then(() => post<ApiActions[A]['result']>({ kind: 'api', idToken: idTokenProvider(), actAs: getActAs(), action, params }));
 }
 
 /** 参加リンクのページの操作（LINEログインなし） */
