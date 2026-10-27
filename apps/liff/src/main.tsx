@@ -128,16 +128,30 @@ function App() {
       toast('削除しました');
       return true;
     } catch (e) {
+      // 返事が届かなかっただけで、消えているかもしれない。取り直して、まだあるときだけ戻す
+      let still: PracticeView = v;
+      try {
+        still = await api('getPractice', { id });
+      } catch (e2) {
+        // 「見つかりません」なら消えている。通信できなかったときは、押した時点の内容で戻す
+        if (e2 instanceof Error && e2.message.includes('見つかりません')) {
+          toast('削除しました');
+          return true;
+        }
+      }
       removed.current.delete(id);
       const order = (x: PracticeView) => x.practice.date + x.practice.start;
+      const back = still;
       setPracticesState((cur) =>
-        cur && !cur.list.some((x) => x.practice.id === id) ? { ...cur, list: [...cur.list, v].sort((a, b) => order(a).localeCompare(order(b))) } : cur,
+        cur && !cur.list.some((x) => x.practice.id === id) ? { ...cur, list: [...cur.list, back].sort((a, b) => order(a).localeCompare(order(b))) } : cur,
       );
       toast(`削除できませんでした（${e instanceof Error ? e.message : String(e)}）`, true);
       return false;
     }
   };
   const updatePractice = (v: PracticeView, { revert = false } = {}) => {
+    // 削除した練習は、あとから届いた結果（取り直し・出欠）で戻さない
+    if (removed.current.has(v.practice.id)) return;
     // 失敗して元に戻したときは、起動時の一覧の最新の内容を入れてよい
     if (revert) touched.current?.delete(v.practice.id);
     else touched.current?.add(v.practice.id);

@@ -181,12 +181,21 @@ export function backfillGroupMembers() {
   console.log(`所属グループが増えた人数: ${runBackfill(makeCtx())}`);
 }
 
-/** 初回だけ実行：毎時のトリガー（キャンセル期限前警告・終了処理）を作る */
+/**
+ * 行の挿入・削除・並べ替えなど、onEdit では拾えない手での変更（インストール型の onChange トリガー）：
+ * 表の写しを使わないようにする
+ */
+export function onSheetChange() {
+  onEdit();
+}
+
+/** 初回とトリガーを足したときに実行：毎時のトリガー（キャンセル期限前警告・終了処理）と、シートの変更を拾うトリガーを作る */
 export function installTriggers() {
   for (const t of ScriptApp.getProjectTriggers()) {
-    if (t.getHandlerFunction() === 'hourlyJob') ScriptApp.deleteTrigger(t);
+    if (t.getHandlerFunction() === 'hourlyJob' || t.getHandlerFunction() === 'onSheetChange') ScriptApp.deleteTrigger(t);
   }
   ScriptApp.newTrigger('hourlyJob').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('onSheetChange').forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onChange().create();
 }
 
 /** 設定の確認用：足りないスクリプトプロパティをログに出す */
