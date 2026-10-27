@@ -112,6 +112,7 @@ export function practiceView(ctx: Ctx, p: Practice, me: Member | null, att?: Att
     goingCount: going.length,
     perPerson: perPersonFee(p.fee, going.length, settings.roundUnit, p.feeOverride),
     myAnswer: me ? (mine.find((a) => a.participant === me.userId)?.answer ?? null) : null,
+    involved: me ? involved(mine, p, me) : false,
     canEdit,
     joinUrl: me && isActive(p) ? appLink(ctx.config.joinPageUrl, { p: p.id, k: joinKey }) : null,
     icsUrl: appLink(ctx.config.gasUrl, { action: 'ics', id: p.id, k: joinKey }),

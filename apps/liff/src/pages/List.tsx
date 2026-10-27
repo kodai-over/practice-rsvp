@@ -37,9 +37,9 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
   const answer = useAnswer(run);
 
   // 「予定」に出すのは、自分に招待が来た（入っているグループに募集された）練習と、自分が招待を送った（登録した）練習。
-  // 参加リンクなどで答えた練習も出す。管理者でも、ほかの練習は「募集」で見る
+  // 答えた・ゲストを足した練習も出す。管理者でも、ほかの練習は「募集」で見る
   const mine = (list ?? []).filter(
-    (v) => v.practice.booker === me.member.userId || v.practice.groups.some((g) => me.member.groups.includes(g)) || v.myAnswer != null,
+    (v) => v.practice.booker === me.member.userId || v.practice.groups.some((g) => me.member.groups.includes(g)) || v.myAnswer != null || v.involved,
   );
   const active = mine.filter((v) => v.practice.status !== '中止');
   const groups: Record<Tab, PracticeView[]> = {
@@ -69,6 +69,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
       ) : shown.length === 0 ? (
         <div class="empty">
           <div>{tab === 'todo' ? '未定の練習はありません' : tab === 'mine' ? '行く練習はありません' : '練習はありません'}</div>
+          {tab === 'all' && <p class="note">入っているグループの練習が出ないときは、そのグループの募集メッセージの「RSVP」から一度開いてください</p>}
           {tab === 'all' && canRegister(me.member) && (
             <button class="btn primary" onClick={() => go('/register')}>
               <Icon name="plus" size={18} />

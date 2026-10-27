@@ -239,7 +239,10 @@ a {
   z-index: 1;
   /* 縦のスクロールはブラウザに任せ、横の動きだけ受け取る */
   touch-action: pan-y;
+  /* 中止の練習（半透明）の下から赤が透けないように */
+  background: var(--bg);
   user-select: none;
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
 }
 .swipe-body > .ticket {

@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { isAdmin, labelDate, type PracticeView } from '@studio-attendance/shared';
+import { deleteMessage } from './Detail';
 import { api } from '../api';
 import { Icon, Spinner, Stub, TopBar, go, place, useApp, useRunner } from '../ui';
 
@@ -10,7 +11,9 @@ import { Icon, Spinner, Stub, TopBar, go, place, useApp, useRunner } from '../ui
  */
 export function RecruitListPage() {
   const { me, practices, setPractices } = useApp();
-  const [run, busy] = useRunner();
+  const [run] = useRunner();
+  // 削除は裏の一覧取得と分ける（取得中もスワイプした削除を押せるように）
+  const [runDelete, deleting] = useRunner();
   const [fresh, setFresh] = useState(false);
   // 削除ボタンを出しているチケット（一度に1枚だけ）
   const [opened, setOpened] = useState<string | null>(null);
@@ -24,18 +27,12 @@ export function RecruitListPage() {
   }, []);
 
   const admin = isAdmin(me.member);
-  const list = practices == null && !fresh ? null : (practices ?? []).filter((v) => admin || v.practice.booker === me.member.userId);
+  // 直せる練習（自分が登録した練習。管理者はすべて）。サーバーの判定（canEdit）にそろえる
+  const list = practices == null && !fresh ? null : (practices ?? []).filter((v) => v.canEdit);
 
   const remove = async (v: PracticeView) => {
-    const p = v.practice;
-    const others = v.goingCount + v.maybe.length;
-    const msg = [
-      `${labelDate(p.date)} ${p.start}〜 ${place(p)} を削除しますか？`,
-      others > 0 ? `答えている人がいます（行く${v.goingCount}人・保留${v.maybe.length}人）。出欠も消えます。` : '出欠も消えます。',
-      'グループへの連絡は送られないので、必要ならグループで伝えてください。',
-    ].join('\n');
-    if (!confirm(msg)) return;
-    const r = await run(() => api('deletePractice', { id: p.id }), '削除しました');
+    if (!confirm(deleteMessage(v))) return setOpened(null);
+    const r = await runDelete(() => api('deletePractice', { id: v.practice.id }), '削除しました');
     if (r) setPractices(r, true);
     setOpened(null);
   };
@@ -43,7 +40,7 @@ export function RecruitListPage() {
   return (
     <>
       <TopBar title="募集">
-        <button class="icon-btn" aria-label="スタジオ予約を登録" onClick={() => go('/register')}>
+        <button class="icon-btn" aria-label="スタジオ予約を登録" onClick={() => (opened ? setOpened(null) : go('/register'))}>
           <Icon name="plus" />
         </button>
       </TopBar>
@@ -62,9 +59,10 @@ export function RecruitListPage() {
           <SwipeRow
             key={v.practice.id}
             open={opened === v.practice.id}
+            anyOpen={opened != null}
             onOpen={(o) => setOpened(o ? v.practice.id : null)}
             onDelete={() => remove(v)}
-            busy={busy}
+            busy={deleting}
           >
             <RecruitTicket v={v} showBooker={admin && v.practice.booker !== me.member.userId} />
           </SwipeRow>
@@ -116,12 +114,15 @@ const DELETE_WIDTH = 88;
  */
 function SwipeRow({
   open,
+  anyOpen,
   onOpen,
   onDelete,
   busy,
   children,
 }: {
   open: boolean;
+  /** どれかの行が開いているか。開いている間のタップは、移らずに閉じるだけにする（iPhone のメールと同じ） */
+  anyOpen: boolean;
   onOpen: (open: boolean) => void;
   onDelete: () => void;
   busy: boolean;
@@ -133,7 +134,9 @@ function SwipeRow({
   const swiped = useRef(false);
 
   const base = open ? -DELETE_WIDTH : 0;
-  const x = dx == null ? base : Math.min(0, Math.max(-DELETE_WIDTH * 1.5, base + dx));
+  // ボタンの幅より先は、引いても少ししか動かない
+  const raw = dx == null ? base : base + dx;
+  const x = Math.min(0, raw < -DELETE_WIDTH ? -DELETE_WIDTH + (raw + DELETE_WIDTH) * 0.25 : raw);
 
   return (
     <div class={`swipe${open ? ' open' : ''}${dx != null ? ' dragging' : ''}`}>
@@ -177,11 +180,12 @@ function SwipeRow({
           setDx(null);
         }}
         onClickCapture={(e) => {
-          if (swiped.current || open) {
+          if (swiped.current || anyOpen) {
             e.preventDefault();
             e.stopPropagation();
+            // スワイプで開いた直後は開いたまま。それ以外（開いている行がある間のタップ）は閉じる
+            if (!swiped.current) onOpen(false);
             swiped.current = false;
-            if (open) onOpen(false);
           }
         }}
       >

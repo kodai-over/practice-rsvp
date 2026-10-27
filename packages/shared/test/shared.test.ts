@@ -28,6 +28,7 @@ import {
   practiceListMessage,
   recruitMessages,
   answerReport,
+  warningText,
   toJstDate,
   yen,
   type Practice,
@@ -362,6 +363,12 @@ describe('Flex Message', () => {
     ]);
     expect(sameDay).toBe('出欠を回答しました\n○ 11/1(日) 13:00 行きます\n✕ 11/1(日) 19:00 行きません');
     expect(answerReport([{ practice: at('2026-11-01', '13:00'), answer: null }])).toBeNull();
+  });
+
+  it('キャンセル期限前のお知らせは「募集」の練習の画面を開く', () => {
+    const text = warningText(practice({ id: 'p1' }), 1, 3, appUrl);
+    expect(text).toContain(`${appUrl}?manage=p1`);
+    expect(text).not.toContain('?p=');
   });
 
   it('確認カード: 「登録して募集」「登録のみ」「やめる」', () => {

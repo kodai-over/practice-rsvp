@@ -37,6 +37,8 @@ export interface PracticeView {
   goingCount: number;
   perPerson: number | null;
   myAnswer: Answer | null;
+  /** 自分が答えたか、ゲストを足した練習か */
+  involved: boolean;
   canEdit: boolean;
   joinUrl: string | null;
   icsUrl: string;
