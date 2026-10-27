@@ -32,11 +32,11 @@ openssl rand -hex 32
 > **重要**: Messaging API チャネルと LINEログイン チャネルは **同じプロバイダー** の下に作ってください。
 > 別のプロバイダーだとユーザーIDが一致せず、ボタンとアプリの出欠が別人扱いになります。
 
-> アプリの正式名称は **Practice RSVP** です。プロバイダー名・チャネル名・LIFFアプリ名・スプレッドシート名はこれにそろえます。
+> アプリの正式名称は **スタジオ練出欠管理** です（英語名は Studio Practice Attendance Manager。サブタイトルとしてだけ使い、略称は使いません）。プロバイダー名・チャネル名・LIFFアプリ名・スプレッドシート名はこれにそろえます。
 
 ### 1-1. LINE公式アカウントと Messaging API
 1. [LINE Official Account Manager](https://manager.line.biz/) で公式アカウントを作る（プランはコミュニケーションプラン＝無料）
-2. 設定 → Messaging API → 「Messaging APIを利用する」→ プロバイダーを作成（名前は `Practice RSVP`）→「同意する」
+2. 設定 → Messaging API → 「Messaging APIを利用する」→ プロバイダーを作成（名前は `スタジオ練出欠管理`）→「同意する」
    - プロバイダー名は、LINE内アプリを初めて開いた人の許可画面に提供元として出ます
    - **チャネルを作った後でプロバイダーは変えられません**
 3. [LINE Developers](https://developers.line.biz/console/) で、そのチャネルの
@@ -50,18 +50,18 @@ openssl rand -hex 32
 ### 1-2. LINEログインと LIFF
 LINEログインチャネルは、LINE内アプリを開いた人が誰かを判別するための窓口です。中にLIFFアプリ（LINE内で開く画面）を登録します。
 
-1. [LINE Developers](https://developers.line.biz/console/) で、1-1 で作ったプロバイダー `Practice RSVP` を開く（Messaging API チャネルが入っているはず）
+1. [LINE Developers](https://developers.line.biz/console/) で、1-1 で作ったプロバイダー `スタジオ練出欠管理` を開く（Messaging API チャネルが入っているはず）
 2. 「新規チャネル作成」→「**LINEログイン**」
    - 会社・事業者の所在国・地域: 日本
-   - チャネル名: `Practice RSVP`（許可画面に出ます。「LINE」という文字は使えません）
+   - チャネル名: `スタジオ練出欠管理`（許可画面に出ます。「LINE」という文字は使えません）
    - チャネル説明: 例「ダンス練習の出欠管理」
    - アプリタイプ: **ウェブアプリ**
    - メールアドレス: 自分のもの
 3. 「チャネル基本設定」の **チャネルID** を控える（Apps Script の `LINE_LOGIN_CHANNEL_ID`）
 4. 「LIFF」タブ → 追加
-   - LIFFアプリ名: `Practice RSVP`
+   - LIFFアプリ名: `スタジオ練出欠管理`
    - サイズ: **Full**
-   - エンドポイントURL: GitHub Pages のURL（例 `https://<ユーザー名>.github.io/practice-rsvp/`。5. の後で決まるので仮でよい）
+   - エンドポイントURL: GitHub Pages のURL（例 `https://<ユーザー名>.github.io/studio-attendance/`。5. の後で決まるので仮でよい）
    - Scope: **openid** と **profile**
    - 友だち追加オプション: Off のままでよい
    - **LIFF ID** を控える（Apps Script と GitHub の両方に登録）
@@ -81,14 +81,14 @@ LINEログインチャネルは、LINE内アプリを開いた人が誰かを判
 
    ```bash
    cd apps/gas
-   npx clasp create --type sheets --title "Practice RSVP" --rootDir dist
+   npx clasp create --type sheets --title "スタジオ練出欠管理" --rootDir dist
    ```
    `apps/gas/.clasp.json` ができます（git には入りません）。
    スプレッドシートの名前を変えたり、ドライブ内で別のフォルダに移したりしても、Apps Script との紐づけは切れません。
 4. コードを送る
 
    ```bash
-   npm run push -w @pb/gas
+   npm run push -w @studio-attendance/gas
    ```
 5. Apps Script エディタを開き（`npx clasp open-script`）、関数 **`setupSheets`** を選んで実行 → 権限を承認。
    スプレッドシートに「練習」「出欠」「メンバー」「設定」の4シートができます（改善要望の「要望」シートは、最初の投稿時に自動でできます）。
@@ -102,7 +102,7 @@ LINEログインチャネルは、LINE内アプリを開いた人が誰かを判
    以後の更新は、同じURLのまま次のコマンドでできます（Deployment ID は `apps/gas/package.json` の deploy スクリプトに既定値として入れてあります。別のデプロイを更新するときは `GAS_DEPLOYMENT_ID=<ID>` を付ける）。
 
    ```bash
-   npm run deploy -w @pb/gas
+   npm run deploy -w @studio-attendance/gas
    ```
 
 ---
@@ -125,7 +125,7 @@ cd apps/worker
 npx wrangler secret put LINE_CHANNEL_SECRET   # 1-1 のチャネルシークレット
 npx wrangler secret put RELAY_SECRET          # 0. で作った値
 npx wrangler secret put GAS_URL               # 2-7 のウェブアプリURL
-npm run deploy -w @pb/worker
+npm run deploy -w @studio-attendance/worker
 ```
 
 表示された `https://practice-board-webhook.<サブドメイン>.workers.dev` が Webhook URL です。
@@ -142,7 +142,7 @@ LINE Developers → Messaging API設定 → Webhook URL に登録し、「検証
    - `VITE_LIFF_ID`: 1-2 の LIFF ID
    - `VITE_GAS_URL`: 2-7 のウェブアプリURL
 4. Actions の「Deploy LIFF app to Pages」を実行（main への push でも動きます）
-5. 公開URL（例 `https://<ユーザー名>.github.io/practice-rsvp/`）を、LIFF のエンドポイントURLに登録
+5. 公開URL（例 `https://<ユーザー名>.github.io/studio-attendance/`）を、LIFF のエンドポイントURLに登録
 
 ---
 
@@ -214,6 +214,6 @@ Botとの個別トークの下に「登録」「募集」「予定」「要望�
 ```bash
 npm test                     # すべてのテスト
 npm run typecheck            # 型チェック
-npm run dev:mock -w @pb/liff # LINE・Googleなしで画面を確認（?as=U3 で一般メンバー表示）
-npm run build -w @pb/gas     # apps/gas/dist/Code.js を作る
+npm run dev:mock -w @studio-attendance/liff # LINE・Googleなしで画面を確認（?as=U3 で一般メンバー表示）
+npm run build -w @studio-attendance/gas     # apps/gas/dist/Code.js を作る
 ```

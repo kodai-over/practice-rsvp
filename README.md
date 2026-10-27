@@ -1,4 +1,6 @@
-# Practice RSVP（ダンス練習 自動募集システム）
+# スタジオ練出欠管理
+
+Studio Practice Attendance Manager（ダンス練習 自動募集システム）
 
 予約者がスタジオの予約画面のスクショをLINE Botに送り、「登録する」を押すだけで、
 練習の登録・出欠・割り勘までをLINE上で進める仕組みです。グループへの募集は必要なときだけ流せます。Google（スプレッドシート・Apps Script・Gemini API）、
@@ -27,7 +29,7 @@ LINE、Cloudflare Workers、GitHub Pages の無料枠で動きます。
 ```bash
 npm install
 npm test
-npm run dev:mock -w @pb/liff   # LINE・Googleの準備なしで画面を確認
+npm run dev:mock -w @studio-attendance/liff   # LINE・Googleの準備なしで画面を確認
 ```
 
 本番の準備とデプロイは [docs/setup.md](docs/setup.md) を参照してください。
