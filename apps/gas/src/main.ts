@@ -5,7 +5,7 @@ import { buildIcs, appLink } from '@studio-attendance/shared';
 import type { Ctx, Kv } from './app/ports';
 import { richMenuDefinition } from './app/richmenu';
 import { route } from './app/router';
-import { INITIAL_SETTINGS, SHEETS, settingsToRows } from './app/schema';
+import { INITIAL_SETTINGS, SHEETS, settingsToRows, toCell } from './app/schema';
 import { hourlyJob as runHourly } from './app/triggers';
 import { makeVerifiers } from './gas/auth';
 import { DEFAULT_GEMINI_MODEL, GeminiReader } from './gas/gemini';
@@ -107,7 +107,7 @@ export function setupSheets() {
     sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight('bold');
     if (created && def.name === SHEETS.settings.name) {
       const rows = settingsToRows(INITIAL_SETTINGS);
-      sh.getRange(2, 1, rows.length, def.headers.length).setValues(rows.map((r) => def.headers.map((h) => r[h] ?? '')));
+      sh.getRange(2, 1, rows.length, def.headers.length).setValues(rows.map((r) => def.headers.map((h) => toCell(r[h] ?? ''))));
     }
   }
   const first = ss.getSheetByName('シート1') ?? ss.getSheetByName('Sheet1');

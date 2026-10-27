@@ -6,6 +6,15 @@ import { DEFAULT_FEES, DEFAULT_STUDIOS, formatFeeValue, parseFeeValue, type Atte
 
 export type Row = Record<string, string>;
 
+/**
+ * シートに書く値。= + - @ で始まる文字列は数式として扱われることがあるので、先頭に ' を付けて文字列として書く。
+ * グループ名・表示名・要望など、メンバーが自由に付けた値がそのまま入るため
+ */
+export const toCell = (v: string): string => (/^[=+\-@]/.test(v) ? `'${v}` : v);
+
+/** シートから読んだ値。toCell で付けた ' が残っていれば外す */
+export const fromCell = (v: string): string => (/^'[=+\-@]/.test(v) ? v.slice(1) : v);
+
 export const SHEETS = {
   practices: {
     name: '練習',
