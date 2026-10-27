@@ -26,7 +26,7 @@ export function buildIcs(p: Practice, detailUrl: string, now: Date): string {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//practice-board//JA',
+    'PRODID:-//studio-attendance//JA',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',

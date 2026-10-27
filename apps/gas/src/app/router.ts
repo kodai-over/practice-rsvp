@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@pb/shared';
+import type { ApiResponse } from '@studio-attendance/shared';
 import { handleApi } from './api';
 import { handleJoin } from './join';
 import { UserError, type Ctx } from './ports';

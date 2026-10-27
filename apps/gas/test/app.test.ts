@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleApi } from '../src/app/api';
-import { DEFAULT_FEES } from '@pb/shared';
+import { DEFAULT_FEES } from '@studio-attendance/shared';
 import { INITIAL_SETTINGS, rowsToSettings, settingsToRows } from '../src/app/schema';
 import { handleJoin } from '../src/app/join';
 import { route } from '../src/app/router';

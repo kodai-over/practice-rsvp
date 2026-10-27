@@ -1,6 +1,6 @@
 /** Gemini に渡す指示文と出力の形。実際のスクショで試しながら調整する */
 
-import type { StudioDef } from '@pb/shared';
+import type { StudioDef } from '@studio-attendance/shared';
 
 export function readerPrompt(today: string, studios: StudioDef[], text?: string): string {
   const known = studios.length

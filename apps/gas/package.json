@@ -1,5 +1,5 @@
 {
-  "name": "@pb/gas",
+  "name": "@studio-attendance/gas",
   "private": true,
   "type": "module",
   "scripts": {

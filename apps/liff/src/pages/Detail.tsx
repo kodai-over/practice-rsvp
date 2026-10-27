@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { roomInfo, yen, type Answer, type PracticePatch, type PracticeView } from '@pb/shared';
+import { roomInfo, yen, type Answer, type PracticePatch, type PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
 import { RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';

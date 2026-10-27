@@ -4,7 +4,7 @@
     {
       "name": "liff-mock",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:mock", "-w", "@pb/liff", "--", "--port", "5173", "--strictPort"],
+      "runtimeArgs": ["run", "dev:mock", "-w", "@studio-attendance/liff", "--", "--port", "5173", "--strictPort"],
       "port": 5173
     }
   ]

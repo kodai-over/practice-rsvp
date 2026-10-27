@@ -1,4 +1,4 @@
-import type { LineMessage } from '@pb/shared';
+import type { LineMessage } from '@studio-attendance/shared';
 import { MemoryKv, MemoryStore } from '../src/app/memory';
 import type { Ctx, Image, LineApi, ReaderHints, ReaderInput, ScreenshotReader } from '../src/app/ports';
 

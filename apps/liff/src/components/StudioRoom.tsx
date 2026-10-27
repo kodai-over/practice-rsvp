@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { OTHER_STUDIO, findStudio, roomInfo, type StudioDef } from '@pb/shared';
+import { OTHER_STUDIO, findStudio, roomInfo, type StudioDef } from '@studio-attendance/shared';
 
 const OTHER_ROOM = '__other__';
 

@@ -1,4 +1,4 @@
-import type { ApiAction, ApiActions, ApiResponse, JoinActions } from '@pb/shared';
+import type { ApiAction, ApiActions, ApiResponse, JoinActions } from '@studio-attendance/shared';
 
 export const MOCK = import.meta.env.MODE === 'mock' || import.meta.env.VITE_MOCK === '1';
 const GAS_URL = import.meta.env.VITE_GAS_URL as string;

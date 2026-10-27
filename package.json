@@ -1,5 +1,5 @@
 {
-  "name": "practice-board",
+  "name": "studio-attendance",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -9,8 +9,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p packages/shared && tsc -p apps/gas && tsc -p apps/worker && tsc -p apps/liff",
-    "build": "npm run build -w @pb/gas && npm run build -w @pb/liff",
-    "dev:mock": "npm run dev:mock -w @pb/liff"
+    "build": "npm run build -w @studio-attendance/gas && npm run build -w @studio-attendance/liff",
+    "dev:mock": "npm run dev:mock -w @studio-attendance/liff"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261024.1",

@@ -1,4 +1,4 @@
-import type { LineMessage } from '@pb/shared';
+import type { LineMessage } from '@studio-attendance/shared';
 import type { Image, LineApi } from '../app/ports';
 
 const API = 'https://api.line.me/v2/bot';

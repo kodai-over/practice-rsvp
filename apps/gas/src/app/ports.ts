@@ -1,7 +1,7 @@
 /**
  * 業務ロジックが使う外部依存。GAS上では src/gas/ の実装を、テストではインメモリの実装を差し込む。
  */
-import type { Attendance, Feedback, Group, LineMessage, Member, Practice, Reservation, Settings, StudioDef } from '@pb/shared';
+import type { Attendance, Feedback, Group, LineMessage, Member, Practice, Reservation, Settings, StudioDef } from '@studio-attendance/shared';
 
 export interface Store {
   practices(): Practice[];

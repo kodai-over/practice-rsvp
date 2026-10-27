@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { canRegister, labelDate, type Answer, type PracticeView } from '@pb/shared';
+import { canRegister, labelDate, type Answer, type PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
 import { AvatarStack, Fee, Icon, RsvpButtons, Spinner, StatusBadge, Stub, Syncing, Tabs, go, place, useApp, useRunner } from '../ui';
 

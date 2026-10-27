@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { labelDate } from '@pb/shared';
+import { labelDate } from '@studio-attendance/shared';
 import { api } from '../api';
 import { Icon, Spinner, Stub, TopBar, go, place, useApp, useRunner } from '../ui';
 

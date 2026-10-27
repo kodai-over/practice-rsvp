@@ -12,7 +12,7 @@ import {
   type Answer,
   type LineMessage,
   type NewPracticeInput,
-} from '@pb/shared';
+} from '@studio-attendance/shared';
 import { UserError, type Ctx, type RawReservation } from './ports';
 import {
   buildDraft,

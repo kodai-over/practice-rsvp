@@ -1,5 +1,5 @@
 /** Botとの個別トークの下に出すメニュー（リッチメニュー）。画像は scripts/richmenu.mjs で作る 2500×843・4分割 */
-import { appLink } from '@pb/shared';
+import { appLink } from '@studio-attendance/shared';
 
 export const RICH_MENU_SIZE = { width: 2500, height: 843 };
 
@@ -16,7 +16,7 @@ export function richMenuDefinition(appUrl: string) {
   return {
     size: RICH_MENU_SIZE,
     selected: true,
-    name: 'Practice RSVP メニュー',
+    name: 'スタジオ練出欠管理 メニュー',
     chatBarText: 'メニュー',
     areas: RICH_MENU_VIEWS.map((v, i) => ({
       bounds: { x: Math.round(i * w), y: 0, width: Math.round(w), height: RICH_MENU_SIZE.height },

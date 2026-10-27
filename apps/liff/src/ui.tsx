@@ -1,6 +1,6 @@
 import { createContext, type ComponentChildren } from 'preact';
 import { useCallback, useContext, useEffect, useState } from 'preact/hooks';
-import { canRegister, weekday, yen, type Answer, type MeView, type PracticeView } from '@pb/shared';
+import { canRegister, weekday, yen, type Answer, type MeView, type PracticeView } from '@studio-attendance/shared';
 
 // ---------------------------------------------------------------- ルーティング（ハッシュ）
 

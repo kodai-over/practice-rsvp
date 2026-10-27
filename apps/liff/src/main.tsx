@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { HomeView, MeView, PracticeView } from '@pb/shared';
+import type { HomeView, MeView, PracticeView } from '@studio-attendance/shared';
 import { api } from './api';
 import { initLiff } from './liff';
 import { DetailPage } from './pages/Detail';
