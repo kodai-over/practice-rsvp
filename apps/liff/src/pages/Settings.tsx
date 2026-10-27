@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { DEFAULT_STUDIOS, isAdmin, type CancelRule, type FeeDays, type FeeRule, type Member, type Role, type StudioDef } from '@pb/shared';
+import { DEFAULT_STUDIOS, isAdmin, type CancelRule, type FeeDays, type FeeRule, type Member, type Role, type StudioDef } from '@studio-attendance/shared';
 import { api } from '../api';
 import { Avatar, Icon, Spinner, TopBar, go, useApp, useRunner } from '../ui';
 

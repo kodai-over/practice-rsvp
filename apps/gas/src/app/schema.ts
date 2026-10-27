@@ -2,7 +2,7 @@
  * スプレッドシートの4シートの列と、行⇄データの変換。
  * 列は見出し名で引くので、管理者が列を並べ替えても動く。
  */
-import { DEFAULT_FEES, DEFAULT_STUDIOS, formatFeeValue, parseFeeValue, type Attendance, type Feedback, type Member, type Practice, type Settings, type StudioDef } from '@pb/shared';
+import { DEFAULT_FEES, DEFAULT_STUDIOS, formatFeeValue, parseFeeValue, type Attendance, type Feedback, type Member, type Practice, type Settings, type StudioDef } from '@studio-attendance/shared';
 
 export type Row = Record<string, string>;
 

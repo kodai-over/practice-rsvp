@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import type { AttendeeView, PracticeView } from '@pb/shared';
+import type { AttendeeView, PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
 import { Avatar, Icon, Spinner, Syncing, TopBar, useApp } from '../ui';
 import { PracticePass, usePractice } from './Detail';

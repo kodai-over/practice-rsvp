@@ -1,7 +1,7 @@
 /**
  * Apps Script の入口。build.mjs がここで export した関数を GAS のグローバル関数として公開する。
  */
-import { buildIcs, appLink } from '@pb/shared';
+import { buildIcs, appLink } from '@studio-attendance/shared';
 import type { Ctx, Kv } from './app/ports';
 import { richMenuDefinition } from './app/richmenu';
 import { route } from './app/router';

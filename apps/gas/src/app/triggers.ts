@@ -1,4 +1,4 @@
-import { cancelWarningAt, findCancelRule, goingList, isActive, toJstDate, warningText } from '@pb/shared';
+import { cancelWarningAt, findCancelRule, goingList, isActive, toJstDate, warningText } from '@studio-attendance/shared';
 import type { Ctx } from './ports';
 
 /**

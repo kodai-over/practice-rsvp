@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { addDays, defaultFee, labelDate, skippedNote, toJstDate, type DraftItemKind, type NewPracticeInput, type Reservation } from '@pb/shared';
+import { addDays, defaultFee, labelDate, skippedNote, toJstDate, type DraftItemKind, type NewPracticeInput, type Reservation } from '@studio-attendance/shared';
 import { api } from '../api';
 import { RoomInfo, RoomSelect, StudioSelect } from '../components/StudioRoom';
 import { BusyOverlay, Icon, Spinner, TopBar, go, useApp, useRunner } from '../ui';

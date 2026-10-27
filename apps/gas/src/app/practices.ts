@@ -23,7 +23,7 @@ import {
   type Settings,
   type Via,
   makePracticeId,
-} from '@pb/shared';
+} from '@studio-attendance/shared';
 import { UserError, type Ctx, type RawReservation, type ReaderInput } from './ports';
 
 // ---------------------------------------------------------------- メンバー

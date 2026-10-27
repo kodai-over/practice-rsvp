@@ -27,7 +27,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run build -w @pb/liff
+      - run: npm run build -w @studio-attendance/liff
         env:
           VITE_LIFF_ID: ${{ vars.VITE_LIFF_ID }}
           VITE_GAS_URL: ${{ vars.VITE_GAS_URL }}

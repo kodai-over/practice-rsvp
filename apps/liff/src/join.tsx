@@ -1,7 +1,7 @@
 /** 参加リンクのページ。LINEを使わない人が名前を入れて出欠を出す */
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { yen, type Answer, type JoinView } from '@pb/shared';
+import { yen, type Answer, type JoinView } from '@studio-attendance/shared';
 import { joinApi } from './api';
 import './styles.css';
 import { Pass, RsvpButtons, Spinner, useToast } from './ui';

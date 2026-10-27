@@ -1,5 +1,5 @@
 /** 参加リンク（LINEを使わない人の出欠）。合言葉が合う練習への出欠登録だけができる */
-import { goingList, isAnswer, perPersonFee, roomInfo, toJstDate, type Answer, type JoinActions, type JoinView, type Practice } from '@pb/shared';
+import { goingList, isAnswer, perPersonFee, roomInfo, toJstDate, type Answer, type JoinActions, type JoinView, type Practice } from '@studio-attendance/shared';
 import { UserError, type Ctx } from './ports';
 import { recordAnswer } from './practices';
 

@@ -1,4 +1,4 @@
-import type { Attendance, Feedback, Member, Practice, Settings } from '@pb/shared';
+import type { Attendance, Feedback, Member, Practice, Settings } from '@studio-attendance/shared';
 import type { Store } from '../app/ports';
 import {
   SHEETS,

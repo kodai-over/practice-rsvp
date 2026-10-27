@@ -1,5 +1,5 @@
 /** インメモリの Store / Kv。テストと、LINE内アプリのモック表示で使う */
-import type { Attendance, Feedback, Member, Practice, Settings } from '@pb/shared';
+import type { Attendance, Feedback, Member, Practice, Settings } from '@studio-attendance/shared';
 import type { Kv, Store } from './ports';
 import { rowsToSettings, settingsToRows } from './schema';
 

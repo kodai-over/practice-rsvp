@@ -1,5 +1,5 @@
 {
-  "name": "@pb/liff",
+  "name": "@studio-attendance/liff",
   "private": true,
   "type": "module",
   "scripts": {

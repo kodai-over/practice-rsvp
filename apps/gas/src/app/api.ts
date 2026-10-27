@@ -27,7 +27,7 @@ import {
   type Role,
   type Settings,
   type StudioDef,
-} from '@pb/shared';
+} from '@studio-attendance/shared';
 import { UserError, type Ctx, type RawReservation } from './ports';
 import { buildDraft, createPractices, ensureMember, loadDraft, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
 
