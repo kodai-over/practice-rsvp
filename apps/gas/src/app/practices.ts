@@ -252,14 +252,16 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
       }
       return { input, r, item };
     });
-    for (const { r, item } of plan) {
+    for (const { input, r, item } of plan) {
       if (item.kind === 'duplicate') {
         result.skipped.push(item.targetId!);
       } else if (item.kind === 'extension') {
         const target = practices.find((p) => p.id === item.targetId)!;
         target.end = r.end;
         target.fee += r.fee;
-        if (!created.includes(target)) {
+        // 同じ登録の中で1つの練習にまとめた予約は、それぞれで選んだ募集先をどれも送る
+        if (created.includes(target)) target.groups = [...new Set([...target.groups, ...groupsOf(input)])];
+        else {
           ctx.store.savePractice(target);
           result.extended.push(target.id);
         }
@@ -287,8 +289,20 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
   if (created.length > 0) {
     // グループごとに、そのグループを募集先にした練習だけをまとめて送る
     const sorted = sortPractices(created);
+    // 送る順は設定シートのグループの順
     const targets = settings.groups.map((g) => g.id).filter((g) => sorted.some((p) => p.groups.includes(g)));
     result.recruited = targets.filter((g) => sendRecruit(ctx, sorted.filter((p) => p.groups.includes(g)), [g], booker.name).length > 0);
+    // 送れなかったグループは練習の送り先から外す（その人たちに見えてしまわないように。アプリの「募集」から送り直せる）
+    const failed = targets.filter((g) => !result.recruited!.includes(g));
+    if (failed.length) {
+      result.notRecruited = failed;
+      ctx.withLock(() => {
+        for (const p of created) {
+          const cur = ctx.store.getPractice(p.id);
+          if (cur && cur.groups.some((g) => failed.includes(g))) ctx.store.savePractice({ ...cur, groups: cur.groups.filter((g) => !failed.includes(g)) });
+        }
+      });
+    }
   }
   return result;
 }

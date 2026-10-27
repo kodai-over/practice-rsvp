@@ -12,7 +12,10 @@ export class FakeLine implements LineApi {
     if (this.failReply) throw new Error('Invalid reply token');
     this.replies.push({ token, messages });
   }
+  /** ここに入れた宛先への push は失敗する */
+  failPushTo: string[] = [];
   push(to: string, messages: LineMessage[]) {
+    if (this.failPushTo.includes(to)) throw new Error('push failed');
     this.pushes.push({ to, messages });
   }
   profile(userId: string) {

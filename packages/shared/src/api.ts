@@ -94,6 +94,8 @@ export interface CreateResult {
   skipped: string[];
   /** 募集を送れたグループ */
   recruited?: string[];
+  /** 募集を送れなかったグループ（練習の送り先からは外してある） */
+  notRecruited?: string[];
   /** 登録後の練習一覧（アプリが取り直さずに表示を更新できるように） */
   practices?: PracticeView[];
 }

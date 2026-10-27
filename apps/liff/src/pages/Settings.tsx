@@ -22,7 +22,7 @@ function ActAsSwitch() {
       <div class="section-title">見え方の確認</div>
       <section class="card">
         <div class="muted" style={{ marginBottom: 8 }}>
-          「一般メンバー」では、入っているグループの練習だけが見えます。「admin」で予約を登録して募集し、自分に切り替えると、参加者からの見え方を確かめられます。
+          「一般メンバー」では、入っているグループの練習だけが見えます。「admin」（予約者）で予約を登録して募集し、自分に切り替えると、参加者からの見え方を確かめられます。「admin」で募集すると本当にグループに届くので、テスト用のグループに送ってください。アプリを閉じると自分（管理者）に戻ります。
         </div>
         <div class="toggles">
           {(['self', 'member', 'test'] as ActAs[]).map((v) => (

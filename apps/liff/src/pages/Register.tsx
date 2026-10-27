@@ -94,7 +94,20 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
   // 予約が2件以上あるときは、予約ごとに募集先を選べる（1件目はグループ1だけ、2件目はグループ2だけ、など）
   const [perRow, setPerRow] = useState(false);
   const eachRow = perRow && rows.length > 1;
-  const recruiting = eachRow ? rows.some((r) => r.kind !== 'duplicate' && r.groups.length > 0) : groups.length > 0;
+  // 延長（既存の練習を伸ばす）と登録済みの予約には募集を送らないので、選べるのは新しく登録する予約だけ
+  const pickable = (r: FormRow) => r.kind !== 'duplicate' && r.kind !== 'extension';
+  const recruiting = eachRow ? rows.some((r) => pickable(r) && r.groups.length > 0) : groups.length > 0;
+  /** 入力欄を入れ替えるとき（読み取り・下書き）。予約ごとに選んでいたら、まとめての募集先を入れておく */
+  const replaceRows = (next: FormRow[]) => setRows(perRow ? next.map((r) => ({ ...r, groups: [...groups] })) : next);
+  const removeRow = (key: number) => {
+    const rest = rows.filter((x) => x.key !== key);
+    // 1件になったら「まとめて」に戻し、その予約で選んでいた募集先を引き継ぐ
+    if (perRow && rest.length === 1) {
+      setPerRow(false);
+      setGroups(rest[0].groups);
+    }
+    setRows(rest);
+  };
   const [loading, setLoading] = useState(!!draftId);
   const [run, busy] = useRunner();
   const [pasted, setPasted] = useState('');
@@ -108,7 +121,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         toast('確認カードの期限が切れています。もう一度入力してください', true);
         return;
       }
-      setRows([...d.items.map((i) => fromReservation(i.reservation, i.kind)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete'))]);
+      replaceRows([...d.items.map((i) => fromReservation(i.reservation, i.kind)), ...d.incomplete.map((r) => fromReservation(r, 'incomplete'))]);
     });
   }, [draftId]);
 
@@ -144,7 +157,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
       toast(`新しく登録する予約はありませんでした。${skipped || '手で入力してください。'}`, true);
       return false;
     }
-    setRows(next);
+    replaceRows(next);
     toast(`${next.length}件を読み取りました。${skipped}内容を確かめてください`);
     return true;
   };
@@ -177,9 +190,10 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
         max: r.max.trim() ? Number(r.max) : null,
         min: r.min.trim() ? Number(r.min) : null,
         memo: r.memo,
-        ...(eachRow ? { groups: r.groups } : {}),
+        ...(eachRow ? { groups: pickable(r) ? r.groups : [] } : {}),
       }));
     if (items.length === 0) return toast('登録する練習がありません', true);
+    if (me.actAs === 'test' && recruiting && !confirm('確認用アカウント「admin」として、グループに募集を送ります。よろしいですか？')) return;
     setPhase('saving');
     const res = await run(() => api('createPractices', { items, groups: eachRow ? [] : groups, draftId: draftId ?? undefined }));
     setPhase(null);
@@ -190,7 +204,9 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
       res.extended.length && `${res.extended.length}件を延長しました`,
       res.skipped.length && `${res.skipped.length}件は登録済みでした`,
     ].filter(Boolean);
-    toast(parts.join('・') || '登録しました');
+    const names = (ids: string[]) => ids.map((g) => me.groups.find((x) => x.id === g)?.name ?? g).join('、');
+    if (res.notRecruited?.length) toast(`${parts.join('・')}。${names(res.notRecruited)}には募集を送れませんでした（アプリの「募集」から送り直せます）`, true);
+    else toast(parts.join('・') || '登録しました');
     go('/');
   };
 
@@ -228,7 +244,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
               <span class="grow">{r.date ? labelDate(r.date) : String(i + 1).padStart(2, '0')}</span>
               {r.kind && KIND_TAG[r.kind] && <span class={`tag ${KIND_TAG[r.kind].cls}`}>{KIND_TAG[r.kind].label}</span>}
               {rows.length > 1 && (
-                <button class="icon-btn" aria-label="この予約を削除" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
+                <button class="icon-btn" aria-label="この予約を削除" onClick={() => removeRow(r.key)}>
                   <Icon name="x" size={18} />
                 </button>
               )}
@@ -286,7 +302,7 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
                 <input type="text" placeholder="例：ショーケースの通し" value={r.memo} onInput={(e) => update(r.key, 'memo', e.currentTarget.value)} />
               </label>
             </details>
-            {eachRow && r.kind !== 'duplicate' && (
+            {eachRow && pickable(r) && (
               <div class="field">
                 <span>この予約の募集先</span>
                 <GroupToggles groups={me.groups} defaults={me.member.defaultGroups} value={r.groups} onChange={(g) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, groups: g } : x)))} />
@@ -316,8 +332,8 @@ export function RegisterPage({ draftId }: { draftId: string | null }) {
                 class="toggle"
                 aria-pressed={perRow}
                 onClick={() => {
-                  // 切り替えたときは、まとめて選んでいた募集先を各予約に入れておく
-                  if (!perRow) setRows((rs) => rs.map((r) => ({ ...r, groups: [...groups] })));
+                  // はじめて切り替えたときは、まとめて選んでいた募集先を各予約に入れておく（予約ごとに選んだ内容は消さない）
+                  if (!perRow && rows.every((r) => r.groups.length === 0)) setRows((rs) => rs.map((r) => ({ ...r, groups: [...groups] })));
                   setPerRow(true);
                 }}
               >

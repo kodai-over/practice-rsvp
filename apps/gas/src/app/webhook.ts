@@ -297,6 +297,9 @@ function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string, rec
     if (p) lines.push(`${labelDate(p.date)}の練習を${p.end}までに延長しました。`);
   }
   if (result.skipped.length) lines.push(`登録済みの予約${result.skipped.length}件は飛ばしました。`);
+  if (result.notRecruited?.length) {
+    lines.push(`${result.notRecruited.map((g) => groups.find((x) => x.id === g)?.name ?? g).join('、')}には募集を送れませんでした。アプリの「募集」から送り直せます。`);
+  }
   if (result.created.length && !recruited.length) {
     lines.push('', 'グループに募集するときは、アプリの「募集」で練習を開くと送れます。', ctx.config.appUrl);
   }

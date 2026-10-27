@@ -37,10 +37,12 @@ async function post<T>(body: Record<string, unknown>): Promise<T> {
 
 const ACT_AS_KEY = 'pb:actAs';
 
-/** 管理者の見え方の切り替え（この端末だけに覚える。サーバーは管理者からのときだけ受け付ける） */
+/**
+ * 管理者の見え方の切り替え。アプリを閉じると自分に戻るよう、開いている間だけ覚える（サーバーは管理者からのときだけ受け付ける）
+ */
 export function getActAs(): ActAs {
   try {
-    return (localStorage.getItem(ACT_AS_KEY) as ActAs | null) ?? 'self';
+    return (sessionStorage.getItem(ACT_AS_KEY) as ActAs | null) ?? 'self';
   } catch {
     return 'self';
   }
@@ -48,8 +50,8 @@ export function getActAs(): ActAs {
 
 export function setActAs(v: ActAs) {
   try {
-    if (v === 'self') localStorage.removeItem(ACT_AS_KEY);
-    else localStorage.setItem(ACT_AS_KEY, v);
+    if (v === 'self') sessionStorage.removeItem(ACT_AS_KEY);
+    else sessionStorage.setItem(ACT_AS_KEY, v);
   } catch {
     /* 覚えられなくても、この画面の間は切り替わらないだけ */
   }

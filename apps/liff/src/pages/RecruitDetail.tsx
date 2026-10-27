@@ -6,6 +6,7 @@ import { PracticePass, usePractice } from './Detail';
 
 /** 募集の画面。募集先のグループ・ゲストの追加・参加リンクだけ */
 export function RecruitDetailPage({ id }: { id: string }) {
+  const { me } = useApp();
   const { v, loading, busy, update } = usePractice(id);
   if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
   const guests = [...v.going, ...v.maybe, ...v.notGoing].filter((a) => a.kind === 'ゲスト');
@@ -17,7 +18,10 @@ export function RecruitDetailPage({ id }: { id: string }) {
       <PracticePass v={v} />
 
       {(v.practice.status === '募集中' || v.practice.status === '満員') && (
-        <RecruitForm v={v} busy={busy} onSend={(groups) => update(() => api('recruitPractice', { id, groups }), 'グループに募集を送りました')} />
+        <RecruitForm v={v} busy={busy} onSend={async (groups) => {
+            if (me.actAs === 'test' && !confirm('確認用アカウント「admin」として、グループに募集を送ります。よろしいですか？')) return;
+            await update(() => api('recruitPractice', { id, groups }), 'グループに募集を送りました');
+          }} />
       )}
 
       <section>
