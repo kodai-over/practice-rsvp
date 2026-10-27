@@ -7,7 +7,8 @@ export function richMenuDefinition(appUrl: string) {
     size: RICH_MENU_SIZE,
     selected: true,
     name: 'スタジオ練出欠管理 メニュー',
-    chatBarText: 'アプリを開く',
+    // トーク画面下のバーの文字。押すとメニューが開閉するだけなので「メニュー」にする
+    chatBarText: 'メニュー',
     areas: [{ bounds: { x: 0, y: 0, ...RICH_MENU_SIZE }, action: { type: 'uri', label: 'アプリを開く', uri: appUrl } }],
   };
 }

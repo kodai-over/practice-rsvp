@@ -691,6 +691,9 @@ describe('リッチメニュー', () => {
     expect(def.areas).toEqual([
       { bounds: { x: 0, y: 0, width: 2500, height: 843 }, action: { type: 'uri', label: 'アプリを開く', uri: 'https://liff.line.me/APP' } },
     ]);
+    // LINEの上限（バーの文字は14文字、ボタンのラベルは20文字まで）
+    expect(def.chatBarText.length).toBeLessThanOrEqual(14);
+    expect(def.areas.every((a) => a.action.label.length <= 20)).toBe(true);
   });
 });
 

@@ -56,7 +56,7 @@ function App() {
     (async () => {
       const params = await initLiff();
       // 募集カードや確認カードのリンク（?p= / ?cal= / ?draft=）を画面に振り分ける
-      // メニュー（リッチメニュー）のボタンは ?view= で画面を指定する
+      // ?view= は以前のメニュー（4つのボタン）のリンク。古いリンクから開かれても困らないよう残す
       const p = params.get('p');
       const draft = params.get('draft');
       // グループのカードから開いたときは、先にそのグループのメンバーとして覚えてもらう（でないと練習が見えない）
