@@ -684,17 +684,16 @@ describe('ルーター', () => {
 });
 
 describe('リッチメニュー', () => {
-  it('4つのボタンが横に並び、それぞれアプリの画面を開く', async () => {
+  it('全面が1つのボタンで、アプリのトップを開く', async () => {
     const { richMenuDefinition } = await import('../src/app/richmenu');
     const def = richMenuDefinition('https://liff.line.me/APP');
     expect(def.size).toEqual({ width: 2500, height: 843 });
-    expect(def.areas.map((a) => a.action.uri)).toEqual([
-      'https://liff.line.me/APP?view=register',
-      'https://liff.line.me/APP?view=recruit',
-      'https://liff.line.me/APP?view=mine',
-      'https://liff.line.me/APP?view=feedback',
+    expect(def.areas).toEqual([
+      { bounds: { x: 0, y: 0, width: 2500, height: 843 }, action: { type: 'uri', label: 'アプリを開く', uri: 'https://liff.line.me/APP' } },
     ]);
-    expect(def.areas.reduce((sum, a) => sum + a.bounds.width, 0)).toBe(2500);
+    // LINEの上限（バーの文字は14文字、ボタンのラベルは20文字まで）
+    expect(def.chatBarText.length).toBeLessThanOrEqual(14);
+    expect(def.areas.every((a) => a.action.label.length <= 20)).toBe(true);
   });
 });
 
