@@ -35,11 +35,20 @@ interface AppState {
   /** 練習の一覧。起動時にまとめて取ったもの（前回の表示のときは practicesAt が 0） */
   practices: PracticeView[] | null;
   practicesAt: number;
+  /** 起動時のまとめ取得に失敗した（practicesAt が 0 のまま最新が来ない） */
+  startupFailed: boolean;
   /** 一覧を置き換える。fresh なら「今取った最新」として扱う（一覧に戻っても取り直さない） */
   setPractices(list: PracticeView[], fresh?: boolean): void;
   /** 1件だけ差し替える（出欠や修正の結果をすぐ一覧に反映する） */
   updatePractice(v: PracticeView, opts?: { revert?: boolean }): void;
+  /** 練習を削除する（すぐ一覧から消し、失敗したら戻す）。消せたら true */
+  deletePractice(v: PracticeView): Promise<boolean>;
+  /** 起動時と同じまとめ取得をやり直す（グループのカードから開いたときは、そのグループのメンバーとしても覚えてもらう） */
+  loadHome(): Promise<void>;
 }
+
+/** 一覧を取ってからこの時間内なら、最新とみなして取り直さない */
+export const FRESH_MS = 60_000;
 
 export const AppContext = createContext<AppState>(null as unknown as AppState);
 export const useApp = () => useContext(AppContext);

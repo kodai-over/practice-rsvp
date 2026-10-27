@@ -10,10 +10,8 @@ import { Icon, Spinner, Stub, TopBar, go, place, useApp, useRunner } from '../ui
  * 左にスワイプすると削除が出る。右上の＋から登録する
  */
 export function RecruitListPage() {
-  const { me, practices, setPractices } = useApp();
+  const { me, practices, setPractices, deletePractice } = useApp();
   const [run] = useRunner();
-  // 削除は裏の一覧取得と分ける（取得中もスワイプした削除を押せるように）
-  const [runDelete, deleting] = useRunner();
   const [fresh, setFresh] = useState(false);
   // 削除ボタンを出しているチケット（一度に1枚だけ）
   const [opened, setOpened] = useState<string | null>(null);
@@ -30,11 +28,10 @@ export function RecruitListPage() {
   // 直せる練習（自分が登録した練習。管理者はすべて）。サーバーの判定（canEdit）にそろえる
   const list = practices == null && !fresh ? null : (practices ?? []).filter((v) => v.canEdit);
 
-  const remove = async (v: PracticeView) => {
-    if (!confirm(deleteMessage(v))) return setOpened(null);
-    const r = await runDelete(() => api('deletePractice', { id: v.practice.id }), '削除しました');
-    if (r) setPractices(r, true);
+  // 確認したら、サーバーの返事を待たずに一覧から消す（失敗したらその練習だけ元に戻す）
+  const remove = (v: PracticeView) => {
     setOpened(null);
+    if (confirm(deleteMessage(v))) deletePractice(v);
   };
 
   return (
@@ -62,7 +59,6 @@ export function RecruitListPage() {
             anyOpen={opened != null}
             onOpen={(o) => setOpened(o ? v.practice.id : null)}
             onDelete={() => remove(v)}
-            busy={deleting}
           >
             <RecruitTicket v={v} showBooker={admin && v.practice.booker !== me.member.userId} />
           </SwipeRow>
@@ -117,7 +113,6 @@ function SwipeRow({
   anyOpen,
   onOpen,
   onDelete,
-  busy,
   children,
 }: {
   open: boolean;
@@ -125,7 +120,6 @@ function SwipeRow({
   anyOpen: boolean;
   onOpen: (open: boolean) => void;
   onDelete: () => void;
-  busy: boolean;
   children: ComponentChildren;
 }) {
   const [dx, setDx] = useState<number | null>(null);
@@ -140,7 +134,7 @@ function SwipeRow({
 
   return (
     <div class={`swipe${open ? ' open' : ''}${dx != null ? ' dragging' : ''}`}>
-      <button class="swipe-delete" tabIndex={open ? 0 : -1} aria-hidden={!open} disabled={busy} onClick={onDelete}>
+      <button class="swipe-delete" tabIndex={open ? 0 : -1} aria-hidden={!open} onClick={onDelete}>
         <Icon name="trash" size={20} />
         削除
       </button>
@@ -160,7 +154,13 @@ function SwipeRow({
           if (d.mode === 'wait') {
             if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
             d.mode = Math.abs(mx) > Math.abs(my) ? 'swipe' : 'scroll';
-            if (d.mode === 'swipe') e.currentTarget.setPointerCapture(e.pointerId);
+            if (d.mode === 'swipe') {
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                /* 取れなくても、この行の上で動かしている間はスワイプできる */
+              }
+            }
           }
           if (d.mode === 'swipe') {
             swiped.current = true;

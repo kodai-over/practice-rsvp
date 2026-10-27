@@ -832,6 +832,14 @@ describe('見える練習', () => {
     handleApi(t.ctx, { userId: 'UE' }, 'openedFromGroup', { group: G1, key: key1 });
     expect(t.store.getMember('UE')?.groups).toEqual([G1]);
     expect(ids('UE')).toContain(p.id);
+    // 起動時のまとめ取得（home）にグループと合言葉を付けると、覚えてから一覧を返す（問い合わせ1回で見える）
+    member('UF', []);
+    const home = handleApi(t.ctx, { userId: 'UF' }, 'home', { group: G1, key: key1 }) as any;
+    expect(t.store.getMember('UF')?.groups).toEqual([G1]);
+    expect(home.practices.map((v: any) => v.practice.id)).toContain(p.id);
+    member('UG', []);
+    handleApi(t.ctx, { userId: 'UG' }, 'home', { group: G1, key: 'wrong' });
+    expect(t.store.getMember('UG')?.groups).toEqual([]);
     // 2回目以降も同じ合言葉を使う
     handleApi(t.ctx, { userId: BOOKER }, 'recruitPractice', { id: p.id, groups: [G2] });
     expect(t.store.s.groups.find((g) => g.id === G1)!.key).toBe(key1);

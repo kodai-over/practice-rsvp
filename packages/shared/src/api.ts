@@ -112,7 +112,8 @@ export interface HomeView {
 export interface ApiActions {
   me: { params: Record<string, never>; result: MeView };
   /** 起動時に1回で取る（自分の情報と今後の練習の一覧） */
-  home: { params: Record<string, never>; result: HomeView };
+  /** group と key は、グループのカードから開いたとき（先にそのグループのメンバーとして覚えてから一覧を返す） */
+  home: { params: { group?: string; key?: string }; result: HomeView };
   listPractices: { params: Record<string, never>; result: PracticeView[] };
   getPractice: { params: { id: string }; result: PracticeView };
   /** グループのカードから開いたとき。グループの合言葉が合えば、開いた人をそのグループのメンバーとして覚える */

@@ -27,6 +27,12 @@ function cellToString(header: string, v: unknown): string {
   return v == null ? '' : String(v);
 }
 
+/** 表の写しの置き場（CacheService）。表示のための読み取りでシートを読まずに済ませる */
+export interface Snapshots {
+  get(name: string): string | null;
+  put(name: string, json: string): void;
+}
+
 /** 1枚のシートを「見出し名→値」の行として読み書きする */
 class Table {
   private cache: { headers: string[]; rows: Row[] } | null = null;
@@ -35,6 +41,7 @@ class Table {
     private readonly ss: GoogleAppsScript.Spreadsheet.Spreadsheet,
     private readonly name: string,
     private readonly headers: readonly string[],
+    private readonly snaps?: Snapshots,
   ) {}
 
   /** シートがなければ見出し付きで作る（後から追加したシートも setupSheets なしで使えるように） */
@@ -54,6 +61,16 @@ class Table {
 
   private load() {
     if (this.cache) return this.cache;
+    const snap = this.snaps?.get(this.name);
+    if (snap) {
+      try {
+        const parsed = JSON.parse(snap) as { headers: string[]; rows: Row[] };
+        // 足した列がある写し（古い版のもの）は使わない
+        if (this.headers.every((h) => parsed.headers.includes(h))) return (this.cache = parsed);
+      } catch {
+        /* 壊れていればシートから読む */
+      }
+    }
     const sh = this.sheet();
     const values = sh.getDataRange().getValues();
     const headers = (values[0] ?? []).map((h) => String(h).trim());
@@ -74,6 +91,7 @@ class Table {
       return r;
     });
     this.cache = { headers, rows };
+    this.snaps?.put(this.name, JSON.stringify(this.cache));
     return this.cache;
   }
 
@@ -100,14 +118,18 @@ class Table {
     }
   }
 
+  /** 続いている行はまとめて消す（1行ずつ消すと、行の数だけ時間がかかる） */
   delete(match: (r: Row) => boolean) {
     const cache = this.load();
     const sh = this.sheet();
+    const hit = cache.rows.map(match);
     for (let i = cache.rows.length - 1; i >= 0; i--) {
-      if (match(cache.rows[i])) {
-        sh.deleteRow(i + 2);
-        cache.rows.splice(i, 1);
-      }
+      if (!hit[i]) continue;
+      let start = i;
+      while (start > 0 && hit[start - 1]) start--;
+      sh.deleteRows(start + 2, i - start + 1);
+      cache.rows.splice(start, i - start + 1);
+      i = start;
     }
   }
 
@@ -125,13 +147,13 @@ class Table {
 export class SheetStore implements Store {
   private readonly t: Record<keyof typeof SHEETS, Table>;
 
-  constructor(ss: GoogleAppsScript.Spreadsheet.Spreadsheet) {
+  constructor(ss: GoogleAppsScript.Spreadsheet.Spreadsheet, snaps?: Snapshots) {
     this.t = {
-      practices: new Table(ss, SHEETS.practices.name, SHEETS.practices.headers),
-      attendance: new Table(ss, SHEETS.attendance.name, SHEETS.attendance.headers),
-      members: new Table(ss, SHEETS.members.name, SHEETS.members.headers),
-      settings: new Table(ss, SHEETS.settings.name, SHEETS.settings.headers),
-      feedback: new Table(ss, SHEETS.feedback.name, SHEETS.feedback.headers),
+      practices: new Table(ss, SHEETS.practices.name, SHEETS.practices.headers, snaps),
+      attendance: new Table(ss, SHEETS.attendance.name, SHEETS.attendance.headers, snaps),
+      members: new Table(ss, SHEETS.members.name, SHEETS.members.headers, snaps),
+      settings: new Table(ss, SHEETS.settings.name, SHEETS.settings.headers, snaps),
+      feedback: new Table(ss, SHEETS.feedback.name, SHEETS.feedback.headers, snaps),
     };
   }
 

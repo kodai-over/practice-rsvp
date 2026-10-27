@@ -52,9 +52,28 @@ function App() {
   const [me, setMe] = useState<MeView | null>(cached?.me ?? null);
   const [practices, setPracticesState] = useState<{ list: PracticeView[]; at: number } | null>(cached ? { list: cached.practices, at: 0 } : null);
   const [error, setError] = useState<string | null>(null);
+  const [startupFailed, setStartupFailed] = useState(false);
   const [toast, toastNode] = useToast();
   // 起動中に出欠などで差し替えた練習。あとから届いた起動時の一覧（それより前の状態）で戻さない
   const touched = useRef<Set<string> | null>(new Set());
+  // 削除した（している）練習。あとから届いた一覧（削除より前に読んだもの）で戻さない
+  const removed = useRef(new Set<string>());
+  const clean = (list: PracticeView[]) => list.filter((v) => !removed.current.has(v.practice.id));
+  // グループのカードから開いたときのグループと合言葉（読み込み直すときも、そのグループのメンバーとして覚えてもらう）
+  const entry = useRef<{ group?: string; key?: string }>({});
+
+  /** 起動時と同じまとめ取得。起動中に差し替えた練習は、取得の結果で戻さない */
+  const loadHome = async () => {
+    const home = await api('home', entry.current);
+    setMe(home.me);
+    setPracticesState((cur) => {
+      const keep = touched.current;
+      touched.current = null;
+      const list = home.practices.map((v) => (keep?.has(v.practice.id) ? (cur?.list.find((x) => x.practice.id === v.practice.id) ?? v) : v));
+      return { list: clean(list), at: Date.now() };
+    });
+    saveCache(home);
+  };
 
   useEffect(() => {
     (async () => {
@@ -70,7 +89,7 @@ function App() {
       // グループのカードから開いたときは、先にそのグループのメンバーとして覚えてもらう（でないと練習が見えない）
       const group = params.get('g');
       const key = params.get('k');
-      if (group && key) await api('openedFromGroup', { group, key }).catch(() => null);
+      if (group && key) entry.current = { group, key };
       const views: Record<string, string> = { register: '/register', recruit: '/recruit', mine: '/?tab=mine', feedback: '/feedback' };
       const view = views[params.get('view') ?? ''];
       const hash = answers.length
@@ -86,24 +105,53 @@ function App() {
         history.replaceState(null, '', `${location.pathname}#${hash}`);
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       }
-      const home = await api('home');
-      setMe(home.me);
-      setPracticesState((cur) => {
-        const keep = touched.current;
-        touched.current = null;
-        const list = home.practices.map((v) => (keep?.has(v.practice.id) ? (cur?.list.find((x) => x.practice.id === v.practice.id) ?? v) : v));
-        return { list, at: Date.now() };
-      });
-      saveCache(home);
+      // グループのカードから開いたときは、そのグループのメンバーとして覚えてから一覧を返してもらう（問い合わせは1回だけ）
+      await loadHome();
     })().catch((e) => {
       const msg = e instanceof Error ? e.message : String(e);
+      setStartupFailed(true);
       if (cached) toast(msg, true);
       else setError(msg);
     });
   }, []);
 
-  const setPractices = (list: PracticeView[], fresh = false) => setPracticesState((cur) => ({ list, at: fresh ? Date.now() : cur?.at || Date.now() }));
+  // fresh でないときは取った時刻を変えない（前回の表示を「最新」と取り違えないように）
+  const setPractices = (list: PracticeView[], fresh = false) => setPracticesState((cur) => ({ list: clean(list), at: fresh ? Date.now() : (cur?.at ?? 0) }));
+
+  /** 確認したらすぐ一覧から消し、サーバーの返事は裏で待つ。失敗したらその練習だけ元に戻す */
+  const deletePractice = async (v: PracticeView): Promise<boolean> => {
+    const id = v.practice.id;
+    removed.current.add(id);
+    setPracticesState((cur) => cur && { ...cur, list: cur.list.filter((x) => x.practice.id !== id) });
+    try {
+      setPractices(await api('deletePractice', { id }), true);
+      toast('削除しました');
+      return true;
+    } catch (e) {
+      // 返事が届かなかっただけで、消えているかもしれない。取り直して、まだあるときだけ戻す
+      let still: PracticeView = v;
+      try {
+        still = await api('getPractice', { id });
+      } catch (e2) {
+        // 「見つかりません」なら消えている。通信できなかったときは、押した時点の内容で戻す
+        if (e2 instanceof Error && e2.message.includes('見つかりません')) {
+          toast('削除しました');
+          return true;
+        }
+      }
+      removed.current.delete(id);
+      const order = (x: PracticeView) => x.practice.date + x.practice.start;
+      const back = still;
+      setPracticesState((cur) =>
+        cur && !cur.list.some((x) => x.practice.id === id) ? { ...cur, list: [...cur.list, back].sort((a, b) => order(a).localeCompare(order(b))) } : cur,
+      );
+      toast(`削除できませんでした（${e instanceof Error ? e.message : String(e)}）`, true);
+      return false;
+    }
+  };
   const updatePractice = (v: PracticeView, { revert = false } = {}) => {
+    // 削除した練習は、あとから届いた結果（取り直し・出欠）で戻さない
+    if (removed.current.has(v.practice.id)) return;
     // 失敗して元に戻したときは、起動時の一覧の最新の内容を入れてよい
     if (revert) touched.current?.delete(v.practice.id);
     else touched.current?.add(v.practice.id);
@@ -119,7 +167,7 @@ function App() {
       {error ? (
         <div class="empty">{error}</div>
       ) : me ? (
-        <AppContext.Provider value={{ me, setMe, toast, practices: practices?.list ?? null, practicesAt: practices?.at ?? 0, setPractices, updatePractice }}>
+        <AppContext.Provider value={{ me, setMe, toast, practices: practices?.list ?? null, practicesAt: practices?.at ?? 0, startupFailed, setPractices, updatePractice, deletePractice, loadHome }}>
           {me.actAs && me.actAs !== 'self' && (
             <button class="acting-banner" onClick={() => go('/settings')}>
               {me.actAs === 'member' ? '一般メンバーとして表示中' : '確認用の予約者「admin」として操作中'}（「自分」で戻せます）
