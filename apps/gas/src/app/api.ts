@@ -30,7 +30,7 @@ import {
   type StudioDef,
 } from '@studio-attendance/shared';
 import { UserError, type Ctx, type RawReservation } from './ports';
-import { buildDraft, createPractices, ensureMember, loadDraft, noteGroupMember, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
+import { buildDraft, createPractices, ensureMember, inGroupKey, loadDraft, noteGroupMember, readReservations, recordAnswer, refreshStatus, removeDraft, sendRecruit } from './practices';
 
 type Handler<A extends ApiAction> = (ctx: Ctx, me: Member, params: ApiActions[A]['params']) => ApiActions[A]['result'];
 
@@ -78,7 +78,7 @@ export function practiceView(ctx: Ctx, p: Practice, me: Member | null, att?: Att
     myAnswer: me ? (mine.find((a) => a.participant === me.userId)?.answer ?? null) : null,
     canEdit,
     joinUrl: me && isActive(p) ? appLink(ctx.config.joinPageUrl, { p: p.id, k: joinKey }) : null,
-    icsUrl: appLink(ctx.config.gasUrl, { action: 'ics', id: p.id }),
+    icsUrl: appLink(ctx.config.gasUrl, { action: 'ics', id: p.id, k: joinKey }),
     googleCalendarUrl: googleCalendarUrl(p, detailUrl),
   };
 }
@@ -141,12 +141,15 @@ const cleanName = (s: unknown, max = 30) => {
   return name;
 };
 
+/** アプリに渡す設定。グループの合言葉は渡さない */
+const publicSettings = (s: Settings): Settings => ({ ...s, groups: s.groups.map(({ id, name }) => ({ id, name })) });
+
 // ---------------------------------------------------------------- 各操作
 
 const handlers: { [A in ApiAction]: Handler<A> } = {
   me(ctx, me) {
-    const s = ctx.store.settings();
-    return { member: me, groups: s.groups, settings: s };
+    const pub = publicSettings(ctx.store.settings());
+    return { member: me, groups: pub.groups, settings: pub };
   },
 
   home(ctx, me) {
@@ -167,12 +170,10 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     return view(ctx, id, me);
   },
 
-  openedFromGroup(ctx, me, { id, group, key }) {
-    const p = ctx.store.getPractice(id);
-    // 合言葉は募集カードと参加リンクにしか出ないので、合っていればそのグループのカードから開いたとみなす
-    if (p && typeof key === 'string' && key && key === p.joinKey && typeof group === 'string' && p.groups.includes(group)) {
-      noteGroupMember(ctx, group, me.userId);
-    }
+  openedFromGroup(ctx, me, { group, key }) {
+    const g = ctx.store.settings().groups.find((x) => x.id === group);
+    // グループの合言葉はそのグループに送ったカードにしか出ないので、合っていればそのグループのカードから開いたとみなす
+    if (g?.key && typeof key === 'string' && key === g.key) noteGroupMember(ctx, g.id, me.userId);
     return null;
   },
 
@@ -205,7 +206,8 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       ctx.store.deleteAttendance(id, participant);
       refreshStatus(ctx, p);
     });
-    return view(ctx, id, me);
+    // 自分の出欠を消して見えなくなっても、いま開いている画面には結果を返す
+    return practiceView(ctx, getPracticeOrThrow(ctx, id), me);
   },
 
   appendMemo(ctx, me, { id, text }) {
@@ -327,7 +329,12 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       const ids = new Set(ctx.store.settings().groups.map((g) => g.id));
       if (patch.defaultGroups !== undefined) next.defaultGroups = patch.defaultGroups.filter((g) => ids.has(g));
       // 今は無いグループの記録は残す（招待し直したときに、また見えるように）
-      if (patch.groups !== undefined) next.groups = [...new Set([...patch.groups.filter((g) => ids.has(g)), ...m.groups.filter((g) => !ids.has(g))])];
+      if (patch.groups !== undefined) {
+        if (!Array.isArray(patch.groups)) throw new UserError('グループの指定が不正です');
+        next.groups = [...new Set([...patch.groups.filter((g) => ids.has(g)), ...m.groups.filter((g) => !ids.has(g))])];
+        // 外したグループは、覚え済みの目印も消す（発言やボタンで、すぐまた付けられるように）
+        for (const g of m.groups.filter((x) => !next.groups.includes(x))) ctx.kv.remove(inGroupKey(g, userId));
+      }
       ctx.store.saveMember(next);
       return next;
     });
@@ -399,7 +406,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
         roundUnit: positiveOrNull(params.roundUnit) ?? s.roundUnit,
       };
       ctx.store.saveSettings(next);
-      return next;
+      return publicSettings(next);
     });
   },
 };

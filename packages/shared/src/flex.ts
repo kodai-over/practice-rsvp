@@ -17,12 +17,18 @@ export function appLink(appUrl: string, params: Record<string, string>): string 
   return q ? `${appUrl}${appUrl.includes('?') ? '&' : '?'}${q}` : appUrl;
 }
 
+/** カードを送るグループと、そのグループの合言葉 */
+export interface LinkGroup {
+  id: string;
+  key: string;
+}
+
 /**
- * グループに送るカードから練習を開くリンク。どのグループから開いたかと練習の合言葉を付け、
+ * グループに送るカードから練習を開くリンク。グループIDとそのグループの合言葉を付け、
  * 開いた人をそのグループのメンバーとして覚えられるようにする（group が無ければ練習IDだけ）
  */
-export function practiceLink(appUrl: string, p: Pick<Practice, 'id' | 'joinKey'>, group?: string, extra: Record<string, string> = {}): string {
-  return appLink(appUrl, group ? { p: p.id, ...extra, g: group, k: p.joinKey } : { p: p.id, ...extra });
+export function practiceLink(appUrl: string, p: Pick<Practice, 'id'>, group?: LinkGroup, extra: Record<string, string> = {}): string {
+  return appLink(appUrl, group?.key ? { p: p.id, ...extra, g: group.id, k: group.key } : { p: p.id, ...extra });
 }
 
 export function encodePostback(params: Record<string, string>): string {
@@ -168,7 +174,7 @@ export interface RecruitInput {
   roomInfo?: string | null;
 }
 
-function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appUrl: string, group?: string): Node {
+function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appUrl: string, group?: LinkGroup): Node {
   const d = shortDate(p.date);
   return {
     type: 'bubble',
@@ -238,7 +244,7 @@ function recruitBubble({ practice: p, bookerName, roomInfo }: RecruitInput, appU
 }
 
 /** 1回の登録につき1メッセージ（カルーセルは12枚まで。超えたら複数メッセージに分ける）。group は送り先のグループ */
-export function recruitMessages(items: RecruitInput[], appUrl: string, group?: string): LineMessage[] {
+export function recruitMessages(items: RecruitInput[], appUrl: string, group?: LinkGroup): LineMessage[] {
   const messages: LineMessage[] = [];
   for (let i = 0; i < items.length; i += 12) {
     const chunk = items.slice(i, i + 12);
@@ -260,7 +266,7 @@ export interface ListItem {
 }
 
 /** group はグループでの「練習」への応答のときのグループ */
-export function practiceListMessage(items: ListItem[], appUrl: string, group?: string): LineMessage {
+export function practiceListMessage(items: ListItem[], appUrl: string, group?: LinkGroup): LineMessage {
   if (items.length === 0) {
     return { type: 'text', text: `今後の練習はまだありません。\n${appUrl}` };
   }

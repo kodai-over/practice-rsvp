@@ -73,6 +73,11 @@ export interface CancelRule {
 export interface Group {
   id: string;
   name: string;
+  /**
+   * そのグループに送ったカードのリンクに付ける合言葉。開いた人をそのグループのメンバーとして覚えるのに使う。
+   * サーバーの中だけで使い、アプリには渡さない
+   */
+  key?: string;
 }
 
 /** 部屋。size は広さなどの補足（例: 46.5㎡・天井2.3m） */

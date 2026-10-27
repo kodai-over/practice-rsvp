@@ -62,7 +62,7 @@ function App() {
       // グループのカードから開いたときは、先にそのグループのメンバーとして覚えてもらう（でないと練習が見えない）
       const group = params.get('g');
       const key = params.get('k');
-      if (p && group && key) await api('openedFromGroup', { id: p, group, key }).catch(() => null);
+      if (group && key) await api('openedFromGroup', { group, key }).catch(() => null);
       const views: Record<string, string> = { register: '/register', recruit: '/recruit', mine: '/?tab=mine', feedback: '/feedback' };
       const view = views[params.get('view') ?? ''];
       const hash = p

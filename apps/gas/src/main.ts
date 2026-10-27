@@ -6,6 +6,7 @@ import type { Ctx, Kv } from './app/ports';
 import { richMenuDefinition } from './app/richmenu';
 import { route } from './app/router';
 import { INITIAL_SETTINGS, SHEETS, settingsToRows, toCell } from './app/schema';
+import { backfillGroupMembers as runBackfill } from './app/practices';
 import { hourlyJob as runHourly } from './app/triggers';
 import { makeVerifiers } from './gas/auth';
 import { DEFAULT_GEMINI_MODEL, GeminiReader } from './gas/gemini';
@@ -78,7 +79,8 @@ export function doGet(e: GoogleAppsScript.Events.DoGet) {
   if (e.parameter.action === 'ics' && e.parameter.id) {
     const ctx = makeCtx();
     const p = ctx.store.getPractice(e.parameter.id);
-    if (p) {
+    // 練習IDは推測できるので、合言葉が合うときだけ返す
+    if (p && p.joinKey && e.parameter.k === p.joinKey) {
       return ContentService.createTextOutput(buildIcs(p, appLink(ctx.config.appUrl, { p: p.id }), new Date()))
         .setMimeType(ContentService.MimeType.ICAL)
         .downloadAsFile('practice.ics');
@@ -112,6 +114,11 @@ export function setupSheets() {
   }
   const first = ss.getSheetByName('シート1') ?? ss.getSheetByName('Sheet1');
   if (first && ss.getSheets().length > 1 && first.getLastRow() === 0) ss.deleteSheet(first);
+}
+
+/** 練習が見える範囲を入れたときに一度だけ実行：今いるメンバーの所属グループを、これまでの出欠から埋める */
+export function backfillGroupMembers() {
+  console.log(`所属グループを付けた人数: ${runBackfill(makeCtx())}`);
 }
 
 /** 初回だけ実行：毎時のトリガー（キャンセル期限前警告・終了処理）を作る */

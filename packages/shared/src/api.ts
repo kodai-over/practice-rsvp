@@ -96,8 +96,8 @@ export interface ApiActions {
   home: { params: Record<string, never>; result: HomeView };
   listPractices: { params: Record<string, never>; result: PracticeView[] };
   getPractice: { params: { id: string }; result: PracticeView };
-  /** グループのカードから開いたとき。合言葉が合えば、開いた人をそのグループのメンバーとして覚える */
-  openedFromGroup: { params: { id: string; group: string; key: string }; result: null };
+  /** グループのカードから開いたとき。グループの合言葉が合えば、開いた人をそのグループのメンバーとして覚える */
+  openedFromGroup: { params: { group: string; key: string }; result: null };
   rsvp: { params: { id: string; answer: Answer }; result: PracticeView };
   addGuest: { params: { id: string; name: string }; result: PracticeView };
   removeAttendance: { params: { id: string; participant: string }; result: PracticeView };

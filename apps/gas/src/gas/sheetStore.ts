@@ -58,7 +58,8 @@ class Table {
     const values = sh.getDataRange().getValues();
     const headers = (values[0] ?? []).map((h) => String(h).trim());
     // 後から足した列が今のシートに無ければ、右端に見出しを足す（無いままだと、その列の値が書かれずに消える）
-    const missing = headers.length ? this.headers.filter((h) => !headers.includes(h)) : [];
+    // 見出しが1つも無いシート（中身を全部消した場合など）は触らない
+    const missing = headers.some(Boolean) ? this.headers.filter((h) => !headers.includes(h)) : [];
     if (missing.length) {
       const col = headers.length + 1;
       const lack = col + missing.length - 1 - sh.getMaxColumns();

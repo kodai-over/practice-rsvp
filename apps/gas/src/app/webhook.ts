@@ -20,6 +20,7 @@ import {
   createPractices,
   ensureMember,
   forgetGroupMember,
+  groupLink,
   loadDraft,
   noteGroupMember,
   readReservations,
@@ -81,14 +82,23 @@ function handleEvent(ctx: Ctx, ev: LineEvent): void {
     case 'leave':
       return onLeave(ctx, ev);
     case 'memberJoined':
-      for (const u of ev.joined?.members ?? []) if (u.userId) noteGroupMember(ctx, chatId(ev.source), u.userId);
-      return;
+      return eachUser(ctx, ev.joined?.members, (u) => noteGroupMember(ctx, chatId(ev.source), u));
     case 'memberLeft':
-      for (const u of ev.left?.members ?? []) if (u.userId) forgetGroupMember(ctx, chatId(ev.source), u.userId);
-      return;
+      return eachUser(ctx, ev.left?.members, (u) => forgetGroupMember(ctx, chatId(ev.source), u));
     case 'follow':
       if (ev.source.userId) ensureMember(ctx, ev.source.userId);
       return;
+  }
+}
+
+/** 1人で失敗しても、残りの人は処理する */
+function eachUser(ctx: Ctx, members: { userId?: string }[] | undefined, fn: (userId: string) => void): void {
+  for (const u of members ?? []) {
+    try {
+      if (u.userId) fn(u.userId);
+    } catch (e) {
+      ctx.log('group member update failed', u.userId, e);
+    }
   }
 }
 
@@ -118,7 +128,7 @@ function onText(ctx: Ctx, ev: LineEvent): void {
     const involved = (id: string) => att.some((a) => a.practiceId === id && (a.participant === me?.userId || a.addedBy === me?.userId));
     const practices = upcoming(ctx, groupId).filter((p) => groupId || canSeePractice(me, p, involved(p.id)));
     const items = practices.map((practice) => ({ practice, going: goingList(att, practice.id).length }));
-    safeReply(ctx, ev, [practiceListMessage(items, ctx.config.appUrl, groupId)]);
+    safeReply(ctx, ev, [practiceListMessage(items, ctx.config.appUrl, groupId ? (groupLink(ctx, groupId) ?? undefined) : undefined)]);
     return;
   }
   // グループでの会話には反応しない。個別トークで予約内容らしい文章が来たら読み取る
@@ -317,7 +327,7 @@ function onJoin(ctx: Ctx, ev: LineEvent): void {
   ctx.withLock(() => {
     const s = ctx.store.settings();
     if (!s.groups.some((g) => g.id === id)) {
-      s.groups.push({ id, name: name || `グループ${s.groups.length + 1}` });
+      s.groups.push({ id, name: name || `グループ${s.groups.length + 1}`, key: ctx.uuid() });
       ctx.store.saveSettings(s);
     }
   });

@@ -163,7 +163,7 @@ export function feedbackToRow(f: Feedback): Row {
  * 設定シートは1行1項目。
  *   標準料金     | スタジオ | 部屋（空欄=全部屋） | 30分あたりの金額。曜日・時間帯を付けられる（例「平日 17:00-23:30 1300」）
  *   キャンセル期限 | スタジオ | 何日前             | 警告時刻
- *   グループ     | グループID |                   | 表示名
+ *   グループ     | グループID | カードのリンクの合言葉 | 表示名
  *   共通        | 最低人数標準 / 切り上げ単位 |      | 値
  */
 export function rowsToSettings(rows: Row[]): Settings {
@@ -182,7 +182,7 @@ export function rowsToSettings(rows: Row[]): Settings {
       if (f) s.fees.push({ studio: k1, room: k2, ...f });
     }
     else if (kind === 'キャンセル期限' && k1) s.cancelRules.push({ studio: k1, daysBefore: Number(k2) || 0, time: v || '10:00' });
-    else if (kind === 'グループ' && k1) s.groups.push({ id: k1, name: v || k1 });
+    else if (kind === 'グループ' && k1) s.groups.push({ id: k1, name: v || k1, ...(k2 ? { key: k2 } : {}) });
     else if (kind === '共通' && k1 === '最低人数標準') s.minDefault = Number(v) || s.minDefault;
     else if (kind === '共通' && k1 === '切り上げ単位') s.roundUnit = Number(v) || s.roundUnit;
   }
@@ -208,7 +208,7 @@ export function settingsToRows(s: Settings): Row[] {
     ]),
     ...s.fees.map((f) => ({ 種別: '標準料金', キー1: f.studio, キー2: f.room, 値: formatFeeValue(f) })),
     ...s.cancelRules.map((c) => ({ 種別: 'キャンセル期限', キー1: c.studio, キー2: String(c.daysBefore), 値: c.time })),
-    ...s.groups.map((g) => ({ 種別: 'グループ', キー1: g.id, キー2: '', 値: g.name })),
+    ...s.groups.map((g) => ({ 種別: 'グループ', キー1: g.id, キー2: g.key ?? '', 値: g.name })),
   ];
 }
 
