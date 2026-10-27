@@ -255,10 +255,15 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
     // 先に全件を分類し、送り先がないまま一部だけ登録されることを防ぐ
     const plan = normalized.map(({ input, r }) => {
       let [item] = classifyFor(practices, booker, [r]);
-      // 同じ登録内で続く予約（19-21時と21-22時など）は1つの練習にまとめる。ただし募集先が違えば別の練習にする
-      if (item.kind === 'extension' && batch.has(item.targetId!)) {
+      if (item.kind === 'extension') {
         const target = practices.find((p) => p.id === item.targetId)!;
-        if (!sameGroups(target.groups, groupsOf(input))) item = { reservation: item.reservation, kind: 'new' };
+        const mine = groupsOf(input);
+        // 同じ登録内で続く予約（19-21時と21-22時など）は1つの練習にまとめる。ただし募集先が違えば別の練習にする。
+        // 既存の練習に続く予約も、予約ごとに選んだ募集先がその練習にまだ送っていないグループなら、延長にせず別の練習として募集する
+        const separate = batch.has(item.targetId!)
+          ? !sameGroups(target.groups, mine)
+          : Array.isArray(input.groups) && mine.some((g) => !target.groups.includes(g));
+        if (separate) item = { reservation: item.reservation, kind: 'new' };
       }
       if (item.kind === 'new') {
         // 続く予約を延長として扱えるよう、仮に積んでおく

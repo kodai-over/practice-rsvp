@@ -963,6 +963,25 @@ describe('予約ごとの募集先', () => {
     expect(t.store.getPractice(res.created[0])).toMatchObject({ start: '20:00', end: '23:30', fee: 4000 });
   });
 
+  it('既存の練習に続く予約に、まだ送っていない募集先を選んだら、延長にせず別の練習として募集する', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: G2, name: 'チームB' });
+    const slot = (start: string, end: string, groups?: string[]) => ({ ...reservation, date: '2026-10-28', start, end, fee: 1000, max: null, min: null, memo: '', ...(groups ? { groups } : {}) });
+    const first = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [slot('18:00', '19:00', [G1])], groups: [] }) as any;
+    // 延長の部分（募集先なし）と、G2 を選んだ部分
+    const res = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [slot('19:00', '20:00', []), slot('20:00', '21:00', [G2])], groups: [] }) as any;
+    expect(res.extended).toEqual([first.created[0]]);
+    expect(res.created).toHaveLength(1);
+    expect(t.store.getPractice(res.created[0])).toMatchObject({ start: '20:00', end: '21:00', groups: [G2] });
+    expect(res.recruited).toEqual([G2]);
+    // すでに送ったグループを選んだだけなら延長
+    const res2 = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [slot('21:00', '22:00', [G2])], groups: [] }) as any;
+    expect(res2).toMatchObject({ created: [], extended: [res.created[0]] });
+    // 以前の確認カード（予約ごとの募集先なし）の延長は今までどおり
+    const res3 = handleApi(t.ctx, { userId: BOOKER }, 'createPractices', { items: [slot('22:00', '23:00')], groups: [G1] }) as any;
+    expect(res3).toMatchObject({ created: [], extended: [res.created[0]] });
+  });
+
   it('まとめた予約の料金が読めなくても、分け直す前後どちらにも標準料金が入る。古い下書き（parts なし）も開ける', () => {
     const t = setup();
     t.reader.result = [

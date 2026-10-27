@@ -139,7 +139,9 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
     ? []
     : canRecruit
       ? [text('「登録して募集」ではアプリが開き、内容を確かめて予約ごとに募集先を選べます。', { size: 'xs', color: GRAY })]
-      : [text('グループへの募集は、登録したあとアプリの練習画面からもできます。', { size: 'xs', color: GRAY })];
+      : groups.length > 0
+        ? [text('グループへの募集は、登録したあとアプリの練習画面からもできます。', { size: 'xs', color: GRAY })]
+        : [];
 
   return {
     type: 'flex',

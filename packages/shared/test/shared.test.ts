@@ -352,6 +352,7 @@ describe('Flex Message', () => {
     // グループが無ければ登録だけ
     const none = JSON.stringify(confirmCard({ draft: { ...base, groups: [] }, groups: [], practices: [], appUrl }));
     expect(none).not.toContain('登録して募集');
+    expect(none).not.toContain('アプリの練習画面からも');
     expect(none).toContain('"label":"登録のみ"');
     // 読み取れない項目があれば、登録ボタンは出さず修正してもらう
     const incomplete = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'], incomplete: [{ date: '2026-10-23' }] }, groups: settings.groups, practices: [], appUrl }));

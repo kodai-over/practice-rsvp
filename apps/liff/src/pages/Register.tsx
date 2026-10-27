@@ -146,9 +146,13 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     setRows((rs) =>
       rs.map((r) => {
         if (r.key !== key) return r;
-        // 日時・場所・料金を変えたら、延長などの判定とまとめる前の予約（「分ける」）は使えないので外す。人数・メモだけなら残す
-        const structural = k === 'date' || k === 'start' || k === 'end' || k === 'room' || k === 'fee';
-        const next = structural ? { ...r, [k]: value, kind: r.kind === 'incomplete' ? ('incomplete' as const) : undefined, parts: undefined } : { ...r, [k]: value };
+        // 日時・場所を変えたら延長などの判定が変わるので外す。日時・場所・料金を変えたら、まとめる前の予約（「分ける」）も外す
+        const moved = k === 'date' || k === 'start' || k === 'end' || k === 'room';
+        const next = moved
+          ? { ...r, [k]: value, kind: r.kind === 'incomplete' ? ('incomplete' as const) : undefined, parts: undefined }
+          : k === 'fee'
+            ? { ...r, [k]: value, parts: undefined }
+            : { ...r, [k]: value };
         // 開始を変えたら、終了が開始の1時間後より前にならないようにそろえる
         if (k === 'start') next.end = endAfterStart(value, r.end);
         return k === 'fee' ? { ...next, feeAuto: false } : k === 'date' || k === 'start' || k === 'end' || k === 'room' ? autoFee(next) : next;
