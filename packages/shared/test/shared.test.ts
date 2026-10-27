@@ -210,7 +210,15 @@ describe('classifyReservations: 同じ登録内で続く予約', () => {
       { ...base, date: '2026-10-14', start: '19:00', end: '20:30', fee: 2400 },
     ], all);
     expect(items).toEqual([
-      { kind: 'new', reservation: { ...base, date: '2026-10-14', start: '19:00', end: '21:00', fee: 3200 } },
+      {
+        kind: 'new',
+        reservation: { ...base, date: '2026-10-14', start: '19:00', end: '21:00', fee: 3200 },
+        // まとめる前の予約も残す（アプリで分け直せるように）
+        parts: [
+          { ...base, date: '2026-10-14', start: '19:00', end: '20:30', fee: 2400 },
+          { ...base, date: '2026-10-14', start: '20:30', end: '21:00', fee: 800 },
+        ],
+      },
       { kind: 'new', reservation: { ...base, date: '2026-10-21', start: '19:30', end: '21:00', room: '202', fee: 3300 } },
     ]);
   });
@@ -220,7 +228,8 @@ describe('classifyReservations: 同じ登録内で続く予約', () => {
       { ...base, date: '2026-10-14', start: '20:00', end: '21:00', fee: 1000 },
       { ...base, date: '2026-10-14', start: '21:00', end: '22:00', fee: null },
     ], all);
-    expect(items).toEqual([{ kind: 'extension', targetId: existing.id, reservation: { ...base, date: '2026-10-14', start: '20:00', end: '22:00', fee: null } }]);
+    expect(items).toMatchObject([{ kind: 'extension', targetId: existing.id, reservation: { ...base, date: '2026-10-14', start: '20:00', end: '22:00', fee: null } }]);
+    expect(items[0].parts).toHaveLength(2);
   });
 });
 
@@ -234,7 +243,7 @@ describe('classifyReservations: 延長してよい練習を絞る', () => {
       { ...base, start: '20:00', end: '21:00', fee: 1000 },
       { ...base, start: '21:00', end: '22:00', fee: 1000 },
     ], canExtend);
-    expect(items).toEqual([{ kind: 'new', reservation: { ...base, start: '20:00', end: '22:00', fee: 2000 } }]);
+    expect(items).toMatchObject([{ kind: 'new', reservation: { ...base, start: '20:00', end: '22:00', fee: 2000 } }]);
   });
   it('延長できる練習とできない練習が混ざっても、それぞれ判定する', () => {
     const items = classifyReservations([mine, { ...others, start: '20:00', end: '21:00', id: makePracticeId({ ...base, start: '20:00' }) }], [
@@ -321,7 +330,7 @@ describe('Flex Message', () => {
     expect(json).not.toContain('広さ');
   });
 
-  it('確認カード: 「登録する」がメイン。ふだんの送り先があるときだけ「登録してグループに募集」も出す', () => {
+  it('確認カード: 「登録して募集」「登録のみ」「やめる」', () => {
     const base = {
       id: 'd1',
       booker: 'U1',
@@ -330,17 +339,25 @@ describe('Flex Message', () => {
       pastCount: 0,
       createdAt: '',
     };
-    const withGroup = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'] }, groups: settings.groups, practices: [], appUrl }));
-    expect(withGroup).toContain('"label":"登録する","data":"a=confirm&d=d1"');
-    expect(withGroup).toContain('"label":"登録してグループに募集","data":"a=confirm&d=d1&r=1"');
-    expect(withGroup).toContain('チームA');
-    const noGroup = JSON.stringify(confirmCard({ draft: { ...base, groups: [] }, groups: settings.groups, practices: [], appUrl }));
-    expect(noGroup).toContain('"label":"登録する"');
-    expect(noGroup).not.toContain('登録してグループに募集');
-    expect(noGroup).toContain(`${appUrl}?draft=d1`);
+    // 「登録して募集」はアプリを開き、内容を確かめて予約ごとに募集先を選ぶ
+    const one = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'] }, groups: settings.groups, practices: [], appUrl }));
+    expect(one).toContain(`"label":"登録して募集","uri":"${appUrl}?draft=d1&recruit=1"`);
+    expect(one).toContain('"label":"登録のみ","data":"a=confirm&d=d1"');
+    expect(one).toContain('"label":"やめる"');
+    expect(one).not.toContain('修正して登録');
+    // グループが2つ以上でも同じ
+    const two = JSON.stringify(confirmCard({ draft: { ...base, groups: [] }, groups: [...settings.groups, { id: 'G2', name: 'チームB' }], practices: [], appUrl }));
+    expect(two).toContain(`"label":"登録して募集","uri":"${appUrl}?draft=d1&recruit=1"`);
+    expect(two).toContain('"label":"登録のみ"');
+    // グループが無ければ登録だけ
+    const none = JSON.stringify(confirmCard({ draft: { ...base, groups: [] }, groups: [], practices: [], appUrl }));
+    expect(none).not.toContain('登録して募集');
+    expect(none).not.toContain('アプリの練習画面からも');
+    expect(none).toContain('"label":"登録のみ"');
     // 読み取れない項目があれば、登録ボタンは出さず修正してもらう
     const incomplete = JSON.stringify(confirmCard({ draft: { ...base, groups: ['G1'], incomplete: [{ date: '2026-10-23' }] }, groups: settings.groups, practices: [], appUrl }));
-    expect(incomplete).not.toContain('"label":"登録する"');
+    expect(incomplete).not.toContain('"label":"登録のみ"');
+    expect(incomplete).not.toContain('登録して募集');
     expect(incomplete).toContain('"label":"修正して登録"');
   });
 

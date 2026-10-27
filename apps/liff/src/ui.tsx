@@ -307,18 +307,12 @@ export function BusyOverlay({ message, note }: { message: string; note?: string 
   );
 }
 
-/** 金額。1人あたりが出ていればそれを、なければ合計を */
-export const Fee = ({ v }: { v: PracticeView }) =>
-  v.perPerson != null ? (
-    <span class="fee">
-      {yen(v.perPerson)}
-      <small>/人</small>
-    </span>
-  ) : (
-    <span class="fee">
-      <small>計</small>
-      {yen(v.practice.fee)}
-    </span>
-  );
+/** 一覧のチケットの金額。合計だけを出す（1人あたりは練習の画面で） */
+export const Fee = ({ v }: { v: PracticeView }) => (
+  <span class="fee">
+    <small>計</small>
+    {yen(v.practice.fee)}
+  </span>
+);
 
 export const place = (p: { studio: string; room: string }) => `${p.studio}${p.room ? ' ' + p.room : ''}`;

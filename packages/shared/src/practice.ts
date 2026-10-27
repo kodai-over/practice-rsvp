@@ -146,6 +146,7 @@ export function classifyReservations(
     );
     if (prev && prev.itemIndex != null) {
       const item = items[prev.itemIndex];
+      item.parts = [...(item.parts ?? [{ ...item.reservation }]), { ...r }];
       item.reservation = {
         ...item.reservation,
         end: r.end,

@@ -119,6 +119,8 @@ export interface DraftItem {
   kind: DraftItemKind;
   /** extension / duplicate のときの対象練習ID */
   targetId?: string;
+  /** 続けて取った予約を1つにまとめたときの、まとめる前の予約（アプリで分け直せるように） */
+  parts?: Reservation[];
 }
 
 export interface Draft {

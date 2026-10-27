@@ -3,7 +3,7 @@ import { endAfterStart, roomInfo, yen, type Answer, type PracticePatch, type Pra
 import { api } from '../api';
 import { RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';
-import { Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, go, useApp, useRunner } from '../ui';
+import { Avatar, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, go, useApp, useRunner } from '../ui';
 
 /** 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる） */
 export function usePractice(id: string) {
@@ -79,6 +79,8 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
 
       <RsvpButtons solo value={v.myAnswer} status={p.status} busy={busy} onAnswer={(a: Answer) => update(() => api('rsvp', { id, answer: a }))} />
 
+      <Attendees v={v} />
+
       <div class="sec-head" ref={calRef}>
         <Icon name="calendar" size={18} />
         カレンダー
@@ -106,6 +108,42 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
           }}
         />
       )}
+    </>
+  );
+}
+
+/** 参加メンバーの一覧。行く・保留・行かないの順に名前を出す */
+function Attendees({ v }: { v: PracticeView }) {
+  const lists = [
+    { label: '○ 行く', people: v.going },
+    { label: '△ 保留', people: v.maybe },
+    { label: '✕ 行かない', people: v.notGoing },
+  ];
+  return (
+    <>
+      <div class="sec-head">
+        <Icon name="people" size={18} />
+        参加メンバー
+        <span class="n">{v.going.length + v.maybe.length + v.notGoing.length}</span>
+      </div>
+      {lists.map(({ label, people }) =>
+        people.length === 0 ? null : (
+          <div key={label} style={{ marginBottom: 10 }}>
+            <div class="muted" style={{ marginBottom: 4 }}>
+              {label}（{people.length}）
+            </div>
+            <div class="people">
+              {people.map((a) => (
+                <span class="person" key={a.participant}>
+                  <Avatar name={a.name} guest={a.kind === 'ゲスト'} />
+                  <span>{a.name}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ),
+      )}
+      {v.going.length + v.maybe.length + v.notGoing.length === 0 && <div class="muted">まだ誰も答えていません</div>}
     </>
   );
 }

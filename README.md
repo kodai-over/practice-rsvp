@@ -2,7 +2,7 @@
 
 Studio Practice Attendance Manager（ダンス練習 自動募集システム）
 
-予約者がスタジオの予約画面のスクショをLINE Botに送り、「登録する」を押すだけで、
+予約者がスタジオの予約画面のスクショをLINE Botに送り、「登録のみ」か「登録して募集」を押すだけで、
 練習の登録・出欠・割り勘までをLINE上で進める仕組みです。グループへの募集は必要なときだけ流せます。Google（スプレッドシート・Apps Script・Gemini API）、
 LINE、Cloudflare Workers、GitHub Pages の無料枠で動きます。
 

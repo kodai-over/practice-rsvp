@@ -160,10 +160,7 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
   }
   // 続いている予約をまとめ、登録済みのものを除いてから、料金が読めなかったものに標準料金を入れる
   const classified = classifyFor(ctx.store.practices(), booker, complete);
-  const items = classified.filter((i) => i.kind !== 'duplicate').map((i) => ({
-    ...i,
-    reservation: { ...i.reservation, fee: i.reservation.fee ?? (defaultFee(settings, i.reservation) || null) },
-  }));
+  const items = classified.filter((i) => i.kind !== 'duplicate').map((i) => withDefaultFee(settings, i));
   return {
     id: ctx.uuid(),
     booker: booker.userId,
@@ -179,6 +176,15 @@ export function buildDraft(ctx: Ctx, booker: Member, raws: RawReservation[]): Dr
 /** 予約を分類する。延長するのは登録する人が予約した練習（管理者ならどの練習も）だけ */
 export function classifyFor(practices: Practice[], me: Member, reservations: Reservation[]): DraftItem[] {
   return classifyReservations(practices, reservations, (p) => canExtendPractice(me, p));
+}
+
+/** 料金を読み取れなかった予約に標準料金を入れる。まとめる前の予約（parts）にも入れ、分け直しても空にならないようにする */
+export function withDefaultFee<T extends { reservation: Reservation; parts?: Reservation[] }>(settings: Settings, item: T): T {
+  const fill = (r: Reservation): Reservation => ({ ...r, fee: r.fee ?? (defaultFee(settings, r) || null) });
+  const parts = item.parts?.map(fill);
+  // まとめた予約の料金は、まとめる前の料金の合計にそろえる
+  const fee = parts && parts.every((p) => p.fee != null) ? parts.reduce((n, p) => n + p.fee!, 0) : fill(item.reservation).fee;
+  return { ...item, reservation: { ...item.reservation, fee }, ...(parts ? { parts } : {}) };
 }
 
 /** ふだんの送り先。未設定でグループが1つしかなければ、そのグループにする */
@@ -243,30 +249,47 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
 
   ctx.withLock(() => {
     const practices = ctx.store.practices();
+    // この登録で作る練習のID
+    const batch = new Set<string>();
+    const sameGroups = (a: string[], b: string[]) => a.length === b.length && a.every((g) => b.includes(g));
     // 先に全件を分類し、送り先がないまま一部だけ登録されることを防ぐ
     const plan = normalized.map(({ input, r }) => {
-      const [item] = classifyFor(practices, booker, [r]);
-      if (item.kind === 'new') {
-        // 同じ登録内で続く予約（19-21時と21-22時など）も延長として扱えるよう、仮に積んでおく
-        practices.push({ ...draftPractice(ctx, booker, r, input, groupsOf(input)) });
+      let [item] = classifyFor(practices, booker, [r]);
+      if (item.kind === 'extension') {
+        const target = practices.find((p) => p.id === item.targetId)!;
+        const mine = groupsOf(input);
+        // 同じ登録内で続く予約（19-21時と21-22時など）は1つの練習にまとめる。ただし募集先が違えば別の練習にする。
+        // 既存の練習に続く予約も、予約ごとに選んだ募集先がその練習にまだ送っていないグループなら、延長にせず別の練習として募集する
+        const separate = batch.has(item.targetId!)
+          ? !sameGroups(target.groups, mine)
+          : Array.isArray(input.groups) && mine.some((g) => !target.groups.includes(g));
+        if (separate) item = { reservation: item.reservation, kind: 'new' };
       }
-      return { input, r, item };
-    });
-    for (const { input, r, item } of plan) {
-      if (item.kind === 'duplicate') {
-        result.skipped.push(item.targetId!);
+      if (item.kind === 'new') {
+        // 続く予約を延長として扱えるよう、仮に積んでおく
+        const d = draftPractice(ctx, booker, r, input, groupsOf(input));
+        practices.push(d);
+        batch.add(d.id);
       } else if (item.kind === 'extension') {
+        // その場で終了を伸ばし、さらに続く予約（3件目など）も同じ練習の延長と判定できるようにする
         const target = practices.find((p) => p.id === item.targetId)!;
         target.end = r.end;
         target.fee += r.fee;
-        // 同じ登録の中で1つの練習にまとめた予約は、それぞれで選んだ募集先をどれも送る
-        if (created.includes(target)) target.groups = [...new Set([...target.groups, ...groupsOf(input)])];
-        else {
-          ctx.store.savePractice(target);
-          result.extended.push(target.id);
+      }
+      return { input, r, item };
+    });
+    for (const { r, item } of plan) {
+      if (item.kind === 'duplicate') {
+        result.skipped.push(item.targetId!);
+      } else if (item.kind === 'extension') {
+        // この登録で作る練習の延長は、作るときに一緒に保存する
+        if (!batch.has(item.targetId!) && !result.extended.includes(item.targetId!)) {
+          ctx.store.savePractice(practices.find((p) => p.id === item.targetId)!);
+          result.extended.push(item.targetId!);
         }
       } else {
-        created.push(practices.find((p) => p.id === makePracticeId(r))!);
+        // 同じIDの中止した練習が残っていても、この登録で積んだ方（後ろ）を使う
+        created.push([...practices].reverse().find((p) => p.id === makePracticeId(r))!);
       }
     }
     for (const p of created) {
