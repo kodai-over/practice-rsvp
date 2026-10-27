@@ -12,6 +12,7 @@ import {
   rowToPractice,
   rowsToSettings,
   settingsToRows,
+  toCell,
   type Row,
 } from '../app/schema';
 
@@ -76,7 +77,7 @@ class Table {
     const cache = this.load();
     const idx = cache.rows.findIndex(match);
     const merged: Row = { ...(idx >= 0 ? cache.rows[idx] : {}), ...row };
-    const line = cache.headers.map((h) => merged[h] ?? '');
+    const line = cache.headers.map((h) => toCell(merged[h] ?? ''));
     const sh = this.sheet();
     if (idx >= 0) {
       sh.getRange(idx + 2, 1, 1, cache.headers.length).setValues([line]);
@@ -103,7 +104,7 @@ class Table {
     const sh = this.sheet();
     const last = sh.getLastRow();
     if (last > 1) sh.getRange(2, 1, last - 1, cache.headers.length).clearContent();
-    if (rows.length) sh.getRange(2, 1, rows.length, cache.headers.length).setValues(rows.map((r) => cache.headers.map((h) => r[h] ?? '')));
+    if (rows.length) sh.getRange(2, 1, rows.length, cache.headers.length).setValues(rows.map((r) => cache.headers.map((h) => toCell(r[h] ?? ''))));
     // 消したあとの空行は読み直しで出ないので、控えも書いた行だけにする
     cache.rows = rows.map((r) => Object.fromEntries(cache.headers.map((h) => [h, r[h] ?? ''])));
   }

@@ -6,6 +6,13 @@ import { DEFAULT_FEES, DEFAULT_STUDIOS, formatFeeValue, parseFeeValue, type Atte
 
 export type Row = Record<string, string>;
 
+/**
+ * シートに書く値。メンバーが自由に付けた値（グループ名・表示名・要望など）も入るので、空でなければ先頭に ' を付けて書く。
+ * Sheets は書いた値の先頭の ' を必ず1つ外して文字列として保存するため（書式なしテキストの列でも同じ）、
+ * = で始まる値が数式になったり、0123 や -5 が数値に変わったりしない。読むときは何もしなくてよい
+ */
+export const toCell = (v: string): string => (v ? `'${v}` : v);
+
 export const SHEETS = {
   practices: {
     name: '練習',

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleApi } from '../src/app/api';
 import { DEFAULT_FEES } from '@studio-attendance/shared';
-import { INITIAL_SETTINGS, rowsToSettings, settingsToRows } from '../src/app/schema';
+import { INITIAL_SETTINGS, rowsToSettings, settingsToRows, toCell } from '../src/app/schema';
 import { handleJoin } from '../src/app/join';
 import { route } from '../src/app/router';
 import { hourlyJob } from '../src/app/triggers';
@@ -551,6 +551,16 @@ describe('リッチメニュー', () => {
 });
 
 describe('設定シート', () => {
+  it('シートに書く値は先頭に \' を付け、Sheets が外したあとに元の値へ戻る', () => {
+    // 実機の Sheets は書いた値の先頭の ' を1つ外して、文字列として保存する
+    const sheets = (v: string) => v.replace(/^'/, '');
+    for (const v of ['=1+1', "'=x", "''=x", "'-'", "'x", '-5', '+81 90', '@here', '0123', '2026-10-21', '19:00', 'チームA']) {
+      expect(toCell(v).startsWith("'")).toBe(true);
+      expect(sheets(toCell(v))).toBe(v);
+    }
+    expect(toCell('')).toBe('');
+  });
+
   it('標準料金は曜日・時間帯つきで書き戻せる。0円の行しかなければ公式の料金表を使う', () => {
     const rows = settingsToRows({ ...INITIAL_SETTINGS, groups: [] });
     expect(rows).toContainEqual({ 種別: '標準料金', キー1: 'BUZZ横浜', キー2: '1スタジオ', 値: '平日 17:00-23:30 1300' });
