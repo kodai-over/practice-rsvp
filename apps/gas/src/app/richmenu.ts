@@ -1,26 +1,13 @@
-/** Botとの個別トークの下に出すメニュー（リッチメニュー）。画像は scripts/richmenu.mjs で作る 2500×843・4分割 */
-import { appLink } from '@studio-attendance/shared';
-
+/** Botとの個別トークの下に出すメニュー（リッチメニュー）。画像は scripts/richmenu.mjs で作る 2500×843・ボタン1つ */
 export const RICH_MENU_SIZE = { width: 2500, height: 843 };
 
-/** 各ボタンで開くアプリの画面（LIFF の ?view=） */
-export const RICH_MENU_VIEWS = [
-  { view: 'register', label: '登録' },
-  { view: 'recruit', label: '募集' },
-  { view: 'mine', label: '予定' },
-  { view: 'feedback', label: '要望' },
-] as const;
-
+/** 全面が1つのボタンで、アプリのトップ（練習の一覧）を開く */
 export function richMenuDefinition(appUrl: string) {
-  const w = RICH_MENU_SIZE.width / RICH_MENU_VIEWS.length;
   return {
     size: RICH_MENU_SIZE,
     selected: true,
     name: 'スタジオ練出欠管理 メニュー',
-    chatBarText: 'メニュー',
-    areas: RICH_MENU_VIEWS.map((v, i) => ({
-      bounds: { x: Math.round(i * w), y: 0, width: Math.round(w), height: RICH_MENU_SIZE.height },
-      action: { type: 'uri', label: v.label, uri: appLink(appUrl, { view: v.view }) },
-    })),
+    chatBarText: 'アプリを開く',
+    areas: [{ bounds: { x: 0, y: 0, ...RICH_MENU_SIZE }, action: { type: 'uri', label: 'アプリを開く', uri: appUrl } }],
   };
 }
