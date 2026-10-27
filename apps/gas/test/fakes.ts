@@ -21,8 +21,13 @@ export class FakeLine implements LineApi {
   groupMemberProfile(_g: string, userId: string) {
     return this.profile(userId);
   }
+  /** グループ名を差し替える。値が Error なら取得失敗、null なら見つからない（Botが外れたグループ）にする */
+  groupNames: Record<string, string | Error | null> = {};
   groupSummary(groupId: string) {
-    return { groupName: `名前-${groupId}` };
+    const name = this.groupNames[groupId];
+    if (name instanceof Error) throw name;
+    if (name === null) return null;
+    return { groupName: name ?? `名前-${groupId}` };
   }
   loadings: string[] = [];
   showLoading(userId: string) {

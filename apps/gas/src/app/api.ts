@@ -308,18 +308,6 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     });
   },
 
-  renameGroup(ctx, me, { id, name }) {
-    requireAdmin(me);
-    return ctx.withLock(() => {
-      const s = ctx.store.settings();
-      const g = s.groups.find((x) => x.id === id);
-      if (!g) throw new UserError('グループが見つかりません');
-      g.name = cleanName(name);
-      ctx.store.saveSettings(s);
-      return s.groups;
-    });
-  },
-
   listFeedback(ctx, me) {
     return feedbackList(ctx, me);
   },

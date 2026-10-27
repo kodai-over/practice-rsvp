@@ -5,6 +5,7 @@ import type { Ctx } from './ports';
  * 毎時実行。
  * - 日付を過ぎた練習を「終了」にする（参加リンクも無効になる）
  * - キャンセル期限前警告：警告時刻を過ぎ、参加人数が最低人数に届いていない練習を予約者に知らせる
+ * - グループ名をLINE側の名前にそろえる
  */
 export function hourlyJob(ctx: Ctx): void {
   const now = ctx.now();
@@ -41,4 +42,42 @@ export function hourlyJob(ctx: Ctx): void {
       ctx.log('warning push failed', w.to, e);
     }
   }
+
+  // 名前の同期が失敗しても、終了処理と警告は済ませておく
+  try {
+    syncGroupNames(ctx);
+  } catch (e) {
+    ctx.log('group name sync failed', e);
+  }
+}
+
+/**
+ * グループ名をLINE側の名前にそろえる（グループ名の変更はWebhookで届かないため、毎時取得し直す）。
+ * 複数人トーク（IDが C で始まらない）は名前を取得できないので対象外。取得に失敗したグループはそのままにする
+ */
+export function syncGroupNames(ctx: Ctx): void {
+  const latest = new Map<string, string>();
+  for (const g of ctx.store.settings().groups) {
+    if (!g.id.startsWith('C')) continue;
+    try {
+      // 設定シートは読み込み時に前後の空白を除くので、そろえておかないと毎回「変わった」とみなしてしまう
+      const name = ctx.line.groupSummary(g.id)?.groupName?.trim().slice(0, 50);
+      if (name) latest.set(g.id, name);
+      else ctx.log('group summary not found', g.id);
+    } catch (e) {
+      ctx.log('group summary error', g.id, e);
+    }
+  }
+  ctx.withLock(() => {
+    const s = ctx.store.settings();
+    let changed = false;
+    for (const g of s.groups) {
+      const name = latest.get(g.id);
+      if (name && name !== g.name) {
+        g.name = name;
+        changed = true;
+      }
+    }
+    if (changed) ctx.store.saveSettings(s);
+  });
 }
