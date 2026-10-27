@@ -536,6 +536,56 @@ describe('ルーター', () => {
     expect(t.store.s.groups.map((g) => g.id)).toContain('Cback');
   });
 
+  it('外したあとは数えた回数も消え、通信エラーは何回続いても外さない', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: 'Cgone', name: 'グループ2' }, { id: 'Cflaky', name: '不安定' }, { id: 'Rroom', name: 'グループ4' });
+    t.line.groupNames = { Cgone: null, Cflaky: new Error('500') };
+    for (let i = 0; i < 6; i++) hourlyJob(t.ctx);
+    expect(t.store.s.groups.map((g) => g.id)).toEqual([G1, 'Cflaky', 'Rroom']);
+    expect([...t.kv.data.keys()].filter((k) => k.startsWith('groupgone:'))).toEqual([]);
+  });
+
+  it('確かめたグループが全部見つからないときは、トークンの設定ミスを疑って外さない', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: 'C2', name: 'チームB' });
+    t.line.groupNames = { [G1]: null, C2: null };
+    for (let i = 0; i < 4; i++) hourlyJob(t.ctx);
+    expect(t.store.s.groups.map((g) => g.id)).toEqual([G1, 'C2']);
+  });
+
+  it('招待した時点でBotが外れていたグループは設定に載せない', () => {
+    const t = setup();
+    t.line.groupNames = { Cother: null };
+    handleWebhook(t.ctx, { events: [{ type: 'join', replyToken: 'rt', source: { type: 'group', groupId: 'Cother' } }] });
+    expect(t.store.s.groups.map((g) => g.id)).toEqual([G1]);
+    expect(t.line.replies).toHaveLength(0);
+  });
+
+  it('見つからないと数えている途中で招待し直されたら数え直す', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: 'Cback', name: '戻った' });
+    t.line.groupNames = { Cback: null };
+    hourlyJob(t.ctx);
+    hourlyJob(t.ctx);
+    t.line.groupNames = {};
+    handleWebhook(t.ctx, { events: [{ type: 'join', replyToken: 'rt', source: { type: 'group', groupId: 'Cback' } }] });
+    t.line.groupNames = { Cback: null };
+    hourlyJob(t.ctx);
+    expect(t.store.s.groups.map((g) => g.id)).toContain('Cback');
+  });
+
+  it('確認カードのあとで送り先のグループが外れたら「募集しました」と言わない', () => {
+    const t = setup();
+    t.reader.result = [reservation];
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
+    const draftId = [...t.kv.data.keys()][0].replace('draft:', '');
+    t.store.s.groups = [];
+    handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}&r=1`)] });
+    expect(t.line.pushes).toHaveLength(0);
+    expect(t.line.lastReplyText()).not.toContain('募集しました');
+    expect(t.line.lastReplyText()).toContain('アプリの「募集」');
+  });
+
   it('グループ名が変わっていなければ設定を書き直さない', () => {
     const t = setup();
     t.line.groupNames = { [G1]: 'チームA ' };

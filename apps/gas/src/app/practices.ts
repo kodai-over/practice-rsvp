@@ -201,7 +201,7 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
     }
   });
 
-  if (created.length > 0) sendRecruit(ctx, sortPractices(created), validGroups, booker.name);
+  if (created.length > 0) result.recruited = sendRecruit(ctx, sortPractices(created), validGroups, booker.name);
   return result;
 }
 

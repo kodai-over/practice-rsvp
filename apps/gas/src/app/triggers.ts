@@ -53,17 +53,22 @@ export function hourlyJob(ctx: Ctx): void {
 
 /** 名前を取得できない（Botが入っていない）ことがこの回数続いたら、設定から外す */
 const GONE_LIMIT = 3;
-const goneKey = (id: string) => `groupgone:${id}`;
+/** 数えた回数を覚えておく時間。毎時数えるので GONE_LIMIT 時間より長くする */
+const GONE_TTL = 6 * 60 * 60;
+export const goneKey = (id: string) => `groupgone:${id}`;
 
 /**
  * グループ名をLINE側の名前にそろえる（グループ名の変更はWebhookで届かないため、毎時取得し直す）。
  * あわせて、Botが入っていないグループ（招待直後に外れて退出の知らせが届かなかったものなど）を設定から外す。
- * 外すのは「見つからない」が GONE_LIMIT 回続いたときだけで、通信エラーなど一時的な失敗では外さない。
+ * - 外すのは「見つからない」が GONE_LIMIT 回続き、外す直前に確かめてもまだ見つからないときだけ
+ * - 通信エラーなど一時的な失敗は数えない
+ * - その回に確かめたグループが全部見つからないときは、トークンの設定ミス（別チャネルのトークンなど）を疑い、数えない
  * 複数人トーク（IDが C で始まらない）は名前を取得できないので対象外
  */
 export function syncGroupNames(ctx: Ctx): void {
   const latest = new Map<string, string>();
-  const gone = new Set<string>();
+  const missing: string[] = [];
+  let checked = 0;
   for (const g of ctx.store.settings().groups) {
     if (!g.id.startsWith('C')) continue;
     let summary;
@@ -73,18 +78,43 @@ export function syncGroupNames(ctx: Ctx): void {
       ctx.log('group summary error', g.id, e);
       continue;
     }
-    if (summary) {
-      ctx.kv.remove(goneKey(g.id));
-      // 設定シートは読み込み時に前後の空白を除くので、そろえておかないと毎回「変わった」とみなしてしまう
-      const name = summary.groupName?.trim().slice(0, 50);
-      if (name) latest.set(g.id, name);
+    checked++;
+    if (!summary) {
+      missing.push(g.id);
       continue;
     }
-    const count = Number(ctx.kv.get(goneKey(g.id)) ?? '0') + 1;
-    ctx.log('group summary not found', g.id, count);
-    if (count >= GONE_LIMIT) gone.add(g.id);
-    else ctx.kv.put(goneKey(g.id), String(count), 6 * 60 * 60);
+    ctx.kv.remove(goneKey(g.id));
+    // 設定シートは読み込み時に前後の空白を除くので、そろえておかないと毎回「変わった」とみなしてしまう
+    const name = summary.groupName?.trim().slice(0, 50);
+    if (name) latest.set(g.id, name);
   }
+
+  const gone = new Set<string>();
+  if (missing.length > 0 && missing.length === checked) {
+    ctx.log('group summary not found for all groups; check LINE_CHANNEL_ACCESS_TOKEN', missing);
+  } else {
+    for (const id of missing) {
+      const count = (parseInt(ctx.kv.get(goneKey(id)) ?? '', 10) || 0) + 1;
+      ctx.log('group summary not found', id, count);
+      if (count < GONE_LIMIT) {
+        ctx.kv.put(goneKey(id), String(count), GONE_TTL);
+        continue;
+      }
+      // 数えている間に招待し直された場合に備え、外す直前にもう一度確かめる
+      try {
+        if (ctx.line.groupSummary(id)) {
+          ctx.kv.remove(goneKey(id));
+          continue;
+        }
+      } catch (e) {
+        ctx.log('group summary error', id, e);
+        continue;
+      }
+      gone.add(id);
+    }
+  }
+
+  const removed: { id: string; name: string }[] = [];
   ctx.withLock(() => {
     const s = ctx.store.settings();
     let changed = false;
@@ -95,15 +125,19 @@ export function syncGroupNames(ctx: Ctx): void {
         changed = true;
       }
     }
-    const kept = s.groups.filter((g) => !gone.has(g.id));
-    if (kept.length !== s.groups.length) {
+    const kept = s.groups.filter((g) => {
+      if (!gone.has(g.id)) return true;
+      removed.push(g);
+      return false;
+    });
+    if (removed.length) {
       s.groups = kept;
       changed = true;
     }
     if (changed) ctx.store.saveSettings(s);
   });
-  for (const id of gone) {
-    ctx.kv.remove(goneKey(id));
-    ctx.log('group removed (bot not in group)', id);
+  for (const g of removed) {
+    ctx.kv.remove(goneKey(g.id));
+    ctx.log('group removed (bot not in group)', g.id, g.name);
   }
 }
