@@ -499,14 +499,39 @@ describe('ルーター', () => {
 
   it('毎時の処理でグループ名をLINE側の名前にそろえる', () => {
     const t = setup();
-    t.store.s.groups.push({ id: 'Cfail', name: '旧名' }, { id: 'Rroom', name: 'グループ3' });
-    t.line.groupNames = { [G1]: 'チームA①', Cfail: new Error('not found') };
+    t.store.s.groups.push({ id: 'Cfail', name: '旧名' }, { id: 'Cgone', name: '消えた' }, { id: 'Rroom', name: 'グループ3' });
+    t.line.groupNames = { [G1]: ' チームA① ', Cfail: new Error('500'), Cgone: null };
     hourlyJob(t.ctx);
     expect(t.store.s.groups).toEqual([
-      { id: G1, name: 'チームA①' },
+      { id: G1, name: 'チームA①' }, // 前後の空白は除く
       { id: 'Cfail', name: '旧名' }, // 取得できなければそのまま
+      { id: 'Cgone', name: '消えた' },
       { id: 'Rroom', name: 'グループ3' }, // 複数人トークは対象外
     ]);
+  });
+
+  it('グループ名が変わっていなければ設定を書き直さない', () => {
+    const t = setup();
+    t.line.groupNames = { [G1]: 'チームA ' };
+    let saves = 0;
+    const save = t.store.saveSettings.bind(t.store);
+    t.store.saveSettings = (s) => {
+      saves++;
+      save(s);
+    };
+    hourlyJob(t.ctx);
+    expect(saves).toBe(0);
+  });
+
+  it('グループ名の同期に失敗しても、終了処理と警告は済ませる', () => {
+    const t = setup();
+    t.store.p.push({ ...baseP, id: 'past', status: '募集中', warned: false } as any);
+    t.line.groupNames = { [G1]: '新しい名前' };
+    t.store.saveSettings = () => {
+      throw new Error('sheet error');
+    };
+    expect(() => hourlyJob(t.ctx)).not.toThrow();
+    expect(t.store.p.find((p) => p.id === 'past')?.status).toBe('終了');
   });
 });
 
