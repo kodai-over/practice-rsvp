@@ -51,22 +51,39 @@ export function hourlyJob(ctx: Ctx): void {
   }
 }
 
+/** 名前を取得できない（Botが入っていない）ことがこの回数続いたら、設定から外す */
+const GONE_LIMIT = 3;
+const goneKey = (id: string) => `groupgone:${id}`;
+
 /**
  * グループ名をLINE側の名前にそろえる（グループ名の変更はWebhookで届かないため、毎時取得し直す）。
- * 複数人トーク（IDが C で始まらない）は名前を取得できないので対象外。取得に失敗したグループはそのままにする
+ * あわせて、Botが入っていないグループ（招待直後に外れて退出の知らせが届かなかったものなど）を設定から外す。
+ * 外すのは「見つからない」が GONE_LIMIT 回続いたときだけで、通信エラーなど一時的な失敗では外さない。
+ * 複数人トーク（IDが C で始まらない）は名前を取得できないので対象外
  */
 export function syncGroupNames(ctx: Ctx): void {
   const latest = new Map<string, string>();
+  const gone = new Set<string>();
   for (const g of ctx.store.settings().groups) {
     if (!g.id.startsWith('C')) continue;
+    let summary;
     try {
-      // 設定シートは読み込み時に前後の空白を除くので、そろえておかないと毎回「変わった」とみなしてしまう
-      const name = ctx.line.groupSummary(g.id)?.groupName?.trim().slice(0, 50);
-      if (name) latest.set(g.id, name);
-      else ctx.log('group summary not found', g.id);
+      summary = ctx.line.groupSummary(g.id);
     } catch (e) {
       ctx.log('group summary error', g.id, e);
+      continue;
     }
+    if (summary) {
+      ctx.kv.remove(goneKey(g.id));
+      // 設定シートは読み込み時に前後の空白を除くので、そろえておかないと毎回「変わった」とみなしてしまう
+      const name = summary.groupName?.trim().slice(0, 50);
+      if (name) latest.set(g.id, name);
+      continue;
+    }
+    const count = Number(ctx.kv.get(goneKey(g.id)) ?? '0') + 1;
+    ctx.log('group summary not found', g.id, count);
+    if (count >= GONE_LIMIT) gone.add(g.id);
+    else ctx.kv.put(goneKey(g.id), String(count), 6 * 60 * 60);
   }
   ctx.withLock(() => {
     const s = ctx.store.settings();
@@ -78,6 +95,15 @@ export function syncGroupNames(ctx: Ctx): void {
         changed = true;
       }
     }
+    const kept = s.groups.filter((g) => !gone.has(g.id));
+    if (kept.length !== s.groups.length) {
+      s.groups = kept;
+      changed = true;
+    }
     if (changed) ctx.store.saveSettings(s);
   });
+  for (const id of gone) {
+    ctx.kv.remove(goneKey(id));
+    ctx.log('group removed (bot not in group)', id);
+  }
 }

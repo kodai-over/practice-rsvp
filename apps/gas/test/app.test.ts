@@ -510,6 +510,32 @@ describe('ルーター', () => {
     ]);
   });
 
+  it('Botが入っていないグループは、見つからないことが3回続いたら設定から外す', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: 'Cgone', name: 'グループ2' }, { id: 'Cflaky', name: '不安定' });
+    t.line.groupNames = { Cgone: null, Cflaky: new Error('500') };
+    hourlyJob(t.ctx);
+    hourlyJob(t.ctx);
+    expect(t.store.s.groups.map((g) => g.id)).toEqual([G1, 'Cgone', 'Cflaky']);
+    hourlyJob(t.ctx);
+    // 通信エラーは数えない
+    expect(t.store.s.groups.map((g) => g.id)).toEqual([G1, 'Cflaky']);
+  });
+
+  it('途中で名前を取得できたら、見つからなかった回数を数え直す', () => {
+    const t = setup();
+    t.store.s.groups.push({ id: 'Cback', name: '戻った' });
+    t.line.groupNames = { Cback: null };
+    hourlyJob(t.ctx);
+    hourlyJob(t.ctx);
+    t.line.groupNames = { Cback: '戻った' };
+    hourlyJob(t.ctx);
+    t.line.groupNames = { Cback: null };
+    hourlyJob(t.ctx);
+    hourlyJob(t.ctx);
+    expect(t.store.s.groups.map((g) => g.id)).toContain('Cback');
+  });
+
   it('グループ名が変わっていなければ設定を書き直さない', () => {
     const t = setup();
     t.line.groupNames = { [G1]: 'チームA ' };
