@@ -3,18 +3,23 @@ import { endAfterStart, labelDate, roomInfo, yen, type Answer, type AttendeeView
 import { api } from '../api';
 import { RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';
-import { Avatar, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, useApp, useRunner } from '../ui';
+import { Avatar, FRESH_MS, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, useApp, useRunner } from '../ui';
 
-/** 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる） */
+/**
+ * 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる）。
+ * 一覧を取ったばかり（30秒以内）なら、取り直さない
+ */
 export function usePractice(id: string) {
-  const { toast, practices, updatePractice } = useApp();
+  const { toast, practices, practicesAt, updatePractice } = useApp();
   const fromList = () => practices?.find((x) => x.practice.id === id) ?? null;
+  const fresh = () => fromList() != null && practicesAt > 0 && Date.now() - practicesAt < FRESH_MS;
   const [v, setV] = useState<PracticeView | null>(fromList);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !fresh());
   const [run, busy] = useRunner();
 
   useEffect(() => {
     setV(fromList());
+    if (fresh()) return setLoading(false);
     setLoading(true);
     api('getPractice', { id })
       .then((r) => {

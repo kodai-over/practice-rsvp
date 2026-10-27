@@ -52,6 +52,7 @@ function App() {
   const [me, setMe] = useState<MeView | null>(cached?.me ?? null);
   const [practices, setPracticesState] = useState<{ list: PracticeView[]; at: number } | null>(cached ? { list: cached.practices, at: 0 } : null);
   const [error, setError] = useState<string | null>(null);
+  const [startupFailed, setStartupFailed] = useState(false);
   const [toast, toastNode] = useToast();
   // 起動中に出欠などで差し替えた練習。あとから届いた起動時の一覧（それより前の状態）で戻さない
   const touched = useRef<Set<string> | null>(new Set());
@@ -70,7 +71,6 @@ function App() {
       // グループのカードから開いたときは、先にそのグループのメンバーとして覚えてもらう（でないと練習が見えない）
       const group = params.get('g');
       const key = params.get('k');
-      if (group && key) await api('openedFromGroup', { group, key }).catch(() => null);
       const views: Record<string, string> = { register: '/register', recruit: '/recruit', mine: '/?tab=mine', feedback: '/feedback' };
       const view = views[params.get('view') ?? ''];
       const hash = answers.length
@@ -86,7 +86,8 @@ function App() {
         history.replaceState(null, '', `${location.pathname}#${hash}`);
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       }
-      const home = await api('home');
+      // グループのカードから開いたときは、そのグループのメンバーとして覚えてから一覧を返してもらう（問い合わせは1回だけ）
+      const home = await api('home', group && key ? { group, key } : {});
       setMe(home.me);
       setPracticesState((cur) => {
         const keep = touched.current;
@@ -97,6 +98,7 @@ function App() {
       saveCache(home);
     })().catch((e) => {
       const msg = e instanceof Error ? e.message : String(e);
+      setStartupFailed(true);
       if (cached) toast(msg, true);
       else setError(msg);
     });
@@ -119,7 +121,7 @@ function App() {
       {error ? (
         <div class="empty">{error}</div>
       ) : me ? (
-        <AppContext.Provider value={{ me, setMe, toast, practices: practices?.list ?? null, practicesAt: practices?.at ?? 0, setPractices, updatePractice }}>
+        <AppContext.Provider value={{ me, setMe, toast, practices: practices?.list ?? null, practicesAt: practices?.at ?? 0, startupFailed, setPractices, updatePractice }}>
           {me.actAs && me.actAs !== 'self' && (
             <button class="acting-banner" onClick={() => go('/settings')}>
               {me.actAs === 'member' ? '一般メンバーとして表示中' : '確認用の予約者「admin」として操作中'}（「自分」で戻せます）

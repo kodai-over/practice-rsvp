@@ -37,7 +37,8 @@ export function makeVerifiers(props: { relaySecret: string; loginChannelId: stri
       const claims = JSON.parse(res.getContentText()) as { sub?: string; name?: string; exp?: number };
       if (!claims.sub) return null;
       const user = { userId: claims.sub, name: claims.name };
-      const ttl = Math.min(600, Math.floor((claims.exp ?? 0) - Date.now() / 1000));
+      // トークンの期限まで覚える（キャッシュの上限は6時間）。開くたびに LINE に問い合わせないように
+      const ttl = Math.min(21600, Math.floor((claims.exp ?? 0) - Date.now() / 1000));
       if (ttl > 0) cache.put(key, JSON.stringify(user), ttl);
       return user;
     },

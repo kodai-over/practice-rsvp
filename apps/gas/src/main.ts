@@ -30,10 +30,14 @@ function props(): Record<(typeof PROP_KEYS)[number], string> {
   return Object.fromEntries(PROP_KEYS.map((k) => [k, p[k] ?? ''])) as Record<(typeof PROP_KEYS)[number], string>;
 }
 
-function makeCtx(): Ctx {
-  const p = props();
+/** シートを書き換えるたびに変える目印。ロックを取ったとき、これが読み始めから変わっていなければ読み直さない */
+const STORE_VERSION_KEY = 'store:ver';
+
+function makeCtx(p = props()): Ctx {
   const store = new SheetStore(SpreadsheetApp.getActiveSpreadsheet());
   const cache = CacheService.getScriptCache();
+  // シートを読む前に目印を控える。ほかの実行が書き換えれば目印が変わる
+  let seen = cache.get(STORE_VERSION_KEY);
   const kv: Kv = {
     get: (k) => cache.get(k),
     put: (k, v, ttl) => cache.put(k, v, ttl),
@@ -51,9 +55,14 @@ function makeCtx(): Ctx {
       lock.waitLock(30000);
       lockDepth++;
       try {
-        store.invalidate();
+        // ほかの実行が書き換えたときだけ読み直す（毎回読み直すと、出欠1つでもシートを何度も読むことになる）
+        const cur = cache.get(STORE_VERSION_KEY);
+        if (cur == null || cur !== seen) store.invalidate();
         return fn();
       } finally {
+        // 途中で失敗しても書きかけかもしれないので、目印は必ず変える
+        seen = Utilities.getUuid();
+        cache.put(STORE_VERSION_KEY, seen, 21600);
         lockDepth--;
         lock.releaseLock();
       }
@@ -71,7 +80,7 @@ function makeCtx(): Ctx {
 
 export function doPost(e: GoogleAppsScript.Events.DoPost) {
   const p = props();
-  const out = route(makeCtx(), e.postData?.contents ?? '', makeVerifiers({ relaySecret: p.RELAY_SECRET, loginChannelId: p.LINE_LOGIN_CHANNEL_ID }));
+  const out = route(makeCtx(p), e.postData?.contents ?? '', makeVerifiers({ relaySecret: p.RELAY_SECRET, loginChannelId: p.LINE_LOGIN_CHANNEL_ID }));
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 

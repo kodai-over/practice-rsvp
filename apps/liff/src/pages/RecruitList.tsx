@@ -30,11 +30,15 @@ export function RecruitListPage() {
   // 直せる練習（自分が登録した練習。管理者はすべて）。サーバーの判定（canEdit）にそろえる
   const list = practices == null && !fresh ? null : (practices ?? []).filter((v) => v.canEdit);
 
+  // 確認したら、サーバーの返事を待たずに一覧から消す（失敗したら元に戻す）
   const remove = async (v: PracticeView) => {
-    if (!confirm(deleteMessage(v))) return setOpened(null);
+    setOpened(null);
+    if (!confirm(deleteMessage(v))) return;
+    const before = practices ?? [];
+    setPractices(before.filter((x) => x.practice.id !== v.practice.id));
     const r = await runDelete(() => api('deletePractice', { id: v.practice.id }), '削除しました');
     if (r) setPractices(r, true);
-    setOpened(null);
+    else setPractices(before);
   };
 
   return (
@@ -160,7 +164,13 @@ function SwipeRow({
           if (d.mode === 'wait') {
             if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
             d.mode = Math.abs(mx) > Math.abs(my) ? 'swipe' : 'scroll';
-            if (d.mode === 'swipe') e.currentTarget.setPointerCapture(e.pointerId);
+            if (d.mode === 'swipe') {
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                /* 取れなくても、この行の上で動かしている間はスワイプできる */
+              }
+            }
           }
           if (d.mode === 'swipe') {
             swiped.current = true;

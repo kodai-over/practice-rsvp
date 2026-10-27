@@ -2,19 +2,21 @@ import { useEffect, useState } from 'preact/hooks';
 import { answerReport } from '@studio-attendance/shared';
 import { api } from '../api';
 import { canSendToChat, closeApp, sendToChat } from '../liff';
-import { Icon, Spinner, Syncing, TopBar, go, useApp, useRunner } from '../ui';
+import { FRESH_MS, Icon, Spinner, Syncing, TopBar, go, useApp, useRunner } from '../ui';
 import { PracticeCard, useAnswer } from './List';
 
 /** 募集カードの「RSVP」から開く画面。その募集の練習だけを並べ、答えたらグループに伝えられる */
 export function AnswerPage({ ids: raw }: { ids: string[] }) {
-  const { practices: list, practicesAt, setPractices, toast } = useApp();
+  const { practices: list, practicesAt, startupFailed, setPractices, toast } = useApp();
   const ids = [...new Set(raw)];
   const [run, busy] = useRunner();
-  const answer = useAnswer(run);
+  const { answer, pending } = useAnswer();
   const [send, sending] = useRunner();
-  // 最新の一覧を取り終えたか。前回の表示の回答のまま送らないよう、取れるまでは答えも送信も止める
-  // 起動時や直前に取ったばかりなら、取り直さない
-  const [load, setLoad] = useState<'loading' | 'ok' | 'error'>(() => (practicesAt > 0 && Date.now() - practicesAt < 30_000 ? 'ok' : 'loading'));
+  // 最新の一覧を取り終えたか。前回の表示の回答のまま送らないよう、取れるまでは答えも送信も止める。
+  // 起動中は、起動時のまとめ取得（グループのメンバーとして覚えてから返す）を待ち、別に取り直さない
+  const [load, setLoad] = useState<'wait' | 'loading' | 'ok' | 'error'>(() =>
+    practicesAt > 0 && Date.now() - practicesAt < FRESH_MS ? 'ok' : practicesAt === 0 && !startupFailed ? 'wait' : 'loading',
+  );
   const reload = () => {
     setLoad('loading');
     run(() => api('listPractices')).then((r) => {
@@ -25,13 +27,18 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
   useEffect(() => {
     if (load === 'loading') reload();
   }, []);
+  useEffect(() => {
+    if (load !== 'wait') return;
+    if (practicesAt > 0) setLoad('ok');
+    else if (startupFailed) setLoad('error');
+  }, [practicesAt, startupFailed]);
   const fresh = load === 'ok';
   // グループに送る文。書き換えるまでは回答に合わせて作り直し、書き換えたらそのまま残す
   const [draft, setDraft] = useState<string | null>(null);
 
   const found = ids.map((id) => list?.find((v) => v.practice.id === id)).filter((v) => v != null);
   // 前回の表示に無い練習（募集されたばかりのもの）は、最新を取り終わるまで待つ
-  if (list == null || (found.length < ids.length && load === 'loading'))
+  if (list == null || (found.length < ids.length && (load === 'loading' || load === 'wait')))
     return (
       <>
         <TopBar title="RSVP" />
@@ -58,7 +65,7 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
 
   return (
     <>
-      <TopBar title="RSVP">{(busy || load === 'loading') && <Syncing />}</TopBar>
+      <TopBar title="RSVP">{(busy || pending.size > 0 || load === 'loading' || load === 'wait') && <Syncing />}</TopBar>
       {load === 'error' && (
         <div class="empty">
           最新の出欠を読み込めませんでした
@@ -70,7 +77,7 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
       {load === 'error' ? null : found.length === 0 ? (
         <div class="empty">練習が見つかりません（終わった・削除された・見られない練習です）</div>
       ) : (
-        found.map((v) => <PracticeCard key={v.practice.id} v={v} busy={busy || !fresh} onAnswer={(a) => answer(v.practice.id, a)} />)
+        found.map((v) => <PracticeCard key={v.practice.id} v={v} busy={pending.has(v.practice.id) || !fresh} onAnswer={(a) => answer(v.practice.id, a)} />)
       )}
       {found.length > 0 && found.length < ids.length && <p class="note">終わった・削除された・見られない練習は表示していません</p>}
 
@@ -102,7 +109,7 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
                   回答から作り直す
                 </button>
               )}
-              <button class="btn primary block" disabled={!text.trim() || busy || sending || !fresh} onClick={tell}>
+              <button class="btn primary block" disabled={!text.trim() || pending.size > 0 || sending || !fresh} onClick={tell}>
                 <Icon name="send" size={18} />
                 グループに伝える
               </button>

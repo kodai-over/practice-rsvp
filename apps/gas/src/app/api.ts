@@ -189,7 +189,14 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     return { member: me, groups: pub.groups, settings: pub, actAs: acting.actAs, canSwitch: acting.canSwitch };
   },
 
-  home(ctx, me, _params, acting) {
+  home(ctx, me, params, acting) {
+    // 起動時の問い合わせを1回で済ませるため、グループのカードから開いたときの記録もここでする
+    if (params?.group && params.key) {
+      handlers.openedFromGroup(ctx, me, { group: params.group, key: params.key }, acting);
+      // 覚えた所属で見える練習を返す（本人として見ているときだけ。確認用アカウントの所属は変わらない）
+      const saved = ctx.store.getMember(me.userId);
+      if (saved && me.userId === (acting?.realUserId ?? me.userId)) me = { ...me, groups: saved.groups };
+    }
     return { me: handlers.me(ctx, me, {}, acting), practices: handlers.listPractices(ctx, me, {}, acting) };
   },
 

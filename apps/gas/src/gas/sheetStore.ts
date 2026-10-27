@@ -100,14 +100,17 @@ class Table {
     }
   }
 
+  /** 続いている行はまとめて消す（1行ずつ消すと、行の数だけ時間がかかる） */
   delete(match: (r: Row) => boolean) {
     const cache = this.load();
     const sh = this.sheet();
     for (let i = cache.rows.length - 1; i >= 0; i--) {
-      if (match(cache.rows[i])) {
-        sh.deleteRow(i + 2);
-        cache.rows.splice(i, 1);
-      }
+      if (!match(cache.rows[i])) continue;
+      let start = i;
+      while (start > 0 && match(cache.rows[start - 1])) start--;
+      sh.deleteRows(start + 2, i - start + 1);
+      cache.rows.splice(start, i - start + 1);
+      i = start;
     }
   }
 
