@@ -153,10 +153,10 @@ export function Tabs<K extends string>({ items, value, onChange }: { items: { ke
 export function NavBar() {
   const { me } = useApp();
   const { path } = useRoute();
-  // 練習の画面は「練習」、募集の画面（/recruit/:id）は「募集」を光らせる
+  // 練習の画面は「予定」、募集の画面（/recruit/:id）は「募集」を光らせる
   const here = path[0] === 'p' ? '' : (path[0] ?? '');
   const items: { to: string; key: string; icon: IconName; label: string }[] = [
-    { to: '/', key: '', icon: 'ticket', label: '練習' },
+    { to: '/', key: '', icon: 'ticket', label: '予定' },
     ...(canRegister(me.member)
       ? ([
           { to: '/register', key: 'register', icon: 'plus', label: '登録' },

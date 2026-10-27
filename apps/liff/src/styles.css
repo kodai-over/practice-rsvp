@@ -1280,3 +1280,11 @@ details > summary {
   margin: 10px 0 0;
   text-align: center;
 }
+.note {
+  margin: 8px 0 0;
+  color: var(--sub);
+  font-size: 13px;
+}
+.sec-head + .note {
+  margin-top: 0;
+}
