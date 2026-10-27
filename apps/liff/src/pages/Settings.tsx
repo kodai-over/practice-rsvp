@@ -84,7 +84,7 @@ export function AdminPage() {
 
   if (!isAdmin(me.member)) return <><TopBar title="管理" back /><div class="empty">管理者だけが使えます</div></>;
 
-  const saveMember = async (userId: string, patch: Partial<Pick<Member, 'role' | 'defaultGroups'>>) => {
+  const saveMember = async (userId: string, patch: Partial<Pick<Member, 'role' | 'defaultGroups' | 'groups'>>) => {
     const m = await run(() => api('updateMember', { userId, patch }), '保存しました');
     if (m) setMembers((ms) => ms!.map((x) => (x.userId === userId ? m : x)));
   };
@@ -110,6 +110,9 @@ export function AdminPage() {
       </section>
 
       <div class="section-title">メンバー</div>
+      <div class="muted" style={{ marginBottom: 8 }}>
+        練習が見えるのは、予約した人・募集したグループに入っている人・出欠を答えた人・管理者です。「入っている」はグループでの発言・ボタン・カードから開いたことで自動で付きます（外しても、そのグループでまた発言すると付き直ります）
+      </div>
       {members == null ? (
         <Spinner />
       ) : (
@@ -123,6 +126,17 @@ export function AdminPage() {
                 <option>管理者</option>
               </select>
             </div>
+            {me.groups.map((g) => (
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    checked={m.groups.includes(g.id)}
+                    disabled={busy}
+                    onChange={(e) => saveMember(m.userId, { groups: e.currentTarget.checked ? [...m.groups, g.id] : m.groups.filter((x) => x !== g.id) })}
+                  />
+                  {g.name}に入っている
+                </label>
+            ))}
             {me.groups.map((g) => (
                 <label class="check">
                   <input

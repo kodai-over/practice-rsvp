@@ -1,5 +1,6 @@
 import {
   canRegister,
+  canSeePractice,
   confirmCard,
   goingList,
   labelDate,
@@ -18,7 +19,10 @@ import {
   buildDraft,
   createPractices,
   ensureMember,
+  forgetGroupMember,
+  groupLink,
   loadDraft,
+  noteGroupMember,
   readReservations,
   recordAnswer,
   removeDraft,
@@ -41,6 +45,9 @@ export interface LineEvent {
   source: Source;
   message?: { id: string; type: string; text?: string; imageSet?: { id: string; index: number; total: number } };
   postback?: { data: string };
+  /** memberJoined / memberLeft で入った人・抜けた人 */
+  joined?: { members: { type: string; userId?: string }[] };
+  left?: { members: { type: string; userId?: string }[] };
 }
 
 export function handleWebhook(ctx: Ctx, body: { events?: LineEvent[] }): void {
@@ -55,6 +62,14 @@ export function handleWebhook(ctx: Ctx, body: { events?: LineEvent[] }): void {
 }
 
 function handleEvent(ctx: Ctx, ev: LineEvent): void {
+  // グループで発言したりボタンを押したりした人は、そのグループに入っている
+  if (ev.source.type !== 'user' && ev.source.userId && (ev.type === 'message' || ev.type === 'postback')) {
+    try {
+      noteGroupMember(ctx, chatId(ev.source), ev.source.userId);
+    } catch (e) {
+      ctx.log('note group member failed', e);
+    }
+  }
   switch (ev.type) {
     case 'message':
       if (ev.message?.type === 'text') return onText(ctx, ev);
@@ -66,9 +81,24 @@ function handleEvent(ctx: Ctx, ev: LineEvent): void {
       return onJoin(ctx, ev);
     case 'leave':
       return onLeave(ctx, ev);
+    case 'memberJoined':
+      return eachUser(ctx, ev.joined?.members, (u) => noteGroupMember(ctx, chatId(ev.source), u));
+    case 'memberLeft':
+      return eachUser(ctx, ev.left?.members, (u) => forgetGroupMember(ctx, chatId(ev.source), u));
     case 'follow':
       if (ev.source.userId) ensureMember(ctx, ev.source.userId);
       return;
+  }
+}
+
+/** 1人で失敗しても、残りの人は処理する */
+function eachUser(ctx: Ctx, members: { userId?: string }[] | undefined, fn: (userId: string) => void): void {
+  for (const u of members ?? []) {
+    try {
+      if (u.userId) fn(u.userId);
+    } catch (e) {
+      ctx.log('group member update failed', u.userId, e);
+    }
   }
 }
 
@@ -92,10 +122,13 @@ function onText(ctx: Ctx, ev: LineEvent): void {
   const text = (ev.message?.text ?? '').trim();
   if (text === '練習') {
     const groupId = ev.source.type === 'user' ? undefined : chatId(ev.source);
-    const practices = upcoming(ctx, groupId);
     const att = ctx.store.attendance();
+    // 個別トークでは、その人に見える練習だけを返す
+    const me = groupId ? null : ctx.store.getMember(ev.source.userId ?? '');
+    const involved = (id: string) => att.some((a) => a.practiceId === id && (a.participant === me?.userId || a.addedBy === me?.userId));
+    const practices = upcoming(ctx, groupId).filter((p) => groupId || canSeePractice(me, p, involved(p.id)));
     const items = practices.map((practice) => ({ practice, going: goingList(att, practice.id).length }));
-    safeReply(ctx, ev, [practiceListMessage(items, ctx.config.appUrl)]);
+    safeReply(ctx, ev, [practiceListMessage(items, ctx.config.appUrl, groupId ? (groupLink(ctx, groupId) ?? undefined) : undefined)]);
     return;
   }
   // グループでの会話には反応しない。個別トークで予約内容らしい文章が来たら読み取る
@@ -294,7 +327,7 @@ function onJoin(ctx: Ctx, ev: LineEvent): void {
   ctx.withLock(() => {
     const s = ctx.store.settings();
     if (!s.groups.some((g) => g.id === id)) {
-      s.groups.push({ id, name: name || `グループ${s.groups.length + 1}` });
+      s.groups.push({ id, name: name || `グループ${s.groups.length + 1}`, key: ctx.uuid() });
       ctx.store.saveSettings(s);
     }
   });

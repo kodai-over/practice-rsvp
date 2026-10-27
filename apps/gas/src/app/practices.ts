@@ -45,9 +45,81 @@ export function ensureMember(ctx: Ctx, userId: string, opts: { groupId?: string;
       ctx.log('profile error', e);
     }
   }
-  const m: Member = { userId, name: name || 'メンバー', role: '一般', defaultGroups: [] };
+  const m: Member = { userId, name: name || 'メンバー', role: '一般', defaultGroups: [], groups: [] };
   ctx.store.saveMember(m);
   return m;
+}
+
+const IN_GROUP_TTL = 6 * 60 * 60;
+/** 覚え済みの目印。グループで発言があるたびにシートを読まないようにする */
+export const inGroupKey = (groupId: string, userId: string) => `ingroup:${groupId}:${userId}`;
+
+/** グループにいると分かった人を、そのグループのメンバーとして覚える。未登録なら一般メンバーとして登録する */
+export function noteGroupMember(ctx: Ctx, groupId: string, userId: string): void {
+  const mark = inGroupKey(groupId, userId);
+  if (ctx.kv.get(mark)) return;
+  if (!ctx.store.getMember(userId)?.groups.includes(groupId)) {
+    if (!ctx.store.settings().groups.some((g) => g.id === groupId)) return;
+    ctx.withLock(() => {
+      // 複数人トーク（R で始まる）はグループのプロフィールAPIでは名前を取れないので、ふつうのプロフィールで取る
+      const m = ensureMember(ctx, userId, groupId.startsWith('C') ? { groupId } : {});
+      if (!m.groups.includes(groupId)) ctx.store.saveMember({ ...m, groups: [...m.groups, groupId] });
+    });
+  }
+  ctx.kv.put(mark, '1', IN_GROUP_TTL);
+}
+
+/** グループを抜けた人を、そのグループのメンバーから外す */
+export function forgetGroupMember(ctx: Ctx, groupId: string, userId: string): void {
+  ctx.kv.remove(inGroupKey(groupId, userId));
+  if (!ctx.store.getMember(userId)?.groups.includes(groupId)) return;
+  ctx.withLock(() => {
+    const m = ctx.store.getMember(userId);
+    if (m?.groups.includes(groupId)) ctx.store.saveMember({ ...m, groups: m.groups.filter((g) => g !== groupId) });
+  });
+}
+
+/** カードのリンクに付けるグループの合言葉。まだ無ければ作って設定に保存する。設定に無いグループなら null */
+export function groupLink(ctx: Ctx, groupId: string): { id: string; key: string } | null {
+  const found = ctx.store.settings().groups.find((g) => g.id === groupId);
+  if (!found) return null;
+  if (found.key) return { id: groupId, key: found.key };
+  return ctx.withLock(() => {
+    const s = ctx.store.settings();
+    const g = s.groups.find((x) => x.id === groupId);
+    if (!g) return null;
+    if (!g.key) {
+      g.key = ctx.uuid();
+      ctx.store.saveSettings(s);
+    }
+    return { id: groupId, key: g.key };
+  });
+}
+
+/**
+ * 公開前からいるメンバーの所属グループを、今あるデータから埋める（一度だけ実行する）。
+ * ふだんの送り先グループと、1つのグループにだけ流した練習に答えたときのグループを、今の所属に足す（何度実行しても同じ）。
+ * 所属が増えた人数を返す
+ */
+export function backfillGroupMembers(ctx: Ctx): number {
+  return ctx.withLock(() => {
+    const known = new Set(ctx.store.settings().groups.map((g) => g.id));
+    const practices = new Map(ctx.store.practices().map((p) => [p.id, p]));
+    const att = ctx.store.attendance();
+    let count = 0;
+    for (const m of ctx.store.members()) {
+      const found = new Set([...m.groups, ...m.defaultGroups.filter((g) => known.has(g))]);
+      for (const a of att) {
+        const p = a.participant === m.userId ? practices.get(a.practiceId) : undefined;
+        if (p?.groups.length === 1 && known.has(p.groups[0])) found.add(p.groups[0]);
+      }
+      if (found.size > m.groups.length) {
+        ctx.store.saveMember({ ...m, groups: [...found] });
+        count++;
+      }
+    }
+    return count;
+  });
 }
 
 // ---------------------------------------------------------------- 下書き（確認カード）
@@ -209,14 +281,12 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
 export function sendRecruit(ctx: Ctx, practices: Practice[], groups: string[], bookerName: string): string[] {
   if (practices.length === 0 || groups.length === 0) return [];
   const { studios } = ctx.store.settings();
-  const messages = recruitMessages(
-    practices.map((practice) => ({ practice, bookerName, roomInfo: roomInfo(studios, practice.studio, practice.room) })),
-    ctx.config.appUrl,
-  );
+  const items = practices.map((practice) => ({ practice, bookerName, roomInfo: roomInfo(studios, practice.studio, practice.room) }));
   const sent: string[] = [];
   for (const g of groups) {
     try {
-      ctx.line.push(g, messages.slice(0, 5));
+      // カードのリンクに送り先のグループと合言葉を入れるので、グループごとに作る
+      ctx.line.push(g, recruitMessages(items, ctx.config.appUrl, groupLink(ctx, g) ?? undefined).slice(0, 5));
       sent.push(g);
     } catch (e) {
       ctx.log('recruit push failed', g, e);

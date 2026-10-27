@@ -44,6 +44,8 @@ export interface Member {
   name: string;
   role: Role;
   defaultGroups: string[];
+  /** 入っているグループ。グループでの発言・出欠・参加から覚え、管理画面でも直せる（古い行には無い） */
+  groups: string[];
 }
 
 /** 標準料金の曜日の区分。'' は毎日 */
@@ -71,6 +73,11 @@ export interface CancelRule {
 export interface Group {
   id: string;
   name: string;
+  /**
+   * そのグループに送ったカードのリンクに付ける合言葉。開いた人をそのグループのメンバーとして覚えるのに使う。
+   * サーバーの中だけで使い、アプリには渡さない
+   */
+  key?: string;
 }
 
 /** 部屋。size は広さなどの補足（例: 46.5㎡・天井2.3m） */
