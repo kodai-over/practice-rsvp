@@ -35,3 +35,28 @@ export function openExternal(url: string) {
 export function closeApp() {
   if (!MOCK && liff.isInClient()) liff.closeWindow();
 }
+
+/**
+ * 開いたトークに本人の発言として送れるか。送れるのはグループ（複数人トーク）から開いたときだけ。
+ * noScope は LINE Developers で chat_message.write を有効にしていないとき
+ */
+export function canSendToChat(): 'ok' | 'outside' | 'noScope' {
+  if (MOCK) return 'ok';
+  if (!liff.isInClient()) return 'outside';
+  const ctx = liff.getContext();
+  if (ctx?.type !== 'group' && ctx?.type !== 'room') return 'outside';
+  return ctx.scope?.includes('chat_message.write') ? 'ok' : 'noScope';
+}
+
+/** 開いたトークに、本人の発言として送る（LINE Developers で chat_message.write を有効にしておく） */
+export async function sendToChat(text: string) {
+  if (MOCK) {
+    console.info('[mock sendMessages]', text);
+    return;
+  }
+  // スコープを足す前にログインした人は、まだ許可していないことがある。そのときは先に許可を求める
+  // 求められない設定のときもあるので、失敗してもそのまま送ってみる（送れなければ sendMessages が失敗する）
+  const { state } = await liff.permission.query('chat_message.write').catch(() => ({ state: 'granted' }));
+  if (state === 'prompt') await liff.permission.requestAll().catch((e) => console.error(e));
+  await liff.sendMessages([{ type: 'text', text }]);
+}

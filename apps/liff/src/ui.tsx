@@ -38,7 +38,7 @@ interface AppState {
   /** 一覧を置き換える。fresh なら「今取った最新」として扱う（一覧に戻っても取り直さない） */
   setPractices(list: PracticeView[], fresh?: boolean): void;
   /** 1件だけ差し替える（出欠や修正の結果をすぐ一覧に反映する） */
-  updatePractice(v: PracticeView): void;
+  updatePractice(v: PracticeView, opts?: { revert?: boolean }): void;
 }
 
 export const AppContext = createContext<AppState>(null as unknown as AppState);
@@ -154,7 +154,7 @@ export function NavBar() {
   const { me } = useApp();
   const { path } = useRoute();
   // 練習の画面は「予定」、募集の画面（/recruit/:id）は「募集」を光らせる
-  const here = path[0] === 'p' ? '' : (path[0] ?? '');
+  const here = path[0] === 'p' || path[0] === 'answer' ? '' : (path[0] ?? '');
   const items: { to: string; key: string; icon: IconName; label: string }[] = [
     { to: '/', key: '', icon: 'ticket', label: '予定' },
     ...(canRegister(me.member)
