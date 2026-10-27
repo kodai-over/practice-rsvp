@@ -1288,6 +1288,17 @@ details > summary {
 .sec-head + .note {
   margin-top: 0;
 }
+/* 「グループに伝える」で送る文の見本 */
+.report {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  background: var(--paper);
+  border-radius: 10px;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
 
 /* 管理者が別のアカウントとして見ているときの帯 */
 .acting-banner {

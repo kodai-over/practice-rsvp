@@ -1,6 +1,6 @@
 import { labelDate, shortDate } from './dates';
 import { skippedNote, yen } from './practice';
-import type { Draft, Group, Practice, Reservation } from './types';
+import type { Answer, Draft, Group, Practice, Reservation } from './types';
 
 /** LINE Messaging API のメッセージオブジェクト（必要な範囲だけ型付け） */
 export type LineMessage = { type: string; [key: string]: unknown };
@@ -170,82 +170,84 @@ export interface RecruitInput {
   bookerName: string;
 }
 
-/** 募集カード。広さ・料金はアプリの練習の画面で見る。出欠はアプリと同じ記号（○行く △保留 ✕行かない） */
-function recruitBubble({ practice: p, bookerName }: RecruitInput, appUrl: string, group?: LinkGroup): Node {
-  const d = shortDate(p.date);
+/** LINE のボタンのリンクに入れられる長さ */
+const MAX_URI = 1000;
+/** 1枚のカードに載せる練習の数（多すぎるとカードが送れない大きさになる） */
+const MAX_PER_CARD = 12;
+
+/**
+ * 募集の練習だけを並べた回答画面を開くリンク（?r=練習ID を練習の数だけ付ける）。
+ * group があれば、開いた人をそのグループのメンバーとして覚えられるようグループIDと合言葉も付ける
+ */
+export function answerLink(appUrl: string, practices: Pick<Practice, 'id'>[], group?: LinkGroup): string {
+  const q = practices.map((p) => `r=${encodeURIComponent(p.id)}`);
+  if (group?.key) q.push(`g=${encodeURIComponent(group.id)}`, `k=${encodeURIComponent(group.key)}`);
+  return `${appUrl}${appUrl.includes('?') ? '&' : '?'}${q.join('&')}`;
+}
+
+/** 募集の1件分。日時・場所・予約者（広さ・料金・参加状況はアプリで見る） */
+function recruitItem({ practice: p, bookerName }: RecruitInput, first: boolean): Node {
   return {
-    type: 'bubble',
-    body: {
-      type: 'box',
-      layout: 'vertical',
-      spacing: 'sm',
-      contents: [
-        text('練習募集', { size: 'xs', color: GREEN, weight: 'bold' }),
-        text(labelDate(p.date), { weight: 'bold', size: 'xl' }),
-        text(timeRange(p), { size: 'md' }),
-        { type: 'separator', margin: 'md' },
-        row('場所', place(p)),
-        row('予約者', bookerName),
-        ...(p.max ? [row('上限', `${p.max}人`)] : []),
-        ...(p.memo ? [row('メモ', p.memo)] : []),
-      ],
-    },
-    footer: {
-      type: 'box',
-      layout: 'vertical',
-      spacing: 'sm',
-      contents: [
-        {
-          type: 'box',
-          layout: 'horizontal',
-          spacing: 'sm',
-          contents: [
-            {
-              type: 'button',
-              style: 'primary',
-              color: GREEN,
-              height: 'sm',
-              action: { type: 'postback', label: '○', data: encodePostback({ a: 'rsvp', p: p.id, v: '1' }), displayText: `${d} 行きます` },
-            },
-            {
-              type: 'button',
-              style: 'secondary',
-              height: 'sm',
-              action: { type: 'postback', label: '△', data: encodePostback({ a: 'rsvp', p: p.id, v: '2' }), displayText: `${d} 保留にします` },
-            },
-            {
-              type: 'button',
-              style: 'secondary',
-              height: 'sm',
-              action: { type: 'postback', label: '✕', data: encodePostback({ a: 'rsvp', p: p.id, v: '0' }), displayText: `${d} 行きません` },
-            },
-          ],
-        },
-        // 参加状況・広さ・料金・カレンダーへの追加は、アプリの練習の画面で
-        {
-          type: 'button',
-          style: 'link',
-          height: 'sm',
-          action: { type: 'uri', label: 'アプリを開く', uri: practiceLink(appUrl, p, group) },
-        },
-      ],
+    type: 'box',
+    layout: 'vertical',
+    spacing: 'xs',
+    margin: first ? 'lg' : 'xl',
+    contents: [
+      ...(first ? [] : [{ type: 'separator' }]),
+      text(`${labelDate(p.date)}　${timeRange(p)}`, { weight: 'bold', size: 'md', margin: first ? 'none' : 'lg' }),
+      row('場所', place(p)),
+      row('予約者', bookerName),
+      ...(p.max ? [row('上限', `${p.max}人`)] : []),
+      ...(p.memo ? [row('メモ', p.memo)] : []),
+    ],
+  };
+}
+
+/**
+ * 参加者募集のカード。その回に募集した練習を1枚に並べ、ボタンは「出欠を答える」だけ。
+ * 押すとアプリでその練習だけの回答画面が開く（グループのトークには何も流れない）
+ */
+function recruitCard(items: RecruitInput[], appUrl: string, group?: LinkGroup): LineMessage {
+  return {
+    type: 'flex',
+    altText: `参加者募集: ${items.map((c) => labelDate(c.practice.date)).join('・')}`,
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [text('参加者募集', { weight: 'bold', size: 'xl', color: GREEN }), ...items.map((c, i) => recruitItem(c, i === 0))],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            style: 'primary',
+            color: GREEN,
+            action: { type: 'uri', label: '出欠を答える', uri: answerLink(appUrl, items.map((c) => c.practice), group) },
+          },
+        ],
+      },
     },
   };
 }
 
-/** 1回の登録につき1メッセージ（カルーセルは12枚まで。超えたら複数メッセージに分ける）。group は送り先のグループ */
+/** 1回の募集につき1枚。練習が多くてリンクやカードに入りきらないときだけ、複数枚に分ける。group は送り先のグループ */
 export function recruitMessages(items: RecruitInput[], appUrl: string, group?: LinkGroup): LineMessage[] {
-  const messages: LineMessage[] = [];
-  for (let i = 0; i < items.length; i += 12) {
-    const chunk = items.slice(i, i + 12);
-    const dates = chunk.map((c) => labelDate(c.practice.date)).join('・');
-    messages.push({
-      type: 'flex',
-      altText: `練習募集: ${dates}`,
-      contents: { type: 'carousel', contents: chunk.map((c) => recruitBubble(c, appUrl, group)) },
-    });
+  const chunks: RecruitInput[][] = [];
+  let cur: RecruitInput[] = [];
+  for (const item of items) {
+    const next = [...cur, item];
+    const fits = next.length <= MAX_PER_CARD && answerLink(appUrl, next.map((c) => c.practice), group).length <= MAX_URI;
+    if (cur.length && !fits) {
+      chunks.push(cur);
+      cur = [item];
+    } else cur = next;
   }
-  return messages;
+  if (cur.length) chunks.push(cur);
+  return chunks.map((c) => recruitCard(c, appUrl, group));
 }
 
 // ---------------------------------------------------------------- 練習一覧（「練習」への応答）
@@ -310,6 +312,26 @@ export function warningText(p: Practice, going: number, min: number, appUrl: str
     'まもなくキャンセル料がかかります。キャンセルするか判断してください。',
     appLink(appUrl, { p: p.id }),
   ].join('\n');
+}
+
+/**
+ * 回答画面の「グループに伝える」で、本人の発言としてグループに送る文。
+ * 行く・行かないを日付でまとめ、保留と未回答は載せない。載せるものが無ければ null
+ */
+export function answerReport(items: { practice: Pick<Practice, 'date' | 'start'>; answer: Answer | null }[]): string | null {
+  // 同じ日に練習が2つあるときだけ、開始時刻も付けて見分ける
+  const label = (p: Pick<Practice, 'date' | 'start'>) =>
+    items.filter((x) => x.practice.date === p.date).length > 1 ? `${labelDate(p.date)} ${p.start}` : labelDate(p.date);
+  const pick = (a: Answer) =>
+    items
+      .filter((x) => x.answer === a)
+      .sort((x, y) => (x.practice.date + x.practice.start).localeCompare(y.practice.date + y.practice.start))
+      .map((x) => label(x.practice))
+      .join('・');
+  const going = pick('行く');
+  const notGoing = pick('行かない');
+  const lines = [going && `○ ${going} 行きます`, notGoing && `✕ ${notGoing} 行きません`].filter(Boolean);
+  return lines.length ? ['出欠を回答しました', ...lines].join('\n') : null;
 }
 
 export function reservationLabel(r: Reservation): string {

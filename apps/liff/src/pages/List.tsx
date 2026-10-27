@@ -16,7 +16,7 @@ function readTab(): Tab {
 }
 
 export function ListPage({ initialTab }: { initialTab?: string | null }) {
-  const { me, practices: list, practicesAt, setPractices, updatePractice } = useApp();
+  const { me, practices: list, practicesAt, setPractices } = useApp();
   const [tab, setTab] = useState<Tab>(() => (initialTab === 'mine' || initialTab === 'todo' || initialTab === 'all' ? initialTab : readTab()));
   const [run, busy] = useRunner();
 
@@ -34,14 +34,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
     }
   };
 
-  // 押した瞬間に色を変え、サーバーの結果が来たら人数なども含めて差し替える（失敗したら元に戻す）
-  const answer = async (id: string, a: Answer) => {
-    const before = (list ?? []).find((x) => x.practice.id === id);
-    if (before) updatePractice({ ...before, myAnswer: a });
-    const v = await run(() => api('rsvp', { id, answer: a }));
-    if (v) updatePractice(v);
-    else if (before) updatePractice(before);
-  };
+  const answer = useAnswer(run);
 
   const active = (list ?? []).filter((v) => v.practice.status !== '中止');
   const groups: Record<Tab, PracticeView[]> = {
@@ -85,7 +78,19 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
   );
 }
 
-function PracticeCard({ v, onAnswer }: { v: PracticeView; onAnswer: (a: Answer) => void }) {
+/** 出欠を答える。押した瞬間に色を変え、サーバーの結果が来たら人数なども含めて差し替える（失敗したら元に戻す） */
+export function useAnswer(run: ReturnType<typeof useRunner>[0]) {
+  const { practices: list, updatePractice } = useApp();
+  return async (id: string, a: Answer) => {
+    const before = (list ?? []).find((x) => x.practice.id === id);
+    if (before) updatePractice({ ...before, myAnswer: a });
+    const v = await run(() => api('rsvp', { id, answer: a }));
+    if (v) updatePractice(v);
+    else if (before) updatePractice(before);
+  };
+}
+
+export function PracticeCard({ v, onAnswer }: { v: PracticeView; onAnswer: (a: Answer) => void }) {
   const p = v.practice;
   const open = () => go(`/p/${encodeURIComponent(p.id)}`);
   return (

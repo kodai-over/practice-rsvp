@@ -27,6 +27,7 @@ import {
   endAfterStart,
   practiceListMessage,
   recruitMessages,
+  answerReport,
   toJstDate,
   yen,
   type Practice,
@@ -309,25 +310,49 @@ describe('カレンダー', () => {
 describe('Flex Message', () => {
   const appUrl = 'https://liff.line.me/123-abc';
 
-  it('募集カードは12枚ごとに1メッセージ', () => {
-    const items = Array.from({ length: 13 }, (_, i) => ({
-      practice: practice({ id: `p${i}`, date: addDays('2026-10-21', i) }),
-      bookerName: 'おおゆち',
-    }));
-    const msgs = recruitMessages(items, appUrl);
-    expect(msgs).toHaveLength(2);
+  it('募集カード: 練習を1枚に並べ、ボタンは「出欠を答える」だけ', () => {
+    const items = [0, 1].map((i) => ({ practice: practice({ id: `p${i}`, date: addDays('2026-11-01', i), max: i ? 5 : null }), bookerName: 'おおゆち' }));
+    const msgs = recruitMessages(items, appUrl, { id: 'C1', key: 'k1' });
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].altText).toBe('参加者募集: 11/1(日)・11/2(月)');
     const json = JSON.stringify(msgs[0]);
-    expect(json).toContain('"displayText":"10/21 行きます"');
-    expect(json).toContain('a=rsvp&p=p0&v=1');
-    expect(json).toContain(`${appUrl}?p=p0"`);
-    // 出欠は記号。ボタンは「アプリを開く」だけで、広さ・料金・カレンダーは載せない
-    expect(json).toContain('"label":"○"');
-    expect(json).toContain('"label":"△"');
-    expect(json).toContain('"label":"✕"');
-    expect(json).toContain('"label":"アプリを開く"');
-    expect(json).not.toContain('カレンダー');
+    expect(json).toContain('"text":"参加者募集"');
+    expect(json).toContain('おおゆち');
+    expect(json).toContain('"label":"出欠を答える"');
+    expect(json).toContain(`"uri":"${appUrl}?r=p0&r=p1&g=C1&k=k1"`);
+    // その場で答えるボタン（押すとトークに発言が流れる）は載せない
+    expect(json).not.toContain('postback');
     expect(json).not.toContain('割り勘');
-    expect(json).not.toContain('広さ');
+  });
+
+  it('募集カード: 練習が多いときやリンクが長すぎるときは分ける', () => {
+    const many = Array.from({ length: 13 }, (_, i) => ({ practice: practice({ id: `p${i}`, date: addDays('2026-10-21', i) }), bookerName: 'a' }));
+    expect(recruitMessages(many, appUrl).map((m) => JSON.stringify(m).match(/r=p/g)!.length)).toEqual([12, 1]);
+    const long = Array.from({ length: 5 }, (_, i) => ({ practice: practice({ id: `${'あ'.repeat(30)}${i}` }), bookerName: 'a' }));
+    const msgs = recruitMessages(long, appUrl);
+    expect(msgs.length).toBeGreaterThan(1);
+    for (const m of msgs) expect(JSON.stringify(m).match(/"uri":"([^"]+)"/)![1].length).toBeLessThanOrEqual(1000);
+    expect(msgs.reduce((n, m) => n + JSON.stringify(m).match(/r=/g)!.length, 0)).toBe(5);
+  });
+
+  it('グループに伝える文: 行く・行かないを日付でまとめ、保留と未回答は載せない', () => {
+    const at = (date: string, start: string) => ({ date, start });
+    expect(
+      answerReport([
+        { practice: at('2026-11-02', '19:00'), answer: '行く' },
+        { practice: at('2026-11-01', '19:00'), answer: '行く' },
+        { practice: at('2026-11-03', '19:00'), answer: '行かない' },
+        { practice: at('2026-11-04', '19:00'), answer: '保留' },
+        { practice: at('2026-11-05', '19:00'), answer: null },
+      ]),
+    ).toBe('出欠を回答しました\n○ 11/1(日)・11/2(月) 行きます\n✕ 11/3(火) 行きません');
+    // 同じ日に2つあるときは開始時刻で見分ける
+    const sameDay = answerReport([
+      { practice: at('2026-11-01', '13:00'), answer: '行く' },
+      { practice: at('2026-11-01', '19:00'), answer: '行かない' },
+    ]);
+    expect(sameDay).toBe('出欠を回答しました\n○ 11/1(日) 13:00 行きます\n✕ 11/1(日) 19:00 行きません');
+    expect(answerReport([{ practice: at('2026-11-01', '13:00'), answer: '保留' }])).toBeNull();
   });
 
   it('確認カード: 「登録して募集」「登録のみ」「やめる」', () => {

@@ -35,3 +35,20 @@ export function openExternal(url: string) {
 export function closeApp() {
   if (!MOCK && liff.isInClient()) liff.closeWindow();
 }
+
+/** グループ（複数人トーク）から開いたか。開いたトークにだけ、本人の発言として送れる */
+export function canSendToChat(): boolean {
+  if (MOCK) return true;
+  if (!liff.isInClient()) return false;
+  const type = liff.getContext()?.type;
+  return type === 'group' || type === 'room';
+}
+
+/** 開いたトークに、本人の発言として送る（LINE Developers で chat_message.write を有効にしておく） */
+export async function sendToChat(text: string) {
+  if (MOCK) {
+    console.info('[mock sendMessages]', text);
+    return;
+  }
+  await liff.sendMessages([{ type: 'text', text }]);
+}
