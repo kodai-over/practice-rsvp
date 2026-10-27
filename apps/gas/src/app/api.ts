@@ -73,7 +73,8 @@ function actingAs(ctx: Ctx, real: Member, requested: unknown): { me: Member; act
         if (!ctx.store.getMember(TEST_MEMBER_ID)) ctx.store.saveMember(m);
         return ctx.store.getMember(TEST_MEMBER_ID) ?? m;
       });
-    return { me: test, acting };
+    // 管理画面で権限を変えられていても、確認用アカウントとしては予約者で操作する
+    return { me: { ...test, role: '予約者' }, acting };
   }
   return { me: real, acting };
 }
