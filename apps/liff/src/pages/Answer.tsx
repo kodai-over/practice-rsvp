@@ -2,10 +2,10 @@ import { useEffect, useState } from 'preact/hooks';
 import { answerReport } from '@studio-attendance/shared';
 import { api } from '../api';
 import { canSendToChat, closeApp, sendToChat } from '../liff';
-import { Icon, Spinner, Syncing, TopBar, useApp, useRunner } from '../ui';
+import { Icon, Spinner, Syncing, TopBar, go, useApp, useRunner } from '../ui';
 import { PracticeCard, useAnswer } from './List';
 
-/** 募集カードの「出欠を答える」から開く画面。その募集の練習だけを並べ、答えたらグループに伝えられる */
+/** 募集カードの「RSVP」から開く画面。その募集の練習だけを並べ、答えたらグループに伝えられる */
 export function AnswerPage({ ids: raw }: { ids: string[] }) {
   const { practices: list, practicesAt, setPractices, toast } = useApp();
   const ids = [...new Set(raw)];
@@ -26,24 +26,27 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
     if (load === 'loading') reload();
   }, []);
   const fresh = load === 'ok';
+  // グループに送る文。書き換えるまでは回答に合わせて作り直し、書き換えたらそのまま残す
+  const [draft, setDraft] = useState<string | null>(null);
 
   const found = ids.map((id) => list?.find((v) => v.practice.id === id)).filter((v) => v != null);
   // 前回の表示に無い練習（募集されたばかりのもの）は、最新を取り終わるまで待つ
   if (list == null || (found.length < ids.length && load === 'loading'))
     return (
       <>
-        <TopBar title="出欠を答える" />
+        <TopBar title="RSVP" />
         <Spinner />
       </>
     );
 
   // 中止の練習は答えられないので、伝える文にも載せない
-  const report = answerReport(found.filter((v) => v.practice.status !== '中止').map((v) => ({ practice: v.practice, answer: v.myAnswer })));
+  const report = answerReport(found.filter((v) => v.practice.status !== '中止').map((v) => ({ practice: v.practice, answer: v.myAnswer }))) ?? '';
+  const text = draft ?? report;
   const chat = canSendToChat();
   const tell = () =>
     send(async () => {
       try {
-        await sendToChat(report!);
+        await sendToChat(text.trim());
       } catch (e) {
         console.error(e);
         throw new Error('グループに送れませんでした。回答は記録されています');
@@ -55,7 +58,7 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
 
   return (
     <>
-      <TopBar title="出欠を答える">{(busy || load === 'loading') && <Syncing />}</TopBar>
+      <TopBar title="RSVP">{(busy || load === 'loading') && <Syncing />}</TopBar>
       {load === 'error' && (
         <div class="empty">
           最新の出欠を読み込めませんでした
@@ -83,15 +86,36 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
             <p class="note">回答は記録されています。グループに送る設定がまだのため、伝えられません（管理者に知らせてください）</p>
           ) : (
             <>
-              {report ? <pre class="report">{report}</pre> : <p class="note">○ か ✕ を選ぶと伝えられます（△は伝えません）</p>}
-              <button class="btn primary block" disabled={!report || busy || sending || !fresh} onClick={tell}>
+              <label class="field">
+                <span>送る文（書き換えられます）</span>
+                <textarea
+                  class="report"
+                  rows={Math.max(3, text.split('\n').length + 1)}
+                  value={text}
+                  placeholder="○ △ ✕ を選ぶと、ここに文ができます"
+                  maxLength={1000}
+                  onInput={(e) => setDraft(e.currentTarget.value)}
+                />
+              </label>
+              {draft != null && draft !== report && (
+                <button class="btn ghost block" style={{ marginBottom: 8 }} onClick={() => setDraft(null)}>
+                  回答から作り直す
+                </button>
+              )}
+              <button class="btn primary block" disabled={!text.trim() || busy || sending || !fresh} onClick={tell}>
                 <Icon name="send" size={18} />
                 グループに伝える
               </button>
-              <p class="note">押すと、あなたの発言としてこのトークに送ります。送らなくても回答は記録されています</p>
+              <p class="note">押すと、あなたの発言としてこのトークに送ります。伝えなくても回答は記録されています</p>
             </>
           )}
         </section>
+      )}
+
+      {found.length > 0 && (
+        <button class="btn ghost block" style={{ marginTop: 16 }} disabled={sending} onClick={() => go('/')}>
+          完了
+        </button>
       )}
     </>
   );

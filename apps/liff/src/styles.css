@@ -1332,7 +1332,13 @@ details > summary {
 }
 /* 「グループに伝える」で送る文の見本 */
 .report {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0 0 12px;
+  border: 0;
+  color: var(--ink);
+  resize: vertical;
   padding: 12px 14px;
   background: var(--paper);
   border-radius: 10px;
