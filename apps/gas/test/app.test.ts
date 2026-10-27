@@ -770,7 +770,7 @@ describe('見える練習', () => {
     expect(ids('UB')).not.toContain(created[0]);
   });
 
-  it('公開前からいるメンバーの所属を、ふだんの送り先と、1グループだけの練習へのボタン回答から埋める', () => {
+  it('公開前からいるメンバーの所属を、ふだんの送り先と、1グループだけの練習への回答から埋める', () => {
     member('Uold1', []);
     member('Uold2', []);
     member('Uold3', []);
@@ -778,14 +778,15 @@ describe('見える練習', () => {
     t.store.p.push({ ...baseP, id: 'p1', groups: [G1] } as any, { ...baseP, id: 'p2', groups: [G1, G2] } as any);
     const ans = (participant: string, practiceId: string, via: 'ボタン' | 'アプリ') =>
       ({ practiceId, participant, name: '', kind: 'メンバー', via, addedBy: participant, answer: '行く', updatedAt: '' }) as const;
-    t.store.a.push(ans('Uold2', 'p1', 'ボタン'), ans('Uold3', 'p2', 'ボタン'), ans('Uold3', 'p1', 'アプリ'));
-    expect(backfillGroupMembers(t.ctx)).toBe(2);
+    t.store.a.push(ans('Uold2', 'p1', 'ボタン'), ans('Uold3', 'p2', 'ボタン'), ans('Uold3', 'p1', 'アプリ'), ans('UD', 'p1', 'ボタン'));
+    expect(backfillGroupMembers(t.ctx)).toBe(4);
     expect(t.store.getMember('Uold1')?.groups).toEqual([G2]);
     expect(t.store.getMember('Uold2')?.groups).toEqual([G1]);
-    // どのグループか分からない回答・アプリからの回答では付けない
-    expect(t.store.getMember('Uold3')?.groups).toEqual([]);
-    // すでに所属がある人は変えない
-    expect(t.store.getMember('UD')?.groups).toEqual([G2]);
+    // どのグループか分からない回答（2グループに流した練習）では付けない
+    expect(t.store.getMember('Uold3')?.groups).toEqual([G1]);
+    // すでに所属がある人にも足す。もう一度実行しても変わらない
+    expect(t.store.getMember('UD')?.groups).toEqual([G2, G1]);
+    expect(backfillGroupMembers(t.ctx)).toBe(0);
   });
 
   it('複数人トークでの発言では、ふつうのプロフィールで名前を取る。覚えたあとはシートを読み直さない', () => {

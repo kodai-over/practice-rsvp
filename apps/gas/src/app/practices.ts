@@ -98,8 +98,8 @@ export function groupLink(ctx: Ctx, groupId: string): { id: string; key: string 
 
 /**
  * 公開前からいるメンバーの所属グループを、今あるデータから埋める（一度だけ実行する）。
- * 所属がまだ空の人に、ふだんの送り先グループと、1つのグループにだけ流した練習にボタンで答えたときのグループを付ける。
- * 付けた人数を返す
+ * ふだんの送り先グループと、1つのグループにだけ流した練習に答えたときのグループを、今の所属に足す（何度実行しても同じ）。
+ * 所属が増えた人数を返す
  */
 export function backfillGroupMembers(ctx: Ctx): number {
   return ctx.withLock(() => {
@@ -108,13 +108,12 @@ export function backfillGroupMembers(ctx: Ctx): number {
     const att = ctx.store.attendance();
     let count = 0;
     for (const m of ctx.store.members()) {
-      if (m.groups.length) continue;
-      const found = new Set(m.defaultGroups.filter((g) => known.has(g)));
+      const found = new Set([...m.groups, ...m.defaultGroups.filter((g) => known.has(g))]);
       for (const a of att) {
-        const p = a.participant === m.userId && a.via === 'ボタン' ? practices.get(a.practiceId) : undefined;
+        const p = a.participant === m.userId ? practices.get(a.practiceId) : undefined;
         if (p?.groups.length === 1 && known.has(p.groups[0])) found.add(p.groups[0]);
       }
-      if (found.size) {
+      if (found.size > m.groups.length) {
         ctx.store.saveMember({ ...m, groups: [...found] });
         count++;
       }

@@ -116,9 +116,9 @@ export function setupSheets() {
   if (first && ss.getSheets().length > 1 && first.getLastRow() === 0) ss.deleteSheet(first);
 }
 
-/** 練習が見える範囲を入れたときに一度だけ実行：今いるメンバーの所属グループを、これまでの出欠から埋める */
+/** 練習が見える範囲を入れたときに実行（何度実行してもよい）：今いるメンバーの所属グループを、これまでの出欠から埋める */
 export function backfillGroupMembers() {
-  console.log(`所属グループを付けた人数: ${runBackfill(makeCtx())}`);
+  console.log(`所属グループが増えた人数: ${runBackfill(makeCtx())}`);
 }
 
 /** 初回だけ実行：毎時のトリガー（キャンセル期限前警告・終了処理）を作る */
