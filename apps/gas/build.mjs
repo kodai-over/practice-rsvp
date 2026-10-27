@@ -2,7 +2,7 @@
 import { build } from 'esbuild';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
-const GLOBALS = ['doPost', 'doGet', 'hourlyJob', 'setupSheets', 'installTriggers', 'checkConfig', 'setupRichMenu', 'backfillGroupMembers'];
+const GLOBALS = ['doPost', 'doGet', 'onEdit', 'hourlyJob', 'setupSheets', 'installTriggers', 'checkConfig', 'setupRichMenu', 'backfillGroupMembers'];
 
 mkdirSync('dist', { recursive: true });
 await build({
@@ -14,6 +14,8 @@ await build({
   outfile: 'dist/Code.js',
   charset: 'utf8',
   legalComments: 'none',
+  // 実行のたびに読み込むので小さくする（読み込みが速くなる）
+  minify: true,
 });
 const footer = GLOBALS.map((n) => `function ${n}(e) { return App.${n}(e); }`).join('\n');
 writeFileSync('dist/Code.js', readFileSync('dist/Code.js', 'utf8') + '\n' + footer + '\n');

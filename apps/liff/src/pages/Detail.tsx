@@ -7,18 +7,20 @@ import { Avatar, FRESH_MS, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, us
 
 /**
  * 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる）。
- * 一覧を取ったばかり（30秒以内）なら、取り直さない
+ * 一覧を取ったばかり（FRESH_MS 以内）なら取り直さず、一覧の変化（出欠の結果など）にそのまま合わせる
  */
 export function usePractice(id: string) {
   const { toast, practices, practicesAt, updatePractice } = useApp();
-  const fromList = () => practices?.find((x) => x.practice.id === id) ?? null;
-  const fresh = () => fromList() != null && practicesAt > 0 && Date.now() - practicesAt < FRESH_MS;
-  const [v, setV] = useState<PracticeView | null>(fromList);
+  const inList = practices?.find((x) => x.practice.id === id) ?? null;
+  const fresh = () => inList != null && practicesAt > 0 && Date.now() - practicesAt < FRESH_MS;
+  // 取り直した・操作した結果。無い間は一覧の内容を出す
+  const [own, setV] = useState<PracticeView | null>(null);
+  const v = own ?? inList;
   const [loading, setLoading] = useState(() => !fresh());
   const [run, busy] = useRunner();
 
   useEffect(() => {
-    setV(fromList());
+    setV(null);
     if (fresh()) return setLoading(false);
     setLoading(true);
     api('getPractice', { id })

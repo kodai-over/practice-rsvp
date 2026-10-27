@@ -7,7 +7,7 @@ import { PracticeCard, useAnswer } from './List';
 
 /** 募集カードの「RSVP」から開く画面。その募集の練習だけを並べ、答えたらグループに伝えられる */
 export function AnswerPage({ ids: raw }: { ids: string[] }) {
-  const { practices: list, practicesAt, startupFailed, setPractices, toast } = useApp();
+  const { practices: list, practicesAt, startupFailed, loadHome, toast } = useApp();
   const ids = [...new Set(raw)];
   const [run, busy] = useRunner();
   const { answer, pending } = useAnswer();
@@ -17,12 +17,10 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
   const [load, setLoad] = useState<'wait' | 'loading' | 'ok' | 'error'>(() =>
     practicesAt > 0 && Date.now() - practicesAt < FRESH_MS ? 'ok' : practicesAt === 0 && !startupFailed ? 'wait' : 'loading',
   );
+  // 起動時と同じまとめ取得をやり直す（グループのメンバーとして覚えてもらうのもやり直す）
   const reload = () => {
     setLoad('loading');
-    run(() => api('listPractices')).then((r) => {
-      if (r) setPractices(r, true);
-      setLoad(r ? 'ok' : 'error');
-    });
+    run(() => loadHome().then(() => true)).then((r) => setLoad(r ? 'ok' : 'error'));
   };
   useEffect(() => {
     if (load === 'loading') reload();

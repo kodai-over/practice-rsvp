@@ -25,7 +25,8 @@ export function makeVerifiers(props: { relaySecret: string; loginChannelId: stri
     },
     idToken(token) {
       if (!props.loginChannelId) return null;
-      const key = 'idt:' + hex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token, Utilities.Charset.UTF_8));
+      // チャネルを変えたときに古いチャネルのトークンを通さないよう、チャネルIDもキーに入れる
+      const key = `idt:${props.loginChannelId}:` + hex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token, Utilities.Charset.UTF_8));
       const hit = cache.get(key);
       if (hit) return JSON.parse(hit);
       const res = UrlFetchApp.fetch('https://api.line.me/oauth2/v2.1/verify', {

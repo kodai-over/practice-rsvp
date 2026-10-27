@@ -30,20 +30,46 @@ function props(): Record<(typeof PROP_KEYS)[number], string> {
   return Object.fromEntries(PROP_KEYS.map((k) => [k, p[k] ?? ''])) as Record<(typeof PROP_KEYS)[number], string>;
 }
 
-/** シートを書き換えるたびに変える目印。ロックを取ったとき、これが読み始めから変わっていなければ読み直さない */
+/**
+ * シートを書き換えるたびに変える目印。表の写し（CacheService）はこの目印ごとに置き、
+ * 書き換えがあれば次の実行は新しい写しを作る。写しを使うのは表示のための読み取りだけで、
+ * ロックの中（書き込みの前）は必ずシートを直接読む
+ */
 const STORE_VERSION_KEY = 'store:ver';
+/** 写しを使う時間の上限。手でシートを直したときも、これより長く古い表示は出ない */
+const SNAPSHOT_TTL = 300;
+/** CacheService に1件で置ける大きさ（100KB）より少し小さく */
+const SNAPSHOT_MAX_BYTES = 95_000;
 
 function makeCtx(p = props()): Ctx {
-  const store = new SheetStore(SpreadsheetApp.getActiveSpreadsheet());
   const cache = CacheService.getScriptCache();
   // シートを読む前に目印を控える。ほかの実行が書き換えれば目印が変わる
   let seen = cache.get(STORE_VERSION_KEY);
+  if (!seen) {
+    // 手で直した後などで目印が無ければ作る。このあとシートを読むので、写しは今のシートと合う
+    seen = Utilities.getUuid();
+    cache.put(STORE_VERSION_KEY, seen, 21600);
+  }
+  let lockDepth = 0;
+  const store = new SheetStore(SpreadsheetApp.getActiveSpreadsheet(), {
+    get(name) {
+      if (lockDepth > 0 || !seen) return null;
+      return cache.get(`snap:${name}:${seen}`);
+    },
+    put(name, json) {
+      if (!seen) return;
+      try {
+        if (Utilities.newBlob(json).getBytes().length <= SNAPSHOT_MAX_BYTES) cache.put(`snap:${name}:${seen}`, json, SNAPSHOT_TTL);
+      } catch {
+        /* 置けなくてもシートから読めばよい */
+      }
+    },
+  });
   const kv: Kv = {
     get: (k) => cache.get(k),
     put: (k, v, ttl) => cache.put(k, v, ttl),
     remove: (k) => cache.remove(k),
   };
-  let lockDepth = 0;
   return {
     store,
     line: new LineClient(p.LINE_CHANNEL_ACCESS_TOKEN),
@@ -55,16 +81,32 @@ function makeCtx(p = props()): Ctx {
       lock.waitLock(30000);
       lockDepth++;
       try {
-        // ほかの実行が書き換えたときだけ読み直す（毎回読み直すと、出欠1つでもシートを何度も読むことになる）
-        const cur = cache.get(STORE_VERSION_KEY);
-        if (cur == null || cur !== seen) store.invalidate();
+        // ほかの実行の書き込みを取りこぼさないよう、ロックの中ではシートを読み直す（写しは使わない）
+        seen = cache.get(STORE_VERSION_KEY);
+        store.invalidate();
         return fn();
+      } catch (e) {
+        // 書きかけかもしれないので、手元の控えは捨てる
+        store.invalidate();
+        throw e;
       } finally {
-        // 途中で失敗しても書きかけかもしれないので、目印は必ず変える
-        seen = Utilities.getUuid();
-        cache.put(STORE_VERSION_KEY, seen, 21600);
-        lockDepth--;
-        lock.releaseLock();
+        try {
+          // 書き込みをシートに届けてから目印を変える（届く前に変えると、新しい目印で古い写しが作られる）
+          SpreadsheetApp.flush();
+          seen = Utilities.getUuid();
+          cache.put(STORE_VERSION_KEY, seen, 21600);
+        } catch {
+          // 目印を変えられなければ消す。消せなくても、この実行では写しを使わない
+          seen = null;
+          try {
+            cache.remove(STORE_VERSION_KEY);
+          } catch {
+            /* 写しは SNAPSHOT_TTL で消える */
+          }
+        } finally {
+          lockDepth--;
+          lock.releaseLock();
+        }
       }
     },
     config: {
@@ -96,6 +138,15 @@ export function doGet(e: GoogleAppsScript.Events.DoGet) {
     }
   }
   return ContentService.createTextOutput('ok');
+}
+
+/** スプレッドシートを手で直したとき（単純トリガー）：表の写しを使わないようにする */
+export function onEdit() {
+  try {
+    CacheService.getScriptCache().remove(STORE_VERSION_KEY);
+  } catch {
+    /* 使えなくても、写しは SNAPSHOT_TTL で消える */
+  }
 }
 
 export function hourlyJob() {

@@ -50,7 +50,7 @@ export function handleApi(ctx: Ctx, auth: { userId: string; name?: string; actAs
   const handler = (handlers as Record<string, Handler<ApiAction>>)[action];
   if (!handler) throw new UserError(`不明な操作です: ${action}`);
   // 登録済みならロックを取らない（起動を速くするため）。未登録のときだけロックして登録する
-  const real = ctx.store.getMember(auth.userId) ?? ctx.withLock(() => ensureMember(ctx, auth.userId, { name: auth.name }));
+  const real = ctx.store.getMember(auth.userId) ?? ensureMember(ctx, auth.userId, { name: auth.name });
   const { me, acting } = actingAs(ctx, real, auth.actAs);
   return handler(ctx, me, (params ?? {}) as never, acting);
 }
@@ -81,12 +81,36 @@ function actingAs(ctx: Ctx, real: Member, requested: unknown): { me: Member; act
 
 // ---------------------------------------------------------------- 表示用データ
 
+/** 一覧を作るとき、練習ごとに全員・全出欠をなめ直さないよう、同じ配列から作った索引を使い回す */
+const memberIndex = new WeakMap<Member[], Map<string, Member>>();
+const attendanceIndex = new WeakMap<Attendance[], Map<string, Attendance[]>>();
+
+function membersById(members: Member[]): Map<string, Member> {
+  let m = memberIndex.get(members);
+  if (!m) memberIndex.set(members, (m = new Map(members.map((x) => [x.userId, x]))));
+  return m;
+}
+
+function attendanceOf(att: Attendance[], practiceId: string): Attendance[] {
+  let m = attendanceIndex.get(att);
+  if (!m) {
+    m = new Map();
+    for (const a of att) {
+      const list = m.get(a.practiceId);
+      if (list) list.push(a);
+      else m.set(a.practiceId, [a]);
+    }
+    attendanceIndex.set(att, m);
+  }
+  return m.get(practiceId) ?? [];
+}
+
 export function practiceView(ctx: Ctx, p: Practice, me: Member | null, att?: Attendance[], members?: Member[], settings?: Settings): PracticeView {
   att ??= ctx.store.attendance(p.id);
   members ??= ctx.store.members();
   settings ??= ctx.store.settings();
-  const byId = new Map(members.map((m) => [m.userId, m]));
-  const mine = att.filter((a) => a.practiceId === p.id);
+  const byId = membersById(members);
+  const mine = attendanceOf(att, p.id);
   const toView = (a: Attendance): AttendeeView => ({
     participant: a.participant,
     name: a.kind === 'メンバー' ? (byId.get(a.participant)?.name ?? a.name) : a.name,
@@ -149,7 +173,7 @@ function getPracticeOrThrow(ctx: Ctx, id: string): Practice {
 
 /** 出欠に関わっている（本人が答えた・ゲストを足した）か */
 const involved = (att: Attendance[], p: Practice, me: Member) =>
-  att.some((a) => a.practiceId === p.id && (a.participant === me.userId || a.addedBy === me.userId));
+  attendanceOf(att, p.id).some((a) => a.participant === me.userId || a.addedBy === me.userId);
 
 const visibleTo = (ctx: Ctx, me: Member, p: Practice, att?: Attendance[]) => canSeePractice(me, p, involved(att ?? ctx.store.attendance(p.id), p, me));
 
@@ -192,7 +216,12 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
   home(ctx, me, params, acting) {
     // 起動時の問い合わせを1回で済ませるため、グループのカードから開いたときの記録もここでする
     if (params?.group && params.key) {
-      handlers.openedFromGroup(ctx, me, { group: params.group, key: params.key }, acting);
+      // 覚えられなくても一覧は返す（大勢が同時に開いてロックを待ちきれなかったときなど）
+      try {
+        handlers.openedFromGroup(ctx, me, { group: params.group, key: params.key }, acting);
+      } catch (e) {
+        ctx.log('openedFromGroup failed', e);
+      }
       // 覚えた所属で見える練習を返す（本人として見ているときだけ。確認用アカウントの所属は変わらない）
       const saved = ctx.store.getMember(me.userId);
       if (saved && me.userId === (acting?.realUserId ?? me.userId)) me = { ...me, groups: saved.groups };

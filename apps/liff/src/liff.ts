@@ -1,5 +1,28 @@
-import liff from '@line/liff';
+// 使う機能だけを読み込む（SDK を丸ごと読み込むより小さく、開くのが速い）
+import liff from '@line/liff/core';
+import CloseWindow from '@line/liff/close-window';
+import GetContext from '@line/liff/get-context';
+import GetIDToken from '@line/liff/get-id-token';
+import IsInClient from '@line/liff/is-in-client';
+import IsLoggedIn from '@line/liff/is-logged-in';
+import Login from '@line/liff/login';
+import Logout from '@line/liff/logout';
+import OpenWindow from '@line/liff/open-window';
+import Permission from '@line/liff/permission';
+import SendMessages from '@line/liff/send-messages';
 import { MOCK, configureAuth, markReady } from './api';
+
+liff
+  .use(new IsLoggedIn())
+  .use(new Login())
+  .use(new Logout())
+  .use(new GetIDToken())
+  .use(new IsInClient())
+  .use(new OpenWindow())
+  .use(new CloseWindow())
+  .use(new GetContext())
+  .use(new SendMessages())
+  .use(new Permission());
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID as string;
 

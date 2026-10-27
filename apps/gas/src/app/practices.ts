@@ -46,9 +46,14 @@ export function ensureMember(ctx: Ctx, userId: string, opts: { groupId?: string;
       ctx.log('profile error', e);
     }
   }
-  const m: Member = { userId, name: name || 'メンバー', role: '一般', defaultGroups: [], groups: [] };
-  ctx.store.saveMember(m);
-  return m;
+  // 書き込みは必ずロックの中で（同時に2回登録しないように。表の写しの目印も変わる）
+  return ctx.withLock(() => {
+    const again = ctx.store.getMember(userId);
+    if (again) return again;
+    const m: Member = { userId, name: name || 'メンバー', role: '一般', defaultGroups: [], groups: [] };
+    ctx.store.saveMember(m);
+    return m;
+  });
 }
 
 const IN_GROUP_TTL = 6 * 60 * 60;

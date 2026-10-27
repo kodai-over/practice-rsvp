@@ -1,12 +1,12 @@
 import { useState } from 'preact/hooks';
 import type { AttendeeView, PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
-import { Avatar, Icon, Spinner, Syncing, TopBar, useApp } from '../ui';
+import { Avatar, Icon, Spinner, Syncing, TopBar, go, useApp } from '../ui';
 import { EditForm, PracticePass, usePractice } from './Detail';
 
 /** 「募集」から開く練習の画面。募集先のグループ・ゲストの追加・参加リンク・（予約者と管理者は）編集と削除 */
 export function RecruitDetailPage({ id }: { id: string }) {
-  const { me, practices, setPractices, toast } = useApp();
+  const { me, deletePractice } = useApp();
   const { v, loading, busy, update } = usePractice(id);
   if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
   const guests = [...v.going, ...v.maybe, ...v.notGoing].filter((a) => a.kind === 'ゲスト');
@@ -56,18 +56,9 @@ export function RecruitDetailPage({ id }: { id: string }) {
           busy={busy}
           onSave={(patch) => update(() => api('updatePractice', { id, patch }), '保存しました')}
           onDelete={async () => {
-            // サーバーの返事を待たずに「募集」に戻り、一覧から消しておく（失敗したら元に戻して知らせる）
-            const before = practices ?? [];
-            setPractices(before.filter((x) => x.practice.id !== id));
-            history.replaceState(null, '', '#/recruit');
-            window.dispatchEvent(new HashChangeEvent('hashchange'));
-            try {
-              setPractices(await api('deletePractice', { id }), true);
-              toast('削除しました');
-            } catch (e) {
-              setPractices(before);
-              toast(`削除できませんでした（${e instanceof Error ? e.message : String(e)}）`, true);
-            }
+            // サーバーの返事を待たずに「募集」に戻る（失敗したら一覧に戻して知らせる）
+            go('/recruit');
+            await deletePractice(v);
           }}
         />
       )}

@@ -99,7 +99,12 @@ export function useAnswer() {
       updatePractice(await api('rsvp', { id, answer: a }));
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), true);
-      if (before) updatePractice(before, { revert: true });
+      // 押した時点の控えは古いかもしれないので、取り直して差し替える（取れなければ控えに戻す）
+      try {
+        updatePractice(await api('getPractice', { id }));
+      } catch {
+        if (before) updatePractice(before, { revert: true });
+      }
     } finally {
       setPending((s) => {
         const next = new Set(s);
