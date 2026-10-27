@@ -105,15 +105,6 @@ export function isActive(p: Practice): boolean {
   return p.status === '募集中' || p.status === '満員';
 }
 
-/** 同じ日・同じスタジオと部屋で、既存の練習のすぐ後に続く予約なら延長とみなす */
-export function findExtensionTarget(practices: Practice[], r: Reservation): Practice | null {
-  return (
-    practices.find(
-      (p) => isActive(p) && p.date === r.date && p.studio === r.studio && p.room === r.room && p.end === r.start,
-    ) ?? null
-  );
-}
-
 /** LINEのトークで送られた文章が予約内容らしいか（日付と時刻の両方を含む） */
 export function looksLikeReservation(text: string): boolean {
   const t = text.replace(/[０-９：／]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
@@ -127,12 +118,12 @@ export function looksLikeReservation(text: string): boolean {
  * - 同じ練習IDがあれば登録済み
  * - 既存の練習のすぐ後に続けば、その練習の延長
  * - 同じ登録内の予約のすぐ後に続けば（予約一覧の 19:00-20:30 と 20:30-21:00 など）、その予約にまとめる（料金は合計、どちらか不明なら不明）
- * canExtend で延長してよい既存の練習を絞れる（他人の練習は延長せず新規にする）
+ * canExtend で延長してよい既存の練習を絞る（登録する人が延長できない練習の後に続く予約は新規にする）
  */
 export function classifyReservations(
   practices: Practice[],
   reservations: Reservation[],
-  canExtend: (p: Practice) => boolean = () => true,
+  canExtend: (p: Practice) => boolean,
 ): DraftItem[] {
   const items: DraftItem[] = [];
   // 判定に使う練習。itemIndex があるものは、この登録で作る（または延長する）items の行

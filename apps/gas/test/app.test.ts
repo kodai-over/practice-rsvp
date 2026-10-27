@@ -169,6 +169,22 @@ describe('スクショから募集まで', () => {
       expect(t.store.p.find((p) => p.id === NEXT_PID)).toMatchObject({ end: '23:00', fee: 6000 });
     });
 
+    it('ほかの人の練習を含む予約一覧を送っても、登録済みの枠は飛ばし、続きの枠は自分の新しい練習にする', () => {
+      const res = handleApi(t.ctx, { userId: 'U9' }, 'createPractices', {
+        items: [{ ...reservation, max: null, min: null, memo: '' }, nextItem],
+        groups: [],
+      }) as any;
+      expect(res).toMatchObject({ skipped: [PID], extended: [], created: [NEXT_PID] });
+      expect(t.store.p.find((p) => p.id === PID)).toMatchObject({ booker: BOOKER, end: '21:00' });
+    });
+
+    it('入力の順番が逆でも、確認画面と同じく日時順に見てまとめる', () => {
+      const after = { ...nextItem, start: '22:00', end: '23:00', fee: 3000 };
+      const other = handleApi(t.ctx, { userId: 'U9' }, 'createPractices', { items: [after, nextItem], groups: [] }) as any;
+      expect(other.created).toEqual([NEXT_PID]);
+      expect(t.store.p.find((p) => p.id === NEXT_PID)).toMatchObject({ end: '23:00', fee: 6000 });
+    });
+
     it('管理者は、ほかの人の練習も延長できる', () => {
       const res = handleApi(t.ctx, { userId: ADMIN }, 'createPractices', { items: [nextItem], groups: [] }) as any;
       expect(res.extended).toEqual([PID]);
@@ -184,6 +200,7 @@ describe('スクショから募集まで', () => {
 
       t.reader.result = [next];
       handleWebhook(t.ctx, { events: [imageEvent('U9', 'm9')] });
+      expect(t.line.lastReplyText()).toContain('10/21(水) 21:00〜22:00');
       expect(t.line.lastReplyText()).not.toContain('延長として更新');
       const draftId = [...t.kv.data.keys()].at(-1)!.replace('draft:', '');
       const d = handleApi(t.ctx, { userId: 'U9' }, 'getDraft', { id: draftId }) as any;

@@ -236,6 +236,8 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
     if (!r) throw new UserError(`入力が足りない予約があります（${input.date || '日付なし'}）`);
     return { input, r: { ...r, fee: r.fee ?? defaultFee(settings, r) } };
   });
+  // 確認画面の分類（classifyReservations は日時順に見る）と同じ結果になるよう、日時順に並べてから1件ずつ分類する
+  normalized.sort((a, b) => (a.r.date + a.r.start).localeCompare(b.r.date + b.r.start));
 
   ctx.withLock(() => {
     const practices = ctx.store.practices();
