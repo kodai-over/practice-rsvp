@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { labelDate, type Answer, type PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
+import { sending, wanted } from '../answering';
 import { AvatarStack, FRESH_MS, Fee, Icon, RsvpButtons, Spinner, StatusBadge, Stub, Syncing, Tabs, go, place, useApp, useRunner } from '../ui';
 
 type Tab = 'all' | 'mine' | 'todo';
@@ -79,21 +80,23 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
   );
 }
 
-/** 送りたい回答（練習ごとに最後に押したもの）と、送っている途中の処理。画面をまたいでも同じものを使う */
-const wanted = new Map<string, Answer>();
-const sending = new Map<string, Promise<void>>();
-
-/** 押した瞬間の見た目。記号と、行く人数を先に変える（名前の並びはサーバーの結果で差し替える） */
+/**
+ * 押した瞬間の見た目。記号・行く人数・満員かどうかを先に変える
+ * （名前の並びと1人あたりはサーバーの結果で差し替える）
+ */
 function optimistic(v: PracticeView, a: Answer): PracticeView {
   const was = v.myAnswer === '行く';
   const now = a === '行く';
-  return { ...v, myAnswer: a, goingCount: Math.max(0, v.goingCount + (now === was ? 0 : now ? 1 : -1)) };
+  const goingCount = Math.max(0, v.goingCount + (now === was ? 0 : now ? 1 : -1));
+  const p = v.practice;
+  const status = p.status === '満員' || p.status === '募集中' ? (p.max != null && p.max > 0 && goingCount >= p.max ? '満員' : '募集中') : p.status;
+  return { ...v, myAnswer: a, goingCount, practice: status === p.status ? p : { ...p, status } };
 }
 
 /**
  * 回答する。押した瞬間に記号を変え、待たずに続けて押し直せる（ボタンは止めない）。
  * サーバーには練習ごとに1つずつ送り、送っている間に押し直したら、終わったあと最後の回答だけを送る。
- * 途中の結果では画面を戻さず、最後の結果で人数なども含めて差し替える（失敗したら取り直すか元に戻す）
+ * 途中の結果では画面を戻さず、最後の結果で人数なども含めて差し替える（失敗したら取り直すか、最後に記録できた内容に戻す）
  */
 export function useAnswer() {
   const { practices: list, updatePractice, toast } = useApp();
@@ -102,27 +105,36 @@ export function useAnswer() {
     if (current) updatePractice(optimistic(current, a));
     wanted.set(id, a);
     if (sending.has(id)) return;
-    // 押す前の内容。失敗して取り直せなかったときに戻す
-    const before = current;
     const loop = (async () => {
+      // 最後にサーバーに記録できた内容。失敗して取り直せなかったときはここに戻す
+      let confirmed = current;
       try {
         for (;;) {
           const target = wanted.get(id)!;
-          const r = await api('rsvp', { id, answer: target });
-          if (wanted.get(id) === target) {
+          try {
+            const r = await api('rsvp', { id, answer: target });
+            confirmed = r;
+            if (wanted.get(id) === target) {
+              wanted.delete(id);
+              updatePractice(r);
+              return;
+            }
+          } catch (e) {
+            // 送っている間に押し直していれば、その回答を送り直す
+            if (wanted.get(id) !== target) continue;
             wanted.delete(id);
-            updatePractice(r);
+            toast(e instanceof Error ? e.message : String(e), true);
+            // 押した時点の控えは古いかもしれないので、取り直して差し替える（取り直している間に押し直したら、それを送る）
+            try {
+              const fresh = await api('getPractice', { id });
+              if (wanted.has(id)) continue;
+              updatePractice(fresh);
+            } catch {
+              if (wanted.has(id)) continue;
+              if (confirmed) updatePractice(confirmed, { revert: true });
+            }
             return;
           }
-        }
-      } catch (e) {
-        wanted.delete(id);
-        toast(e instanceof Error ? e.message : String(e), true);
-        // 押した時点の控えは古いかもしれないので、取り直して差し替える（取れなければ控えに戻す）
-        try {
-          updatePractice(await api('getPractice', { id }));
-        } catch {
-          if (before) updatePractice(before, { revert: true });
         }
       } finally {
         sending.delete(id);
@@ -131,11 +143,6 @@ export function useAnswer() {
     sending.set(id, loop);
   };
   return { answer };
-}
-
-/** 送っている途中の回答がすべて終わるのを待つ（グループに伝える前に、結果をそろえる） */
-export async function answersSettled(): Promise<void> {
-  while (sending.size > 0) await Promise.all([...sending.values()]);
 }
 
 export function PracticeCard({ v, onAnswer, busy }: { v: PracticeView; onAnswer: (a: Answer) => void; busy?: boolean }) {
