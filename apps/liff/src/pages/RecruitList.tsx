@@ -18,8 +18,9 @@ export function RecruitListPage() {
 
   // 手元の一覧ですぐ表示し、最新の一覧は裏で取り直す
   useEffect(() => {
+    const started = Date.now();
     run(() => api('listPractices')).then((r) => {
-      if (r) setPractices(r, true);
+      if (r) setPractices(r, true, started);
       setFresh(true);
     });
   }, []);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
-import { labelDate, type Answer, type PracticeView } from '@studio-attendance/shared';
+import { labelDate, nextStatus, type Answer, type PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
+import { pressedAt, sending, wanted } from '../answering';
 import { AvatarStack, FRESH_MS, Fee, Icon, RsvpButtons, Spinner, StatusBadge, Stub, Syncing, Tabs, go, place, useApp, useRunner } from '../ui';
 
 type Tab = 'all' | 'mine' | 'todo';
@@ -22,7 +23,8 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
 
   useEffect(() => {
     // 起動時のまとめ取得から時間がたっていれば取り直す（前回の表示のときは起動処理が取り直すので待つ）
-    if (practicesAt > 0 && Date.now() - practicesAt > FRESH_MS) run(() => api('listPractices')).then((r) => r && setPractices(r));
+    const started = Date.now();
+    if (practicesAt > 0 && started - practicesAt > FRESH_MS) run(() => api('listPractices')).then((r) => r && setPractices(r, false, started));
   }, []);
 
   const selectTab = (t: Tab) => {
@@ -34,7 +36,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
     }
   };
 
-  const { answer, pending } = useAnswer();
+  const { answer } = useAnswer();
 
   // 「予定」に出すのは、自分に招待が来た（入っているグループに募集された）練習と、自分が招待を送った（登録した）練習。
   // 答えた・ゲストを足した練習も出す。管理者でも、ほかの練習は「募集」で見る
@@ -61,7 +63,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
             { key: 'todo', label: '未定', count: list ? groups.todo.length : undefined },
           ]}
         />
-        {(practicesAt === 0 || busy || pending.size > 0) && <Syncing />}
+        {(practicesAt === 0 || busy) && <Syncing />}
       </header>
 
       {list == null ? (
@@ -73,42 +75,76 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
           {tab === 'all' && <p class="note">スタジオの予約は「募集」の右上の＋から登録できます</p>}
         </div>
       ) : (
-        shown.map((v) => <PracticeCard key={v.practice.id} v={v} busy={pending.has(v.practice.id)} onAnswer={(a) => answer(v.practice.id, a)} />)
+        shown.map((v) => <PracticeCard key={v.practice.id} v={v} onAnswer={(a) => answer(v.practice.id, a)} />)
       )}
     </>
   );
 }
 
 /**
- * 出欠を答える。押した瞬間に色を変え、サーバーの結果が来たら人数なども含めて差し替える（失敗したら元に戻す）。
- * 待つのは答えている練習だけ。ほかの練習の記号は続けて押せる
+ * 押した瞬間の見た目。記号・行く人数・満員かどうかを先に変える
+ * （名前の並びと1人あたりはサーバーの結果で差し替える）
+ */
+function optimistic(v: PracticeView, a: Answer): PracticeView {
+  const was = v.myAnswer === '行く';
+  const now = a === '行く';
+  const goingCount = Math.max(0, v.goingCount + (now === was ? 0 : now ? 1 : -1));
+  const p = v.practice;
+  const status = nextStatus(p, goingCount);
+  return { ...v, myAnswer: a, goingCount, practice: status === p.status ? p : { ...p, status } };
+}
+
+/**
+ * 回答する。押した瞬間に記号を変え、待たずに続けて押し直せる（ボタンは止めない）。
+ * サーバーには練習ごとに1つずつ送り、送っている間に押し直したら、終わったあと最後の回答だけを送る。
+ * 途中の結果では画面を戻さず、最後の結果で人数なども含めて差し替える（失敗したら取り直すか、最後に記録できた内容に戻す）
  */
 export function useAnswer() {
   const { practices: list, updatePractice, toast } = useApp();
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
-  const answer = async (id: string, a: Answer) => {
-    const before = (list ?? []).find((x) => x.practice.id === id);
-    if (before) updatePractice({ ...before, myAnswer: a });
-    setPending((s) => new Set(s).add(id));
-    try {
-      updatePractice(await api('rsvp', { id, answer: a }));
-    } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), true);
-      // 押した時点の控えは古いかもしれないので、取り直して差し替える（取れなければ控えに戻す）
+  const answer = (id: string, a: Answer) => {
+    const current = (list ?? []).find((x) => x.practice.id === id);
+    if (current) updatePractice(optimistic(current, a));
+    wanted.set(id, a);
+    pressedAt.set(id, Date.now());
+    if (sending.has(id)) return;
+    const loop = (async () => {
+      // 最後にサーバーに記録できた内容。失敗して取り直せなかったときはここに戻す
+      let confirmed = current;
       try {
-        updatePractice(await api('getPractice', { id }));
-      } catch {
-        if (before) updatePractice(before, { revert: true });
+        for (;;) {
+          const target = wanted.get(id)!;
+          try {
+            const r = await api('rsvp', { id, answer: target });
+            confirmed = r;
+            if (wanted.get(id) === target) {
+              wanted.delete(id);
+              updatePractice(r);
+              return;
+            }
+          } catch (e) {
+            // 送っている間に押し直していれば、その回答を送り直す（失敗した途中の回答は知らせない）
+            if (wanted.get(id) !== target) continue;
+            wanted.delete(id);
+            toast(e instanceof Error ? e.message : String(e), true);
+            // 押した時点の控えは古いかもしれないので、取り直して差し替える（取り直している間に押し直したら、それを送る）
+            try {
+              const fresh = await api('getPractice', { id });
+              if (wanted.has(id)) continue;
+              updatePractice(fresh);
+            } catch {
+              if (wanted.has(id)) continue;
+              if (confirmed) updatePractice(confirmed, { revert: true });
+            }
+            return;
+          }
+        }
+      } finally {
+        sending.delete(id);
       }
-    } finally {
-      setPending((s) => {
-        const next = new Set(s);
-        next.delete(id);
-        return next;
-      });
-    }
+    })();
+    sending.set(id, loop);
   };
-  return { answer, pending };
+  return { answer };
 }
 
 export function PracticeCard({ v, onAnswer, busy }: { v: PracticeView; onAnswer: (a: Answer) => void; busy?: boolean }) {

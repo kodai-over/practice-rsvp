@@ -4,18 +4,23 @@ import { api } from '../api';
 import { RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';
 import { Avatar, FRESH_MS, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, useApp, useRunner } from '../ui';
+import { isAnswering } from '../answering';
+import { useAnswer } from './List';
 
 /**
  * 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる）。
- * 一覧を取ったばかり（FRESH_MS 以内）なら取り直さず、一覧の変化（出欠の結果など）にそのまま合わせる
+ * 一覧を取ったばかり（FRESH_MS 以内）なら取り直さない。取り直した・操作した結果は一覧に入れ、画面は一覧に合わせる
+ * （一覧に無い練習だけ手元の内容を出す）。回答を送っている途中は、取り直した結果で押した回答を戻さない
  */
 export function usePractice(id: string) {
   const { toast, practices, practicesAt, updatePractice } = useApp();
   const inList = practices?.find((x) => x.practice.id === id) ?? null;
   const fresh = () => inList != null && practicesAt > 0 && Date.now() - practicesAt < FRESH_MS;
-  // 取り直した・操作した結果。無い間は一覧の内容を出す
+  // 取り直した・操作した結果。一覧に無い練習のときだけ使う
   const [own, setV] = useState<PracticeView | null>(null);
-  const v = own ?? inList;
+  const v = inList ?? own;
+  const latest = useRef(inList);
+  latest.current = inList;
   const [loading, setLoading] = useState(() => !fresh());
   const [run, busy] = useRunner();
 
@@ -23,8 +28,11 @@ export function usePractice(id: string) {
     setV(null);
     if (fresh()) return setLoading(false);
     setLoading(true);
+    const started = Date.now();
     api('getPractice', { id })
       .then((r) => {
+        // 取り直している間に回答を押していれば、押す前に読んだかもしれないので使わない（結果は回答の処理が入れる）
+        if (isAnswering(id, started)) return;
         setV(r);
         updatePractice(r);
       })
@@ -35,12 +43,15 @@ export function usePractice(id: string) {
   const update = async (fn: () => Promise<PracticeView>, done?: string) => {
     const r = await run(fn, done);
     if (r) {
-      setV(r);
-      updatePractice(r); // 一覧にもすぐ反映する
+      // 回答を送っている途中なら、押した回答はそのまま出す（人数などは回答の結果で差し替わる）
+      const cur = latest.current;
+      const next = isAnswering(id) && cur ? { ...r, myAnswer: cur.myAnswer } : r;
+      setV(next);
+      updatePractice(next); // 一覧にもすぐ反映する
     }
     return r;
   };
-  return { v, loading, run, busy, update };
+  return { v, inList, loading, run, busy, update };
 }
 
 /** 練習のパス。日時・場所・金額・人数 */
@@ -67,7 +78,8 @@ export function PracticePass({ v }: { v: PracticeView }) {
 
 /** 「予定」から開く練習の画面。見るのと出欠・カレンダーだけ（編集・削除・募集は「募集」から） */
 export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null }) {
-  const { v, loading, busy, update } = usePractice(id);
+  const { v, inList, loading, busy, update } = usePractice(id);
+  const { answer } = useAnswer();
   const calRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,7 +95,17 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
 
       <PracticePass v={v} />
 
-      <RsvpButtons solo value={v.myAnswer} status={p.status} busy={busy} onAnswer={(a: Answer) => update(() => api('rsvp', { id, answer: a }))} />
+      <RsvpButtons
+        solo
+        value={v.myAnswer}
+        status={p.status}
+        busy={busy && !inList}
+        onAnswer={(a: Answer) => {
+          // 一覧にある練習は、待たずに切り替える（結果は一覧に入り、この画面もそれに合わせる）
+          if (inList) answer(id, a);
+          else update(() => api('rsvp', { id, answer: a }));
+        }}
+      />
 
       <Attendees v={v} onRemove={(a) => update(() => api('removeAttendance', { id, participant: a.participant }), '削除しました')} />
 
