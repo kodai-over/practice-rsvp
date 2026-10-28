@@ -16,6 +16,7 @@ import {
   toJstDate,
   appLink,
   ACT_AS,
+  MAX_SCREENSHOTS,
   TEST_MEMBER_ID,
   type ActAs,
   type ApiAction,
@@ -299,7 +300,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
     const imgs = Array.isArray(images) ? images : [];
     const t = typeof text === 'string' ? text.trim().slice(0, 5000) : '';
     if (imgs.length === 0 && !t) throw new UserError('スクショを選ぶか、予約内容の文章を貼り付けてください');
-    if (imgs.length > 5) throw new UserError('スクショは5枚までにしてください');
+    if (imgs.length > MAX_SCREENSHOTS) throw new UserError(`スクショは${MAX_SCREENSHOTS}枚までにしてください`);
     let raws: RawReservation[];
     try {
       raws = readReservations(ctx, { images: imgs, text: t || undefined });
