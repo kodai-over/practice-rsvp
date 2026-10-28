@@ -70,6 +70,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
         <div class="empty">
           <div>{tab === 'todo' ? '未定の練習はありません' : tab === 'mine' ? '行く練習はありません' : '登録されている予約情報はありません。'}</div>
           {tab === 'all' && <p class="note">入っているグループの練習が出ないときは、そのグループの募集メッセージの「RSVP」から一度開いてください</p>}
+          {tab === 'all' && <p class="note">スタジオの予約は「募集」の右上の＋から登録できます</p>}
         </div>
       ) : (
         shown.map((v) => <PracticeCard key={v.practice.id} v={v} busy={pending.has(v.practice.id)} onAnswer={(a) => answer(v.practice.id, a)} />)
