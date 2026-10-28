@@ -76,7 +76,7 @@ async function shrink(file: File): Promise<{ mimeType: string; data: string }> {
   try {
     loaded = await loadImage(file);
   } catch {
-    throw new Error(`画像を読み込めませんでした（${file.type || '形式不明'}）。スクショ（PNG/JPEG）を選んでください`);
+    throw new Error(`スクショを読み込めませんでした（${file.type || '形式不明'}）。スクショ（PNG/JPEG）を選んでください`);
   }
   const scale = Math.min(1, 2000 / Math.max(loaded.width, loaded.height));
   const canvas = document.createElement('canvas');
@@ -169,7 +169,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     // 登録済み・終了した予約はサーバーで除かれている。件数だけ伝える
     const skipped = skippedNote(res);
     if (next.length === 0) {
-      toast(`新しく登録する予約はありませんでした。${skipped || '手で入力してください。'}`, true);
+      toast(`新しく登録する予約情報はありませんでした。${skipped || '手で入力してください。'}`, true);
       return false;
     }
     setRows(next);
@@ -207,7 +207,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
         memo: r.memo,
         groups: pickable(r) ? r.groups : [],
       }));
-    if (items.length === 0) return toast('登録する練習がありません', true);
+    if (items.length === 0) return toast('登録する予約情報がありません', true);
     if (me.actAs === 'test' && recruiting && !confirm('確認用アカウント「admin」として、グループに募集を送ります。よろしいですか？')) return;
     setPhase('saving');
     const res = await run(() => api('createPractices', { items, groups: [], draftId: draftId ?? undefined }));
@@ -260,7 +260,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
               <span class="grow">{r.date ? labelDate(r.date) : String(i + 1).padStart(2, '0')}</span>
               {r.kind && KIND_TAG[r.kind] && <span class={`tag ${KIND_TAG[r.kind].cls}`}>{KIND_TAG[r.kind].label}</span>}
               {rows.length > 1 && (
-                <button class="icon-btn" aria-label="この予約を削除" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
+                <button class="icon-btn" aria-label="この予約情報を削除" onClick={() => setRows(rows.filter((x) => x.key !== r.key))}>
                   <Icon name="x" size={18} />
                 </button>
               )}
@@ -296,7 +296,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
               <span>
                 スタジオ代 ¥{r.feeAuto && r.fee !== '' && <span class="tag soft" title="スタジオの料金表（曜日・時間帯）から計算">自動</span>}
               </span>
-              <input type="number" inputMode="numeric" placeholder="金額" value={r.fee} onInput={(e) => update(r.key, 'fee', e.currentTarget.value)} />
+              <input type="number" inputMode="numeric" placeholder="円" value={r.fee} onInput={(e) => update(r.key, 'fee', e.currentTarget.value)} />
             </label>
             <details style={{ marginBottom: 8 }}>
               <summary class="more-summary">
@@ -305,11 +305,11 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
               </summary>
               <div class="grid2" style={{ marginTop: 8 }}>
                 <label class="field">
-                  <span>上限</span>
+                  <span>上限人数</span>
                   <input type="number" inputMode="numeric" placeholder="なし" value={r.max} onInput={(e) => update(r.key, 'max', e.currentTarget.value)} />
                 </label>
                 <label class="field">
-                  <span>最低</span>
+                  <span>最低人数</span>
                   <input type="number" inputMode="numeric" placeholder={`標準 ${me.settings.minDefault}人`} value={r.min} onInput={(e) => update(r.key, 'min', e.currentTarget.value)} />
                 </label>
               </div>
@@ -320,7 +320,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
             </details>
             {r.parts && r.parts.length > 1 && (
               <div class="row muted" style={{ marginBottom: 10 }}>
-                <span class="grow">続けて取った予約{r.parts.length}件をまとめています</span>
+                <span class="grow">続けて取った予約情報{r.parts.length}件をまとめています</span>
                 <button class="btn small" onClick={() => splitRow(r)}>
                   分ける
                 </button>
@@ -328,7 +328,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
             )}
             {me.groups.length > 0 && pickable(r) && (
               <div class="field">
-                <span>募集先（選ばなければ登録だけ）</span>
+                <span>送り先（選ばなければ登録のみ）</span>
                 <GroupToggles groups={me.groups} defaults={me.member.defaultGroups} value={r.groups} onChange={(g) => setRowGroups(r.key, g)} />
               </div>
             )}
@@ -338,14 +338,14 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
 
       <button class="add-row" onClick={() => setRows([...rows, emptyRow({ ...rows.at(-1), kind: undefined, parts: undefined, date: rows.at(-1)?.date ? addDays(rows.at(-1)!.date, 7) : '' })])}>
         <Icon name="plus" size={18} />
-        予約を追加
+        予約情報を追加
       </button>
 
       {me.groups.length > 0 && rows.filter(pickable).length > 1 && (
         <>
           <div class="sec-head">
             <Icon name="send" size={18} />
-            すべての予約の募集先
+            すべての予約情報の送り先
           </div>
           <div class="toggles">
             {me.groups.map((g) => (
@@ -355,14 +355,14 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
             ))}
           </div>
           <div class="muted" style={{ marginTop: 6 }}>
-            押すと、すべての予約に付けたり外したりします。予約ごとに変えるときは、それぞれの予約の「募集先」で選んでください
+            押すと、すべての予約情報に付けたり外したりします。予約情報ごとに変えるときは、それぞれの「送り先」で選んでください
           </div>
         </>
       )}
 
       {recruit && !recruiting && me.groups.length > 0 && (
         <div class="muted" style={{ marginTop: 12 }}>
-          募集するときは、予約ごとの「募集先」でグループを選んでください（選ばなければ登録だけ）
+          募集するときは、予約情報ごとの「送り先」でグループを選んでください（選ばなければ登録のみ）
         </div>
       )}
       <button class="btn primary block submit" disabled={busy} onClick={submit}>

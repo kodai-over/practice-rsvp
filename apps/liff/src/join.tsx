@@ -48,7 +48,7 @@ function JoinPage() {
       save(NAME_KEY, name.trim());
       save(pidKey, r.participant);
       setV(r);
-      toast(`「${a}」で登録しました`);
+      toast(`「${a}」で回答しました`);
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), true);
     } finally {
@@ -63,7 +63,7 @@ function JoinPage() {
   return (
     <>
       <header class="topbar">
-        <h1>出欠</h1>
+        <h1>RSVP</h1>
       </header>
       <Pass
         date={v.date}
@@ -80,7 +80,7 @@ function JoinPage() {
 
       {!closed && (
         <>
-          <input type="text" value={name} maxLength={30} aria-label="お名前" placeholder="お名前" style={{ marginBottom: 12 }} onInput={(e) => setName(e.currentTarget.value)} />
+          <input type="text" value={name} maxLength={30} aria-label="名前" placeholder="名前" style={{ marginBottom: 12 }} onInput={(e) => setName(e.currentTarget.value)} />
           <RsvpButtons solo value={v.myAnswer} status={v.status} busy={busy} onAnswer={answer} />
           <p class="muted" style={{ textAlign: 'center' }}>LINE不要・押し直しで変更できます</p>
         </>

@@ -355,13 +355,13 @@ describe('Flex Message', () => {
         { practice: at('2026-11-04', '19:00'), answer: '保留' },
         { practice: at('2026-11-05', '19:00'), answer: null },
       ]),
-    ).toBe('出欠を回答しました\n○ 11/1(日)・11/2(月) 行きます\n△ 11/4(水) 未定です\n✕ 11/3(火) 行きません');
+    ).toBe('回答しました\n○ 11/1(日)・11/2(月) 行きます\n△ 11/4(水) 未定です\n✕ 11/3(火) 行きません');
     // 同じ日に2つあるときは開始時刻で見分ける
     const sameDay = answerReport([
       { practice: at('2026-11-01', '13:00'), answer: '行く' },
       { practice: at('2026-11-01', '19:00'), answer: '行かない' },
     ]);
-    expect(sameDay).toBe('出欠を回答しました\n○ 11/1(日) 13:00 行きます\n✕ 11/1(日) 19:00 行きません');
+    expect(sameDay).toBe('回答しました\n○ 11/1(日) 13:00 行きます\n✕ 11/1(日) 19:00 行きません');
     expect(answerReport([{ practice: at('2026-11-01', '13:00'), answer: null }])).toBeNull();
   });
 
@@ -425,7 +425,7 @@ describe('Flex Message', () => {
         appUrl,
       }),
     );
-    expect(json).toContain('10/21 19:00〜21:00の練習の延長として更新');
+    expect(json).toContain('10/21 19:00〜21:00の予約情報の延長として更新');
   });
 
   it('練習一覧', () => {

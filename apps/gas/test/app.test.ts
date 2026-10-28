@@ -145,7 +145,7 @@ describe('スクショから募集まで', () => {
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm2')] });
     const card = t.line.lastReplyText();
     expect(card).not.toContain('10/21(水) 19:00');
-    expect(card).toContain('登録済みの予約1件は除きました');
+    expect(card).toContain('登録済みの予約情報1件は除きました');
     expect(card).toContain('延長として更新');
     draftId = [...t.kv.data.keys()].at(-1)!.replace('draft:', '');
     handleWebhook(t.ctx, { events: [postback(BOOKER, `a=confirm&d=${draftId}`)] });
@@ -224,7 +224,7 @@ describe('スクショから募集まで', () => {
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER)] });
     const card = t.line.lastReplyText();
     expect(card).toContain('¥6,000');
-    expect(card).toContain('読み取れなかった項目がある予約が1件');
+    expect(card).toContain('読み取れなかった項目がある予約情報が1件');
     expect(card).not.toContain('"label":"登録する"');
   });
 
@@ -249,7 +249,7 @@ describe('スクショから募集まで', () => {
     expect(card).toContain('10/14(水) 19:00〜21:00');
     expect(card).toContain('¥3,200');
     expect(card).toContain('10/21(水) 19:30〜21:00');
-    expect(card).toContain('終了した予約1件は除きました');
+    expect(card).toContain('終了した予約情報1件は除きました');
     expect(card).not.toContain('20:30');
   });
 
@@ -266,7 +266,7 @@ describe('スクショから募集まで', () => {
       { date: '2026-10-21', start: '19:00', end: '21:00', studio: 'worcle横浜', room: 'A', fee: 6000 },
     ];
     handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm2')] });
-    expect(t.line.lastReplyText()).toContain('新しく登録する予約はありませんでした。登録済みの予約1件・終了した予約1件は除きました。');
+    expect(t.line.lastReplyText()).toContain('新しく登録する予約情報はありませんでした。登録済みの予約情報1件・終了した予約情報1件は除きました。');
     expect(t.kv.data.size).toBe(drafts);
 
     // アプリの読み取りも同じ
@@ -411,7 +411,7 @@ describe('出欠', () => {
     handleWebhook(t.ctx, { events: [postback('U1', `a=rsvp&p=${encodeURIComponent(PID)}&v=1`, G1)] });
     expect(t.store.p[0].status).toBe('満員');
     handleWebhook(t.ctx, { events: [postback('U2', `a=rsvp&p=${encodeURIComponent(PID)}&v=1`, G1)] });
-    expect(t.line.lastReplyText()).toContain('10/21の練習は満員です');
+    expect(t.line.lastReplyText()).toContain('10/21：満員です');
     handleWebhook(t.ctx, { events: [postback('U1', `a=rsvp&p=${encodeURIComponent(PID)}&v=0`, G1)] });
     expect(t.store.p[0].status).toBe('募集中');
 
@@ -425,7 +425,7 @@ describe('出欠', () => {
     handleWebhook(t.ctx, { events: [text('練習お疲れ')] });
     expect(t.line.replies).toHaveLength(0);
     handleWebhook(t.ctx, { events: [text('練習')] });
-    expect(t.line.lastReplyText()).toContain('今後の練習');
+    expect(t.line.lastReplyText()).toContain('今後の予約情報');
     expect(t.line.lastReplyText()).toContain('10/21(水)');
   });
 
@@ -471,7 +471,7 @@ describe('出欠', () => {
     // 登録した本人は修正・中止ができ、他の一般メンバーはできない
     expect((handleApi(t.ctx, { userId: 'U9' }, 'getPractice', { id: only.created[0] }) as any).canEdit).toBe(true);
     // どこにも募集していない練習は、他の一般メンバーには見えない
-    expect(() => handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'getPractice', { id: only.created[0] })).toThrow('練習が見つかりません');
+    expect(() => handleApi(t.ctx, { userId: 'U1', name: 'いち' }, 'getPractice', { id: only.created[0] })).toThrow('予約情報が見つかりません');
 
     const withGroup = handleApi(t.ctx, { userId: 'U9' }, 'createPractices', { items: [{ ...item, date: '2026-10-31' }], groups: [G1] }) as any;
     expect(t.store.getPractice(withGroup.created[0])?.groups).toEqual([G1]);
@@ -757,10 +757,10 @@ describe('見える練習', () => {
     expect(ids('UB')).toContain(id);
     expect(ids('UC')).toContain(id);
     expect(ids('UD')).not.toContain(id);
-    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'getPractice', { id })).toThrow('練習が見つかりません');
-    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'rsvp', { id, answer: '行く' })).toThrow('練習が見つかりません');
-    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'addGuest', { id, name: 'ゲスト' })).toThrow('練習が見つかりません');
-    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'appendMemo', { id, text: 'メモ' })).toThrow('練習が見つかりません');
+    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'getPractice', { id })).toThrow('予約情報が見つかりません');
+    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'rsvp', { id, answer: '行く' })).toThrow('予約情報が見つかりません');
+    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'addGuest', { id, name: 'ゲスト' })).toThrow('予約情報が見つかりません');
+    expect(() => handleApi(t.ctx, { userId: 'UD' }, 'appendMemo', { id, text: 'メモ' })).toThrow('予約情報が見つかりません');
     expect(t.store.a.filter((a) => a.participant === 'UD')).toEqual([]);
     // 管理者は全部見える
     expect(ids(ADMIN)).toContain(id);

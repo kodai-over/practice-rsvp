@@ -75,14 +75,14 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
   const byId = new Map(practices.map((p) => [p.id, p]));
   const itemRows: Node[] = draft.items.map(({ reservation: r, kind, targetId }) => {
     const target = targetId ? byId.get(targetId) : undefined;
-    const note = kind === 'extension' && target ? `${shortDate(target.date)} ${timeRange(target)}の練習の延長として更新（募集は出し直しません）` : '';
+    const note = kind === 'extension' && target ? `${shortDate(target.date)} ${timeRange(target)}の予約情報の延長として更新（募集は出し直しません）` : '';
     return {
       type: 'box',
       layout: 'vertical',
       spacing: 'xs',
       contents: [
         text(`${labelDate(r.date)} ${timeRange(r)}`, { weight: 'bold' }),
-        text(`${place(r)}　${r.fee != null ? yen(r.fee) : '料金不明'}`, { size: 'sm' }),
+        text(`${place(r)}　${r.fee != null ? yen(r.fee) : 'スタジオ代不明'}`, { size: 'sm' }),
         ...(note ? [text(note, { size: 'xs', color: GREEN })] : []),
       ],
     };
@@ -91,11 +91,11 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
   const skipped = skippedNote(draft);
   if (skipped) itemRows.push(text(skipped, { size: 'xs', color: GRAY }));
   if (draft.items.length === 0 && draft.incomplete.length === 0) {
-    itemRows.push(text('登録できる今後の予約はありませんでした。', { size: 'sm' }));
+    itemRows.push(text('登録できる今後の予約情報はありませんでした。', { size: 'sm' }));
   }
   if (draft.incomplete.length > 0) {
     itemRows.push(
-      text(`読み取れなかった項目がある予約が${draft.incomplete.length}件あります。「修正して登録」から入力してください。`, {
+      text(`読み取れなかった項目がある予約情報が${draft.incomplete.length}件あります。「修正して登録」から入力してください。`, {
         size: 'sm',
         color: RED,
       }),
@@ -138,9 +138,9 @@ export function confirmCard({ draft, groups, practices, appUrl }: ConfirmCardInp
   const note = !canRegister
     ? []
     : canRecruit
-      ? [text('「登録して募集」ではアプリが開き、内容を確かめて予約ごとに募集先を選べます。', { size: 'xs', color: GRAY })]
+      ? [text('「登録して募集」ではアプリが開き、内容を確かめて予約情報ごとに送り先を選べます。', { size: 'xs', color: GRAY })]
       : groups.length > 0
-        ? [text('グループへの募集は、登録したあとアプリの練習画面からもできます。', { size: 'xs', color: GRAY })]
+        ? [text('グループへの募集は、登録したあとアプリの「募集」からもできます。', { size: 'xs', color: GRAY })]
         : [];
 
   return {
@@ -200,7 +200,7 @@ function recruitItem({ practice: p, bookerName }: RecruitInput, first: boolean):
       text(`${labelDate(p.date)}　${timeRange(p)}`, { weight: 'bold', size: 'md', margin: first ? 'none' : 'lg' }),
       row('場所', place(p)),
       row('予約者', bookerName),
-      ...(p.max ? [row('上限', `${p.max}人`)] : []),
+      ...(p.max ? [row('上限人数', `${p.max}人`)] : []),
       ...(p.memo ? [row('メモ', [...p.memo].length > MAX_MEMO ? [...p.memo].slice(0, MAX_MEMO).join('') + '…' : p.memo)] : []),
     ],
   };
@@ -282,7 +282,7 @@ export interface ListItem {
 /** group はグループでの「練習」への応答のときのグループ */
 export function practiceListMessage(items: ListItem[], appUrl: string, group?: LinkGroup): LineMessage {
   if (items.length === 0) {
-    return { type: 'text', text: `今後の練習はまだありません。\n${appUrl}` };
+    return { type: 'text', text: `今後の予約情報はまだありません。\n${appUrl}` };
   }
   const shown = items.slice(0, 10);
   const rows: Node[] = shown.map(({ practice: p, going }) => ({
@@ -313,14 +313,14 @@ export function practiceListMessage(items: ListItem[], appUrl: string, group?: L
   if (items.length > shown.length) rows.push(text(`ほか${items.length - shown.length}件`, { size: 'xs', color: GRAY }));
   return {
     type: 'flex',
-    altText: '今後の練習',
+    altText: '今後の予約情報',
     contents: {
       type: 'bubble',
-      body: { type: 'box', layout: 'vertical', spacing: 'md', contents: [text('今後の練習', { weight: 'bold', size: 'lg' }), ...rows] },
+      body: { type: 'box', layout: 'vertical', spacing: 'md', contents: [text('今後の予約情報', { weight: 'bold', size: 'lg' }), ...rows] },
       footer: {
         type: 'box',
         layout: 'vertical',
-        contents: [{ type: 'button', style: 'primary', color: GREEN, action: { type: 'uri', label: 'アプリで見る', uri: appUrl } }],
+        contents: [{ type: 'button', style: 'primary', color: GREEN, action: { type: 'uri', label: 'アプリを開く', uri: appUrl } }],
       },
     },
   };
@@ -355,7 +355,7 @@ export function answerReport(items: { practice: Pick<Practice, 'date' | 'start'>
   const maybe = pick('保留');
   const notGoing = pick('行かない');
   const lines = [going && `○ ${going} 行きます`, maybe && `△ ${maybe} 未定です`, notGoing && `✕ ${notGoing} 行きません`].filter(Boolean);
-  return lines.length ? ['出欠を回答しました', ...lines].join('\n') : null;
+  return lines.length ? ['回答しました', ...lines].join('\n') : null;
 }
 
 export function reservationLabel(r: Reservation): string {

@@ -52,14 +52,14 @@ export function PracticePass({ v }: { v: PracticeView }) {
       date={p.date}
       status={p.status}
       fields={[
-        { label: 'TIME', value: `${p.start}–${p.end}`, wide: true },
-        { label: 'STUDIO', value: p.studio, jp: true, wide: !p.room },
-        ...(p.room ? [{ label: 'ROOM', value: p.room, note: roomInfo(me.settings.studios, p.studio, p.room), jp: true }] : []),
-        { label: 'PER PERSON', value: v.perPerson != null ? yen(v.perPerson) : '—', note: p.feeOverride ? '調整済み' : null },
-        { label: 'TOTAL', value: yen(p.fee) },
-        { label: 'GOING', value: <>{v.goingCount}{p.max ? <small class="of">/{p.max}</small> : null}</>, note: p.min ? `最低 ${p.min}人` : null },
-        { label: 'HOST', value: v.bookerName, jp: true },
-        ...(p.memo ? [{ label: 'MEMO', value: p.memo, jp: true, wide: true }] : []),
+        { label: '時間', value: `${p.start}–${p.end}`, wide: true },
+        { label: 'スタジオ', value: p.studio, jp: true, wide: !p.room },
+        ...(p.room ? [{ label: '部屋', value: p.room, note: roomInfo(me.settings.studios, p.studio, p.room), jp: true }] : []),
+        { label: '1人あたり', value: v.perPerson != null ? yen(v.perPerson) : '—', note: p.feeOverride ? '調整済み' : null },
+        { label: 'スタジオ代', value: yen(p.fee) },
+        { label: '参加人数', value: <>{v.goingCount}{p.max ? <small class="of">/{p.max}</small> : null}</>, note: p.min ? `最低人数 ${p.min}人` : null },
+        { label: '予約者', value: v.bookerName, jp: true },
+        ...(p.memo ? [{ label: 'メモ', value: p.memo, jp: true, wide: true }] : []),
       ]}
     />
   );
@@ -74,7 +74,7 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
     if (v && focus === 'calendar') calRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [v != null, focus]);
 
-  if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
+  if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty">予約情報が見つかりません</div>}</>;
   const p = v.practice;
 
   return (
@@ -85,7 +85,7 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
 
       <RsvpButtons solo value={v.myAnswer} status={p.status} busy={busy} onAnswer={(a: Answer) => update(() => api('rsvp', { id, answer: a }))} />
 
-      <Attendees v={v} onRemove={(a) => update(() => api('removeAttendance', { id, participant: a.participant }), '取り消しました')} />
+      <Attendees v={v} onRemove={(a) => update(() => api('removeAttendance', { id, participant: a.participant }), '削除しました')} />
 
       <div class="sec-head" ref={calRef}>
         <Icon name="calendar" size={18} />
@@ -103,8 +103,8 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
       {/* 古いお知らせのリンクなどから開いた予約者が、直す・消す場所に迷わないように */}
       {v.canEdit && (
         <p class="note" style={{ marginTop: 16 }}>
-          直す・消すときは{' '}
-          <a href={`#/recruit/${encodeURIComponent(p.id)}`}>「募集」のこの練習</a>
+          編集・削除は{' '}
+          <a href={`#/recruit/${encodeURIComponent(p.id)}`}>「募集」のこの予約情報</a>
           から
         </p>
       )}
@@ -116,14 +116,14 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
 function Attendees({ v, onRemove }: { v: PracticeView; onRemove: (a: AttendeeView) => void }) {
   const lists = [
     { label: '○ 行く', people: v.going },
-    { label: '△ 保留', people: v.maybe },
+    { label: '△ 未定', people: v.maybe },
     { label: '✕ 行かない', people: v.notGoing },
   ];
   return (
     <>
       <div class="sec-head">
         <Icon name="people" size={18} />
-        参加メンバー
+        参加者
         <span class="n">{v.going.length + v.maybe.length + v.notGoing.length}</span>
       </div>
       {lists.map(({ label, people }) =>
@@ -138,7 +138,7 @@ function Attendees({ v, onRemove }: { v: PracticeView; onRemove: (a: AttendeeVie
                   <Avatar name={a.name} guest={a.kind === 'ゲスト'} />
                   <span>{a.name}</span>
                   {a.kind === 'ゲスト' && a.canRemove && (
-                    <button class="x" aria-label={`${a.name}さんを取り消す`} onClick={() => confirm(`${a.name}さんを取り消しますか？`) && onRemove(a)}>
+                    <button class="x" aria-label={`${a.name}さんを削除`} onClick={() => confirm(`${a.name}さんを削除しますか？`) && onRemove(a)}>
                       <Icon name="x" size={14} />
                     </button>
                   )}
@@ -148,7 +148,7 @@ function Attendees({ v, onRemove }: { v: PracticeView; onRemove: (a: AttendeeVie
           </div>
         ),
       )}
-      {v.going.length + v.maybe.length + v.notGoing.length === 0 && <div class="muted">まだ誰も答えていません</div>}
+      {v.going.length + v.maybe.length + v.notGoing.length === 0 && <div class="muted">まだ誰も回答していません</div>}
     </>
   );
 }
@@ -159,7 +159,7 @@ export function deleteMessage(v: PracticeView): string {
   const answered = v.goingCount + v.maybe.length;
   return [
     `${labelDate(p.date)} ${p.start}〜 ${p.studio}${p.room ? ' ' + p.room : ''} を削除しますか？`,
-    answered > 0 ? `答えている人がいます（行く${v.goingCount}人・保留${v.maybe.length}人）。出欠も消えます。` : '出欠も消えます。',
+    answered > 0 ? `回答している人がいます（行く${v.goingCount}人・未定${v.maybe.length}人）。回答も削除されます。` : '回答も削除されます。',
     'グループへの連絡は送られないので、必要ならグループで伝えてください。',
   ].join('\n');
 }
@@ -221,15 +221,15 @@ export function EditForm({
         </div>
         <div class="grid3">
           <label class="field">
-            <span>上限</span>
+            <span>上限人数</span>
             <input type="number" inputMode="numeric" placeholder="なし" value={f.max} onInput={set('max')} />
           </label>
           <label class="field">
-            <span>最低</span>
-            <input type="number" inputMode="numeric" placeholder="標準" value={f.min} onInput={set('min')} />
+            <span>最低人数</span>
+            <input type="number" inputMode="numeric" placeholder={`標準 ${me.settings.minDefault}人`} value={f.min} onInput={set('min')} />
           </label>
           <label class="field">
-            <span>1人 ¥</span>
+            <span>1人あたり ¥</span>
             <input type="number" inputMode="numeric" placeholder="自動" value={f.feeOverride} onInput={set('feeOverride')} />
           </label>
         </div>

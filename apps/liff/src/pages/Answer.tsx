@@ -66,18 +66,18 @@ export function AnswerPage({ ids: raw }: { ids: string[] }) {
       <TopBar title="RSVP">{(busy || pending.size > 0 || load === 'loading' || load === 'wait') && <Syncing />}</TopBar>
       {load === 'error' && (
         <div class="empty">
-          最新の出欠を読み込めませんでした
+          最新の回答を読み込めませんでした
           <button class="btn primary" onClick={reload}>
             読み込み直す
           </button>
         </div>
       )}
       {load === 'error' ? null : found.length === 0 ? (
-        <div class="empty">練習が見つかりません（終わった・削除された・見られない練習です）</div>
+        <div class="empty">予約情報が見つかりません（終了した・削除された・見られない予約情報です）</div>
       ) : (
         found.map((v) => <PracticeCard key={v.practice.id} v={v} busy={pending.has(v.practice.id) || !fresh} onAnswer={(a) => answer(v.practice.id, a)} />)
       )}
-      {found.length > 0 && found.length < ids.length && <p class="note">終わった・削除された・見られない練習は表示していません</p>}
+      {found.length > 0 && found.length < ids.length && <p class="note">終了した・削除された・見られない予約情報は表示していません</p>}
 
       {fresh && found.length > 0 && (
         <section>

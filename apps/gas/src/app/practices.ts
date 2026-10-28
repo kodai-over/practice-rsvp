@@ -235,7 +235,7 @@ export function removeDraft(ctx: Ctx, id: string): void {
  * 同じ練習IDは登録済みとして飛ばし、直後に続く予約は既存の練習の延長として更新する（募集は出さない）。
  */
 export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInput[], groups: string[]): CreateResult {
-  if (!canRegister(booker)) throw new UserError('練習を登録できません');
+  if (!canRegister(booker)) throw new UserError('予約情報を登録できません');
   const settings = ctx.store.settings();
   const known = (gs: string[]) => [...new Set(gs)].filter((g) => settings.groups.some((s) => s.id === g));
   const validGroups = known(groups);
@@ -246,7 +246,7 @@ export function createPractices(ctx: Ctx, booker: Member, inputs: NewPracticeInp
 
   const normalized = inputs.map((input) => {
     const r = normalizeReservation(input);
-    if (!r) throw new UserError(`入力が足りない予約があります（${input.date || '日付なし'}）`);
+    if (!r) throw new UserError(`入力が足りない予約情報があります（${input.date || '日付なし'}）`);
     return { input, r: { ...r, fee: r.fee ?? defaultFee(settings, r) } };
   });
   // 確認画面の分類（classifyReservations は日時順に見る）と同じ結果になるよう、日時順に並べてから1件ずつ分類する
@@ -411,9 +411,9 @@ export interface Respondent {
 export function recordAnswer(ctx: Ctx, practiceId: string, who: Respondent, answer: Answer): { ok: true } | { ok: false; reason: string } {
   return ctx.withLock(() => {
     const p = ctx.store.getPractice(practiceId);
-    if (!p) return { ok: false as const, reason: '練習が見つかりません' };
+    if (!p) return { ok: false as const, reason: '予約情報が見つかりません' };
     if (p.status === '中止') return { ok: false as const, reason: '中止になりました' };
-    if (p.status === '終了' || p.date < toJstDate(ctx.now())) return { ok: false as const, reason: 'この練習は終了しました' };
+    if (p.status === '終了' || p.date < toJstDate(ctx.now())) return { ok: false as const, reason: 'この予約情報は終了しました' };
     const att = ctx.store.attendance(p.id);
     const existing = att.find((a) => a.participant === who.participant);
     const going = goingList(att, p.id).length;
