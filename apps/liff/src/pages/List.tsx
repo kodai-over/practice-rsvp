@@ -71,7 +71,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
       ) : shown.length === 0 ? (
         <div class="empty">
           <div>{tab === 'todo' ? '未定の予約情報はありません。' : tab === 'mine' ? '行く予約情報はありません。' : '登録されている予約情報はありません。'}</div>
-          {tab === 'all' && <p class="note">所属グループの予約情報が出ないときは、そのグループの募集メッセージの「RSVP」から一度開いてください</p>}
+          {tab === 'all' && <p class="note">所属グループの予約情報が出ないときは、そのグループの募集メッセージの「回答」から一度開いてください</p>}
           {tab === 'all' && <p class="note">スタジオの予約は「募集」の右上の＋から登録できます</p>}
         </div>
       ) : (

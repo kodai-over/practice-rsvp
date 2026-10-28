@@ -206,7 +206,7 @@ function recruitItem({ practice: p, bookerName }: RecruitInput, first: boolean):
   };
 }
 
-/** 「RSVP」のリンク。1件でもリンクに入りきらない（スタジオ名が極端に長いなど）ときは、アプリのトップを開く */
+/** 「回答」のリンク（RSVP 画面を開く）。1件でもリンクに入りきらない（スタジオ名が極端に長いなど）ときは、アプリのトップを開く */
 function cardLink(items: RecruitInput[], appUrl: string, group?: LinkGroup): string {
   const links = [answerLink(appUrl, items.map((c) => c.practice), group), group?.key ? appLink(appUrl, { g: group.id, k: group.key }) : appUrl];
   return links.find((l) => l.length <= MAX_URI) ?? appUrl;
@@ -223,7 +223,7 @@ function bytes(m: LineMessage): number {
 }
 
 /**
- * 参加者募集のカード。その回に募集した練習を1枚に並べ、ボタンは「RSVP」だけ。
+ * 参加者募集のカード。その回に募集した練習を1枚に並べ、ボタンは「回答」だけ（開く画面は RSVP）。
  * 押すとアプリでその練習だけの回答画面が開く（グループのトークには何も流れない）
  */
 function recruitCard(items: RecruitInput[], appUrl: string, group?: LinkGroup): LineMessage {
@@ -245,7 +245,7 @@ function recruitCard(items: RecruitInput[], appUrl: string, group?: LinkGroup): 
             type: 'button',
             style: 'primary',
             color: GREEN,
-            action: { type: 'uri', label: 'RSVP', uri: cardLink(items, appUrl, group) },
+            action: { type: 'uri', label: '回答', uri: cardLink(items, appUrl, group) },
           },
         ],
       },
