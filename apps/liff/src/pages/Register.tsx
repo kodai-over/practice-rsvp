@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { addDays, defaultFee, endAfterStart, labelDate, skippedNote, toJstDate, type DraftItemKind, type NewPracticeInput, type Reservation } from '@studio-attendance/shared';
+import { addDays, defaultFee, endAfterStart, labelDate, MAX_SCREENSHOTS, skippedNote, toJstDate, type DraftItemKind, type NewPracticeInput, type Reservation } from '@studio-attendance/shared';
 import { api } from '../api';
 import { RoomInfo, RoomSelect, StudioSelect } from '../components/StudioRoom';
 import { BusyOverlay, Icon, Spinner, TopBar, go, useApp, useRunner } from '../ui';
@@ -160,7 +160,8 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     );
 
   /** スクショか文章から読み取って、入力欄を置き換える */
-  const parse = async (params: { images?: { mimeType: string; data: string }[]; text?: string }) => {
+  /** note: 結果と一緒に伝えること（読まなかったスクショがあるときなど） */
+  const parse = async (params: { images?: { mimeType: string; data: string }[]; text?: string }, note = '') => {
     setPhase('reading');
     const res = await run(() => api('parseReservations', params));
     setPhase(null);
@@ -169,19 +170,21 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     // 登録済み・終了した予約はサーバーで除かれている。件数だけ伝える
     const skipped = skippedNote(res);
     if (next.length === 0) {
-      toast(`新しく登録する予約情報はありませんでした。${skipped || '手で入力してください。'}`, true);
+      toast(`${note}新しく登録する予約情報はありませんでした。${skipped || '手で入力してください。'}`, true);
       return false;
     }
     setRows(next);
-    toast(`${next.length}件を読み取りました。${skipped}内容を確かめてください`);
+    toast(`${note}${next.length}件を読み取りました。${skipped}内容を確かめてください`);
     return true;
   };
 
   const onFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setPhase('reading');
-    const images = await run(() => Promise.all([...files].slice(0, 5).map(shrink)));
-    if (images) await parse({ images });
+    // 多く選んだときは最初の分だけ読み、読まなかったことを結果と一緒に知らせる
+    const note = files.length > MAX_SCREENSHOTS ? `スクショは${MAX_SCREENSHOTS}枚までのため、最初の${MAX_SCREENSHOTS}枚だけ読み取りました。` : '';
+    const images = await run(() => Promise.all([...files].slice(0, MAX_SCREENSHOTS).map(shrink)));
+    if (images) await parse({ images }, note);
     else setPhase(null);
   };
 

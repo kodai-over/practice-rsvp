@@ -122,7 +122,7 @@ export interface ApiActions {
   addGuest: { params: { id: string; name: string }; result: PracticeView };
   removeAttendance: { params: { id: string; participant: string }; result: PracticeView };
   appendMemo: { params: { id: string; text: string }; result: PracticeView };
-  /** スクショ（images）か予約内容の文章（text）から予約を読み取る */
+  /** スクショ（images、MAX_SCREENSHOTS 枚まで）か予約内容の文章（text）から予約を読み取る */
   parseReservations: { params: { images?: { mimeType: string; data: string }[]; text?: string }; result: ParseResult };
   getDraft: { params: { id: string }; result: Draft | null };
   classify: { params: { reservations: Reservation[] }; result: DraftItem[] };
@@ -173,3 +173,6 @@ export interface JoinActions {
 }
 
 export type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: string };
+
+/** 1回に読み取れるスクショの枚数（アプリでも Bot でも同じ）。多いと Gemini に送れる量を超え、読み間違いも増える */
+export const MAX_SCREENSHOTS = 3;

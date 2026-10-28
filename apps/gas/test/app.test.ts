@@ -104,6 +104,30 @@ describe('スクショから募集まで', () => {
     expect(t.line.lastReplyText()).toContain('グループに募集');
   });
 
+  it('まとめて送ったスクショは、全部届いてから index 順に1回で読み取る', () => {
+    t.reader.result = [reservation];
+    const set = (index: number) => ({ id: 'S1', index, total: 3 });
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm2', set(2))] });
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm1', set(1))] });
+    expect(t.reader.calls).toHaveLength(0);
+    handleWebhook(t.ctx, { events: [imageEvent(BOOKER, 'm3', set(3))] });
+    expect(t.reader.calls).toHaveLength(1);
+    expect(t.reader.calls[0].input.images.map((i) => i.data)).toEqual(['m1', 'm2', 'm3']);
+    expect(t.line.lastReplyText()).toContain('予約内容の確認');
+  });
+
+  it('4枚以上まとめて送ったら読み取らず、1回だけ断る', () => {
+    t.reader.result = [reservation];
+    const set = (index: number) => ({ id: 'S2', index, total: 4 });
+    for (const i of [2, 1, 3, 4]) handleWebhook(t.ctx, { events: [imageEvent(BOOKER, `m${i}`, set(i))] });
+    expect(t.reader.calls).toHaveLength(0);
+    expect(t.line.replies).toHaveLength(1);
+    expect(t.line.lastReplyText()).toContain('スクショは3枚までにしてください');
+    expect(() => handleApi(t.ctx, { userId: BOOKER }, 'parseReservations', { images: Array(4).fill({ mimeType: 'image/jpeg', data: 'x' }) })).toThrow(
+      'スクショは3枚までにしてください',
+    );
+  });
+
   it('読み取りで例外が起きたら、エラーだと伝える', () => {
     t.reader.read = () => {
       throw new Error('Gemini 404: model not found');

@@ -5,6 +5,7 @@ import {
   goingList,
   labelDate,
   looksLikeReservation,
+  MAX_SCREENSHOTS,
   parsePostback,
   practiceListMessage,
   shortDate,
@@ -151,6 +152,12 @@ function onText(ctx: Ctx, ev: LineEvent): void {
 function onImage(ctx: Ctx, ev: LineEvent): void {
   if (ev.source.type !== 'user' || !ev.source.userId || !ev.message) return;
   const userId = ev.source.userId;
+  const set = ev.message.imageSet;
+  if (set && set.total > MAX_SCREENSHOTS) {
+    // 多すぎるときは読み取らない。1枚ずつ届くので、断るのは1枚目のときの1回だけ
+    if (set.index === 1) safeReply(ctx, ev, [textMsg(`スクショは${MAX_SCREENSHOTS}枚までにしてください。分けて送ってください。`)]);
+    return;
+  }
   const messageIds = collectImageSet(ctx, userId, ev.message);
   if (!messageIds) return; // 複数枚送信のうち、まだ全部届いていない
   registerFrom(ctx, ev, userId, { messageIds });
