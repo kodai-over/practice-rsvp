@@ -120,7 +120,8 @@ function safeReply(ctx: Ctx, ev: LineEvent, messages: LineMessage[]): boolean {
 
 function onText(ctx: Ctx, ev: LineEvent): void {
   const text = (ev.message?.text ?? '').trim();
-  if (text === '予約' || text === '予約情報' || text === '練習') {
+  // 「予約」の一語はふだんの会話でも出やすいので、反応するのは「予約情報」と以前からの「練習」だけ
+  if (text === '予約情報' || text === '練習') {
     const groupId = ev.source.type === 'user' ? undefined : chatId(ev.source);
     const att = ctx.store.attendance();
     // 個別トークでは、その人に見える練習だけを返す
@@ -139,7 +140,7 @@ function onText(ctx: Ctx, ev: LineEvent): void {
   }
   safeReply(ctx, ev, [
     textMsg(
-      '予約画面のスクショか、予約内容の文章（予約完了メールなど）を送ると、予約情報を登録できます。\n「予約」と送ると、今後の予約情報の一覧を返します。\n' +
+      '予約画面のスクショか、予約内容の文章（予約完了メールなど）を送ると、予約情報を登録できます。\n「予約情報」と送ると、今後の予約情報の一覧を返します。\n' +
         ctx.config.appUrl,
     ),
   ]);

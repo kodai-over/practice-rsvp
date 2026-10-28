@@ -182,7 +182,7 @@ export function AdminPage() {
                       saveMember(m.userId, { defaultGroups: e.currentTarget.checked ? [...m.defaultGroups, g.id] : m.defaultGroups.filter((x) => x !== g.id) })
                     }
                   />
-                  {g.name}に送る（送り先）
+                  {g.name}をふだんの送り先にする
                 </label>
             ))}
           </section>

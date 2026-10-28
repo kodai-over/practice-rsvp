@@ -420,13 +420,19 @@ describe('出欠', () => {
     expect(t.line.lastReplyText()).toContain('中止になりました');
   });
 
-  it('「練習」に完全一致で一覧を返す', () => {
+  it('「予約情報」「練習」に完全一致で一覧を返す', () => {
     const text = (s: string): LineEvent => ({ type: 'message', replyToken: 'rt', source: { type: 'group', groupId: G1, userId: 'U1' }, message: { id: 'x', type: 'text', text: s } });
     handleWebhook(t.ctx, { events: [text('練習お疲れ')] });
+    expect(t.line.replies).toHaveLength(0);
+    handleWebhook(t.ctx, { events: [text('予約')] });
+    handleWebhook(t.ctx, { events: [text('予約した？')] });
     expect(t.line.replies).toHaveLength(0);
     handleWebhook(t.ctx, { events: [text('練習')] });
     expect(t.line.lastReplyText()).toContain('今後の予約情報');
     expect(t.line.lastReplyText()).toContain('10/21(水)');
+    handleWebhook(t.ctx, { events: [text(' 予約情報 ')] });
+    expect(t.line.replies).toHaveLength(2);
+    expect(t.line.lastReplyText()).toContain('今後の予約情報');
   });
 
   it('アプリ: 割り勘・ゲスト・権限', () => {
