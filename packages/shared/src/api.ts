@@ -174,5 +174,5 @@ export interface JoinActions {
 
 export type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: string };
 
-/** 1回に読み取れるスクショの枚数（アプリでも Bot でも同じ）。多いと Gemini に送れる量を超え、読み間違いも増える */
+/** 1回に読み取れるスクショの枚数（アプリでも Bot でも同じ）。多いと読み間違いが増え、読み取りにも時間がかかる（Bot は縮めずに送るので、Gemini に送れる量も超えやすい） */
 export const MAX_SCREENSHOTS = 3;

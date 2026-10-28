@@ -149,13 +149,19 @@ function onText(ctx: Ctx, ev: LineEvent): void {
 
 // ---------------------------------------------------------------- スクショ・文章からの登録
 
+const CANNOT_REGISTER = '予約情報を登録できません。管理者に確認してください。';
+
 function onImage(ctx: Ctx, ev: LineEvent): void {
   if (ev.source.type !== 'user' || !ev.source.userId || !ev.message) return;
   const userId = ev.source.userId;
   const set = ev.message.imageSet;
   if (set && set.total > MAX_SCREENSHOTS) {
-    // 多すぎるときは読み取らない。1枚ずつ届くので、断るのは1枚目のときの1回だけ
-    if (set.index === 1) safeReply(ctx, ev, [textMsg(`スクショは${MAX_SCREENSHOTS}枚までにしてください。分けて送ってください。`)]);
+    // 多すぎるときは読み取らない。1枚ずつ届くので、返事は1枚目のときの1回だけ
+    if (set.index !== 1) return;
+    ctx.log('too many screenshots', set.total);
+    // 登録できない人には、分けて送り直させずに、登録できないことを先に伝える
+    const text = canRegister(ensureMember(ctx, userId)) ? `スクショは${MAX_SCREENSHOTS}枚までにしてください。分けて送ってください。` : CANNOT_REGISTER;
+    safeReply(ctx, ev, [textMsg(text)]);
     return;
   }
   const messageIds = collectImageSet(ctx, userId, ev.message);
@@ -167,7 +173,7 @@ function onImage(ctx: Ctx, ev: LineEvent): void {
 function registerFrom(ctx: Ctx, ev: LineEvent, userId: string, src: { messageIds?: string[]; text?: string }): void {
   const member = ensureMember(ctx, userId);
   if (!canRegister(member)) {
-    safeReply(ctx, ev, [textMsg('予約情報を登録できません。管理者に確認してください。')]);
+    safeReply(ctx, ev, [textMsg(CANNOT_REGISTER)]);
     return;
   }
   const what = src.text ? '予約内容' : 'スクショ';

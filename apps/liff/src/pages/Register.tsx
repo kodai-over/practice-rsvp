@@ -160,8 +160,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     );
 
   /** スクショか文章から読み取って、入力欄を置き換える */
-  /** note: 結果と一緒に伝えること（読まなかったスクショがあるときなど） */
-  const parse = async (params: { images?: { mimeType: string; data: string }[]; text?: string }, note = '') => {
+  const parse = async (params: { images?: { mimeType: string; data: string }[]; text?: string }) => {
     setPhase('reading');
     const res = await run(() => api('parseReservations', params));
     setPhase(null);
@@ -170,21 +169,21 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     // 登録済み・終了した予約はサーバーで除かれている。件数だけ伝える
     const skipped = skippedNote(res);
     if (next.length === 0) {
-      toast(`${note}新しく登録する予約情報はありませんでした。${skipped || '手で入力してください。'}`, true);
+      toast(`新しく登録する予約情報はありませんでした。${skipped || '手で入力してください。'}`, true);
       return false;
     }
     setRows(next);
-    toast(`${note}${next.length}件を読み取りました。${skipped}内容を確かめてください`);
+    toast(`${next.length}件を読み取りました。${skipped}内容を確かめてください`);
     return true;
   };
 
   const onFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    // 多すぎるときは読み取らない（Bot と同じ。どれを読んだか分からなくなり、読み直すと先の結果も消えるため）
+    if (files.length > MAX_SCREENSHOTS) return toast(`スクショは${MAX_SCREENSHOTS}枚までにしてください。`, true);
     setPhase('reading');
-    // 多く選んだときは最初の分だけ読み、読まなかったことを結果と一緒に知らせる
-    const note = files.length > MAX_SCREENSHOTS ? `スクショは${MAX_SCREENSHOTS}枚までのため、最初の${MAX_SCREENSHOTS}枚だけ読み取りました。` : '';
-    const images = await run(() => Promise.all([...files].slice(0, MAX_SCREENSHOTS).map(shrink)));
-    if (images) await parse({ images }, note);
+    const images = await run(() => Promise.all([...files].map(shrink)));
+    if (images) await parse({ images });
     else setPhase(null);
   };
 
@@ -237,7 +236,15 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
 
       <div class="sources">
         <label class="source primary">
-          <input type="file" accept="image/*" multiple onChange={(e) => onFiles(e.currentTarget.files)} disabled={busy} aria-label="予約画面のスクショから入力" />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => {
+              onFiles(e.currentTarget.files);
+              // 同じスクショを選び直しても読み取れるように空にする
+              e.currentTarget.value = '';
+            }} disabled={busy} aria-label="予約画面のスクショから入力" />
           <Icon name="camera" size={22} />
           <span>スクショから</span>
         </label>
@@ -246,6 +253,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
           <span>文章から</span>
         </button>
       </div>
+      <p class="note">スクショは一度に{MAX_SCREENSHOTS}枚まで選べます</p>
 
       {textOpen && (
         <div class="card">

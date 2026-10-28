@@ -123,6 +123,10 @@ describe('スクショから募集まで', () => {
     expect(t.reader.calls).toHaveLength(0);
     expect(t.line.replies).toHaveLength(1);
     expect(t.line.lastReplyText()).toContain('スクショは3枚までにしてください');
+    expect([...t.kv.data.keys()].some((k) => k.startsWith('imgset:'))).toBe(false);
+  });
+
+  it('API も4枚以上は断る', () => {
     expect(() => handleApi(t.ctx, { userId: BOOKER }, 'parseReservations', { images: Array(4).fill({ mimeType: 'image/jpeg', data: 'x' }) })).toThrow(
       'スクショは3枚までにしてください',
     );
