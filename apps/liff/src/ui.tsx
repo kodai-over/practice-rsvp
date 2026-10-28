@@ -38,7 +38,8 @@ interface AppState {
   /** 起動時のまとめ取得に失敗した（practicesAt が 0 のまま最新が来ない） */
   startupFailed: boolean;
   /** 一覧を置き換える。fresh なら「今取った最新」として扱う（一覧に戻っても取り直さない） */
-  setPractices(list: PracticeView[], fresh?: boolean): void;
+  /** startedAt: 取り直しを始めた時刻。そのあと回答を押した練習は、今の内容を残す */
+  setPractices(list: PracticeView[], fresh?: boolean, startedAt?: number): void;
   /** 1件だけ差し替える（出欠や修正の結果をすぐ一覧に反映する） */
   updatePractice(v: PracticeView, opts?: { revert?: boolean }): void;
   /** 練習を削除する（すぐ一覧から消し、失敗したら戻す）。消せたら true */

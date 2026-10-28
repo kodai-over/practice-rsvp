@@ -28,10 +28,11 @@ export function usePractice(id: string) {
     setV(null);
     if (fresh()) return setLoading(false);
     setLoading(true);
+    const started = Date.now();
     api('getPractice', { id })
       .then((r) => {
-        // 回答を送っている途中なら、送る前に読んだかもしれないので使わない（結果は回答の処理が入れる）
-        if (isAnswering(id)) return;
+        // 取り直している間に回答を押していれば、押す前に読んだかもしれないので使わない（結果は回答の処理が入れる）
+        if (isAnswering(id, started)) return;
         setV(r);
         updatePractice(r);
       })

@@ -101,7 +101,7 @@ export function cancelWarningAt(date: string, rule: CancelRule): Date {
   return jstDateTime(addDays(date, -rule.daysBefore), rule.time);
 }
 
-export function isActive(p: Practice): boolean {
+export function isActive(p: Pick<Practice, 'status'>): boolean {
   return p.status === '募集中' || p.status === '満員';
 }
 
@@ -183,7 +183,7 @@ export function perPersonFee(total: number, count: number, unit: number, overrid
 }
 
 /** 人数の変化に応じて 募集中⇄満員 を切り替える。中止・終了は変えない */
-export function nextStatus(p: Practice, goingCount: number): PracticeStatus {
+export function nextStatus(p: Pick<Practice, 'status' | 'max'>, goingCount: number): PracticeStatus {
   if (!isActive(p)) return p.status;
   return p.max != null && p.max > 0 && goingCount >= p.max ? '満員' : '募集中';
 }

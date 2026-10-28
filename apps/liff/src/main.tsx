@@ -65,12 +65,13 @@ function App() {
 
   /** 起動時と同じまとめ取得。起動中に差し替えた練習と、回答を送っている途中の練習は、取得の結果で戻さない */
   const loadHome = async () => {
+    const started = Date.now();
     const home = await api('home', entry.current);
     setMe(home.me);
     setPracticesState((cur) => {
       const keep = touched.current;
       touched.current = null;
-      const list = home.practices.map((v) => (keep?.has(v.practice.id) || isAnswering(v.practice.id) ? (cur?.list.find((x) => x.practice.id === v.practice.id) ?? v) : v));
+      const list = home.practices.map((v) => (keep?.has(v.practice.id) || isAnswering(v.practice.id, started) ? (cur?.list.find((x) => x.practice.id === v.practice.id) ?? v) : v));
       return { list: clean(list), at: Date.now() };
     });
     saveCache(home);
@@ -118,9 +119,9 @@ function App() {
 
   // fresh でないときは取った時刻を変えない（前回の表示を「最新」と取り違えないように）
   // 回答を送っている途中の練習は、取り直した一覧（送る前に読んだかもしれない）で戻さず、今の内容を残す
-  const setPractices = (list: PracticeView[], fresh = false) =>
+  const setPractices = (list: PracticeView[], fresh = false, startedAt?: number) =>
     setPracticesState((cur) => ({
-      list: clean(list).map((v) => (isAnswering(v.practice.id) ? (cur?.list.find((x) => x.practice.id === v.practice.id) ?? v) : v)),
+      list: clean(list).map((v) => (isAnswering(v.practice.id, startedAt) ? (cur?.list.find((x) => x.practice.id === v.practice.id) ?? v) : v)),
       at: fresh ? Date.now() : (cur?.at ?? 0),
     }));
 

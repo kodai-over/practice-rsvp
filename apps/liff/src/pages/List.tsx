@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
-import { labelDate, type Answer, type PracticeView } from '@studio-attendance/shared';
+import { labelDate, nextStatus, type Answer, type PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
-import { sending, wanted } from '../answering';
+import { pressedAt, sending, wanted } from '../answering';
 import { AvatarStack, FRESH_MS, Fee, Icon, RsvpButtons, Spinner, StatusBadge, Stub, Syncing, Tabs, go, place, useApp, useRunner } from '../ui';
 
 type Tab = 'all' | 'mine' | 'todo';
@@ -23,7 +23,8 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
 
   useEffect(() => {
     // 起動時のまとめ取得から時間がたっていれば取り直す（前回の表示のときは起動処理が取り直すので待つ）
-    if (practicesAt > 0 && Date.now() - practicesAt > FRESH_MS) run(() => api('listPractices')).then((r) => r && setPractices(r));
+    const started = Date.now();
+    if (practicesAt > 0 && started - practicesAt > FRESH_MS) run(() => api('listPractices')).then((r) => r && setPractices(r, false, started));
   }, []);
 
   const selectTab = (t: Tab) => {
@@ -89,7 +90,7 @@ function optimistic(v: PracticeView, a: Answer): PracticeView {
   const now = a === '行く';
   const goingCount = Math.max(0, v.goingCount + (now === was ? 0 : now ? 1 : -1));
   const p = v.practice;
-  const status = p.status === '満員' || p.status === '募集中' ? (p.max != null && p.max > 0 && goingCount >= p.max ? '満員' : '募集中') : p.status;
+  const status = nextStatus(p, goingCount);
   return { ...v, myAnswer: a, goingCount, practice: status === p.status ? p : { ...p, status } };
 }
 
@@ -104,6 +105,7 @@ export function useAnswer() {
     const current = (list ?? []).find((x) => x.practice.id === id);
     if (current) updatePractice(optimistic(current, a));
     wanted.set(id, a);
+    pressedAt.set(id, Date.now());
     if (sending.has(id)) return;
     const loop = (async () => {
       // 最後にサーバーに記録できた内容。失敗して取り直せなかったときはここに戻す
@@ -120,7 +122,7 @@ export function useAnswer() {
               return;
             }
           } catch (e) {
-            // 送っている間に押し直していれば、その回答を送り直す
+            // 送っている間に押し直していれば、その回答を送り直す（失敗した途中の回答は知らせない）
             if (wanted.get(id) !== target) continue;
             wanted.delete(id);
             toast(e instanceof Error ? e.message : String(e), true);
