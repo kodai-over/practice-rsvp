@@ -311,7 +311,7 @@ describe('カレンダー', () => {
 describe('Flex Message', () => {
   const appUrl = 'https://liff.line.me/123-abc';
 
-  it('募集カード: 練習を1枚に並べ、ボタンは「RSVP」だけ', () => {
+  it('募集カード: 練習を1枚に並べ、ボタンは「回答」だけ', () => {
     const items = [0, 1].map((i) => ({ practice: practice({ id: `p${i}`, date: addDays('2026-11-01', i), max: i ? 5 : null }), bookerName: 'おおゆち' }));
     const msgs = recruitMessages(items, appUrl, { id: 'C1', key: 'k1' });
     expect(msgs).toHaveLength(1);
@@ -319,7 +319,7 @@ describe('Flex Message', () => {
     const json = JSON.stringify(msgs[0]);
     expect(json).toContain('"text":"参加者募集"');
     expect(json).toContain('おおゆち');
-    expect(json).toContain('"label":"RSVP"');
+    expect(json).toContain('"label":"回答"');
     expect(json).toContain(`"uri":"${appUrl}?r=p0&r=p1&g=C1&k=k1"`);
     // その場で答えるボタン（押すとトークに発言が流れる）は載せない
     expect(json).not.toContain('postback');

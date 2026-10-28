@@ -6,7 +6,7 @@ import { FRESH_MS, Icon, Spinner, Syncing, TopBar, go, useApp, useRunner } from 
 import { answersSettled } from '../answering';
 import { PracticeCard, useAnswer } from './List';
 
-/** 募集カードの「RSVP」から開く画面。その募集の練習だけを並べ、答えたらグループに伝えられる */
+/** 募集カードの「回答」から開く画面（RSVP）。その募集の練習だけを並べ、答えたらグループに伝えられる */
 export function AnswerPage({ ids: raw }: { ids: string[] }) {
   const { practices: list, practicesAt, startupFailed, loadHome, toast } = useApp();
   const ids = [...new Set(raw)];
