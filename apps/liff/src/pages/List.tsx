@@ -34,7 +34,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
     }
   };
 
-  const { answer, pending } = useAnswer();
+  const { answer } = useAnswer();
 
   // 「予定」に出すのは、自分に招待が来た（入っているグループに募集された）練習と、自分が招待を送った（登録した）練習。
   // 答えた・ゲストを足した練習も出す。管理者でも、ほかの練習は「募集」で見る
@@ -61,7 +61,7 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
             { key: 'todo', label: '未定', count: list ? groups.todo.length : undefined },
           ]}
         />
-        {(practicesAt === 0 || busy || pending.size > 0) && <Syncing />}
+        {(practicesAt === 0 || busy) && <Syncing />}
       </header>
 
       {list == null ? (
@@ -73,42 +73,69 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
           {tab === 'all' && <p class="note">スタジオの予約は「募集」の右上の＋から登録できます</p>}
         </div>
       ) : (
-        shown.map((v) => <PracticeCard key={v.practice.id} v={v} busy={pending.has(v.practice.id)} onAnswer={(a) => answer(v.practice.id, a)} />)
+        shown.map((v) => <PracticeCard key={v.practice.id} v={v} onAnswer={(a) => answer(v.practice.id, a)} />)
       )}
     </>
   );
 }
 
+/** 送りたい回答（練習ごとに最後に押したもの）と、送っている途中の処理。画面をまたいでも同じものを使う */
+const wanted = new Map<string, Answer>();
+const sending = new Map<string, Promise<void>>();
+
+/** 押した瞬間の見た目。記号と、行く人数を先に変える（名前の並びはサーバーの結果で差し替える） */
+function optimistic(v: PracticeView, a: Answer): PracticeView {
+  const was = v.myAnswer === '行く';
+  const now = a === '行く';
+  return { ...v, myAnswer: a, goingCount: Math.max(0, v.goingCount + (now === was ? 0 : now ? 1 : -1)) };
+}
+
 /**
- * 出欠を答える。押した瞬間に色を変え、サーバーの結果が来たら人数なども含めて差し替える（失敗したら元に戻す）。
- * 待つのは答えている練習だけ。ほかの練習の記号は続けて押せる
+ * 回答する。押した瞬間に記号を変え、待たずに続けて押し直せる（ボタンは止めない）。
+ * サーバーには練習ごとに1つずつ送り、送っている間に押し直したら、終わったあと最後の回答だけを送る。
+ * 途中の結果では画面を戻さず、最後の結果で人数なども含めて差し替える（失敗したら取り直すか元に戻す）
  */
 export function useAnswer() {
   const { practices: list, updatePractice, toast } = useApp();
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
-  const answer = async (id: string, a: Answer) => {
-    const before = (list ?? []).find((x) => x.practice.id === id);
-    if (before) updatePractice({ ...before, myAnswer: a });
-    setPending((s) => new Set(s).add(id));
-    try {
-      updatePractice(await api('rsvp', { id, answer: a }));
-    } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), true);
-      // 押した時点の控えは古いかもしれないので、取り直して差し替える（取れなければ控えに戻す）
+  const answer = (id: string, a: Answer) => {
+    const current = (list ?? []).find((x) => x.practice.id === id);
+    if (current) updatePractice(optimistic(current, a));
+    wanted.set(id, a);
+    if (sending.has(id)) return;
+    // 押す前の内容。失敗して取り直せなかったときに戻す
+    const before = current;
+    const loop = (async () => {
       try {
-        updatePractice(await api('getPractice', { id }));
-      } catch {
-        if (before) updatePractice(before, { revert: true });
+        for (;;) {
+          const target = wanted.get(id)!;
+          const r = await api('rsvp', { id, answer: target });
+          if (wanted.get(id) === target) {
+            wanted.delete(id);
+            updatePractice(r);
+            return;
+          }
+        }
+      } catch (e) {
+        wanted.delete(id);
+        toast(e instanceof Error ? e.message : String(e), true);
+        // 押した時点の控えは古いかもしれないので、取り直して差し替える（取れなければ控えに戻す）
+        try {
+          updatePractice(await api('getPractice', { id }));
+        } catch {
+          if (before) updatePractice(before, { revert: true });
+        }
+      } finally {
+        sending.delete(id);
       }
-    } finally {
-      setPending((s) => {
-        const next = new Set(s);
-        next.delete(id);
-        return next;
-      });
-    }
+    })();
+    sending.set(id, loop);
   };
-  return { answer, pending };
+  return { answer };
+}
+
+/** 送っている途中の回答がすべて終わるのを待つ（グループに伝える前に、結果をそろえる） */
+export async function answersSettled(): Promise<void> {
+  while (sending.size > 0) await Promise.all([...sending.values()]);
 }
 
 export function PracticeCard({ v, onAnswer, busy }: { v: PracticeView; onAnswer: (a: Answer) => void; busy?: boolean }) {

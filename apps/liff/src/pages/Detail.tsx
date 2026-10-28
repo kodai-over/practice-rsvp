@@ -4,6 +4,7 @@ import { api } from '../api';
 import { RoomSelect } from '../components/StudioRoom';
 import { openExternal } from '../liff';
 import { Avatar, FRESH_MS, Icon, Pass, RsvpButtons, Spinner, Syncing, TopBar, useApp, useRunner } from '../ui';
+import { useAnswer } from './List';
 
 /**
  * 一覧にある内容ですぐ表示し、最新の内容は裏で取り直す（取り直している間もボタンは押せる）。
@@ -40,7 +41,9 @@ export function usePractice(id: string) {
     }
     return r;
   };
-  return { v, loading, run, busy, update };
+  // 一覧の内容に合わせ直す（一覧に無ければ手元の内容のまま）
+  const follow = () => inList != null && setV(null);
+  return { v, inList, loading, run, busy, update, follow };
 }
 
 /** 練習のパス。日時・場所・金額・人数 */
@@ -67,7 +70,8 @@ export function PracticePass({ v }: { v: PracticeView }) {
 
 /** 「予定」から開く練習の画面。見るのと出欠・カレンダーだけ（編集・削除・募集は「募集」から） */
 export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null }) {
-  const { v, loading, busy, update } = usePractice(id);
+  const { v, inList, loading, busy, update, follow } = usePractice(id);
+  const { answer } = useAnswer();
   const calRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,7 +87,19 @@ export function DetailPage({ id, focus }: { id: string; focus: 'calendar' | null
 
       <PracticePass v={v} />
 
-      <RsvpButtons solo value={v.myAnswer} status={p.status} busy={busy} onAnswer={(a: Answer) => update(() => api('rsvp', { id, answer: a }))} />
+      <RsvpButtons
+        solo
+        value={v.myAnswer}
+        status={p.status}
+        busy={busy && !inList}
+        onAnswer={(a: Answer) => {
+          // 一覧にある練習は、待たずに切り替える（結果は一覧に入り、この画面もそれに合わせる）
+          if (inList) {
+            follow();
+            answer(id, a);
+          } else update(() => api('rsvp', { id, answer: a }));
+        }}
+      />
 
       <Attendees v={v} onRemove={(a) => update(() => api('removeAttendance', { id, participant: a.participant }), '削除しました')} />
 
