@@ -1,10 +1,10 @@
-/** 参加リンクのページ。LINEを使わない人が名前を入れて出欠を出す */
+/** 参加リンクのページ。LINEを使わない人が名前を入れて回答する */
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { yen, type Answer, type JoinView } from '@studio-attendance/shared';
 import { joinApi } from './api';
 import './styles.css';
-import { Pass, RsvpButtons, Spinner, useToast } from './ui';
+import { ANSWER_LABEL, Pass, RsvpButtons, Spinner, useToast } from './ui';
 
 const q = new URLSearchParams(location.search);
 const id = q.get('p') ?? '';
@@ -48,7 +48,7 @@ function JoinPage() {
       save(NAME_KEY, name.trim());
       save(pidKey, r.participant);
       setV(r);
-      toast(`「${a}」で登録しました`);
+      toast(`「${ANSWER_LABEL[a]}」で回答しました`);
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), true);
     } finally {
@@ -63,24 +63,24 @@ function JoinPage() {
   return (
     <>
       <header class="topbar">
-        <h1>出欠</h1>
+        <h1>RSVP</h1>
       </header>
       <Pass
         date={v.date}
         status={v.status}
         fields={[
-          { label: 'TIME', value: `${v.start}–${v.end}`, wide: true },
-          { label: 'STUDIO', value: v.studio, jp: true, wide: !v.room },
-          ...(v.room ? [{ label: 'ROOM', value: v.room, note: v.roomInfo, jp: true }] : []),
-          { label: 'GOING', value: v.goingCount },
-          { label: 'PER PERSON', value: v.perPerson != null ? yen(v.perPerson) : '—' },
-          ...(v.memo ? [{ label: 'MEMO', value: v.memo, jp: true, wide: true }] : []),
+          { label: '時間', value: `${v.start}–${v.end}`, wide: true },
+          { label: 'スタジオ', value: v.studio, jp: true, wide: !v.room },
+          ...(v.room ? [{ label: '部屋', value: v.room, note: v.roomInfo, jp: true }] : []),
+          { label: '参加人数', value: v.goingCount },
+          { label: '1人あたり', value: v.perPerson != null ? yen(v.perPerson) : '—' },
+          ...(v.memo ? [{ label: 'メモ', value: v.memo, jp: true, wide: true }] : []),
         ]}
       />
 
       {!closed && (
         <>
-          <input type="text" value={name} maxLength={30} aria-label="お名前" placeholder="お名前" style={{ marginBottom: 12 }} onInput={(e) => setName(e.currentTarget.value)} />
+          <input type="text" value={name} maxLength={30} aria-label="名前" placeholder="名前" style={{ marginBottom: 12 }} onInput={(e) => setName(e.currentTarget.value)} />
           <RsvpButtons solo value={v.myAnswer} status={v.status} busy={busy} onAnswer={answer} />
           <p class="muted" style={{ textAlign: 'center' }}>LINE不要・押し直しで変更できます</p>
         </>

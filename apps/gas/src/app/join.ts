@@ -6,7 +6,7 @@ import { recordAnswer } from './practices';
 function openPractice(ctx: Ctx, id: unknown, key: unknown): Practice {
   const p = typeof id === 'string' ? ctx.store.getPractice(id) : null;
   if (!p || typeof key !== 'string' || !key || p.joinKey !== key) throw new UserError('参加リンクが無効です');
-  if (p.status === '終了' || p.date < toJstDate(ctx.now())) throw new UserError('この練習は終了しました');
+  if (p.status === '終了' || p.date < toJstDate(ctx.now())) throw new UserError('この予約情報は終了しました');
   return p;
 }
 

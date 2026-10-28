@@ -120,7 +120,8 @@ function safeReply(ctx: Ctx, ev: LineEvent, messages: LineMessage[]): boolean {
 
 function onText(ctx: Ctx, ev: LineEvent): void {
   const text = (ev.message?.text ?? '').trim();
-  if (text === '練習') {
+  // 「予約」の一語はふだんの会話でも出やすいので、反応するのは「予約情報」と以前からの「練習」だけ
+  if (text === '予約情報' || text === '練習') {
     const groupId = ev.source.type === 'user' ? undefined : chatId(ev.source);
     const att = ctx.store.attendance();
     // 個別トークでは、その人に見える練習だけを返す
@@ -139,7 +140,7 @@ function onText(ctx: Ctx, ev: LineEvent): void {
   }
   safeReply(ctx, ev, [
     textMsg(
-      '予約画面のスクショか、予約内容の文章（予約完了メールなど）を送ると、練習を登録できます。\n「練習」と送ると、今後の練習の一覧を返します。\n' +
+      '予約画面のスクショか、予約内容の文章（予約完了メールなど）を送ると、予約情報を登録できます。\n「予約情報」と送ると、今後の予約情報の一覧を返します。\n' +
         ctx.config.appUrl,
     ),
   ]);
@@ -159,7 +160,7 @@ function onImage(ctx: Ctx, ev: LineEvent): void {
 function registerFrom(ctx: Ctx, ev: LineEvent, userId: string, src: { messageIds?: string[]; text?: string }): void {
   const member = ensureMember(ctx, userId);
   if (!canRegister(member)) {
-    safeReply(ctx, ev, [textMsg('練習を登録できません。管理者に確認してください。')]);
+    safeReply(ctx, ev, [textMsg('予約情報を登録できません。管理者に確認してください。')]);
     return;
   }
   const what = src.text ? '予約内容' : 'スクショ';
@@ -176,20 +177,20 @@ function registerFrom(ctx: Ctx, ev: LineEvent, userId: string, src: { messageIds
   } catch (e) {
     ctx.log('read error', e);
     sendToUser(ctx, ev, userId, [
-      textMsg(`${what}の読み取りでエラーが起きました。時間をおいてもう一度送るか、アプリの「＋ 登録」から入力してください。\n${ctx.config.appUrl}`),
+      textMsg(`${what}の読み取りでエラーが起きました。時間をおいてもう一度送るか、アプリの「募集」の右上の＋から入力してください。\n${ctx.config.appUrl}`),
     ]);
     return;
   }
   if (raws.length === 0) {
     sendToUser(ctx, ev, userId, [
-      textMsg(`${what}から予約を読み取れませんでした。予約完了画面や予約一覧を送るか、アプリの「＋ 登録」から入力してください。\n${ctx.config.appUrl}`),
+      textMsg(`${what}から予約を読み取れませんでした。予約完了画面や予約一覧を送るか、アプリの「募集」の右上の＋から入力してください。\n${ctx.config.appUrl}`),
     ]);
     return;
   }
   const draft = buildDraft(ctx, member, raws);
   if (draft.items.length === 0 && draft.incomplete.length === 0) {
     // すべて対象外なら確認カードは出さない
-    sendToUser(ctx, ev, userId, [textMsg(`新しく登録する予約はありませんでした。${skippedNote(draft)}`)]);
+    sendToUser(ctx, ev, userId, [textMsg(`新しく登録する予約情報はありませんでした。${skippedNote(draft)}`)]);
     return;
   }
   saveDraft(ctx, draft);
@@ -236,7 +237,7 @@ function onPostback(ctx: Ctx, ev: LineEvent): void {
     case 'discard': {
       const draft = loadDraft(ctx, data.d);
       if (draft && draft.booker === userId) removeDraft(ctx, data.d);
-      safeReply(ctx, ev, [textMsg('取り消しました。')]);
+      safeReply(ctx, ev, [textMsg('登録をやめました。')]);
       return;
     }
   }
@@ -254,7 +255,7 @@ function onRsvp(ctx: Ctx, ev: LineEvent, userId: string, practiceId: string, ans
   // 記録できたときは本人の発言（displayText）が出るので返信しない
   if (!res.ok) {
     const p = ctx.store.getPractice(practiceId);
-    safeReply(ctx, ev, [textMsg(p ? `${shortDate(p.date)}の練習は${res.reason}` : res.reason)]);
+    safeReply(ctx, ev, [textMsg(p ? `${shortDate(p.date)}：${res.reason}` : res.reason)]);
   }
 }
 
@@ -294,16 +295,16 @@ function onConfirm(ctx: Ctx, ev: LineEvent, userId: string, draftId: string, rec
   }
   for (const id of result.extended) {
     const p = ctx.store.getPractice(id);
-    if (p) lines.push(`${labelDate(p.date)}の練習を${p.end}までに延長しました。`);
+    if (p) lines.push(`${labelDate(p.date)}の予約情報を${p.end}までに延長しました。`);
   }
-  if (result.skipped.length) lines.push(`登録済みの予約${result.skipped.length}件は飛ばしました。`);
+  if (result.skipped.length) lines.push(`登録済みの予約情報${result.skipped.length}件は飛ばしました。`);
   if (result.notRecruited?.length) {
     lines.push(`${result.notRecruited.map((g) => groups.find((x) => x.id === g)?.name ?? g).join('、')}には募集を送れませんでした。アプリの「募集」から送り直せます。`);
   }
   if (result.created.length && !recruited.length) {
-    lines.push('', 'グループに募集するときは、アプリの「募集」で練習を開くと送れます。', ctx.config.appUrl);
+    lines.push('', 'グループに募集するときは、アプリの「募集」で予約情報を開くと送れます。', ctx.config.appUrl);
   }
-  safeReply(ctx, ev, [textMsg(lines.join('\n') || '登録する予約はありませんでした。')]);
+  safeReply(ctx, ev, [textMsg(lines.join('\n') || '登録する予約情報はありませんでした。')]);
 }
 
 // ---------------------------------------------------------------- グループ

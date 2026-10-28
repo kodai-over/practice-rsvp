@@ -167,7 +167,7 @@ const memberNameOf = (ctx: Ctx, userId: string) => ctx.store.getMember(userId)?.
 
 function getPracticeOrThrow(ctx: Ctx, id: string): Practice {
   const p = ctx.store.getPractice(id);
-  if (!p) throw new UserError('練習が見つかりません');
+  if (!p) throw new UserError('予約情報が見つかりません');
   return p;
 }
 
@@ -180,7 +180,7 @@ const visibleTo = (ctx: Ctx, me: Member, p: Practice, att?: Attendance[]) => can
 /** 見えない練習は、無いものとして扱う */
 function getVisibleOrThrow(ctx: Ctx, me: Member, id: string): Practice {
   const p = getPracticeOrThrow(ctx, id);
-  if (!visibleTo(ctx, me, p)) throw new UserError('練習が見つかりません');
+  if (!visibleTo(ctx, me, p)) throw new UserError('予約情報が見つかりません');
   return p;
 }
 
@@ -193,7 +193,7 @@ const requireAdmin = (me: Member) => {
 };
 
 const requireEditable = (me: Member, p: Practice) => {
-  if (!canEditPractice(me, p)) throw new UserError('この練習の予約者か管理者だけが操作できます');
+  if (!canEditPractice(me, p)) throw new UserError('この予約情報の予約者か管理者だけが操作できます');
 };
 
 const cleanName = (s: unknown, max = 30) => {
@@ -276,7 +276,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       const p = getVisibleOrThrow(ctx, me, id);
       const a = ctx.store.attendance(id).find((x) => x.participant === participant);
       if (!a) return;
-      if (!canRemoveAttendance(me, p, a)) throw new UserError('この出欠は取り消せません');
+      if (!canRemoveAttendance(me, p, a)) throw new UserError('この回答は削除できません');
       ctx.store.deleteAttendance(id, participant);
       refreshStatus(ctx, p);
     });
@@ -295,11 +295,11 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
   },
 
   parseReservations(ctx, me, { images, text }) {
-    if (!canRegister(me)) throw new UserError('練習を登録できません');
+    if (!canRegister(me)) throw new UserError('予約情報を登録できません');
     const imgs = Array.isArray(images) ? images : [];
     const t = typeof text === 'string' ? text.trim().slice(0, 5000) : '';
     if (imgs.length === 0 && !t) throw new UserError('スクショを選ぶか、予約内容の文章を貼り付けてください');
-    if (imgs.length > 5) throw new UserError('画像は5枚までにしてください');
+    if (imgs.length > 5) throw new UserError('スクショは5枚までにしてください');
     let raws: RawReservation[];
     try {
       raws = readReservations(ctx, { images: imgs, text: t || undefined });
@@ -321,7 +321,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
   },
 
   classify(ctx, me, { reservations }) {
-    if (!canRegister(me)) throw new UserError('練習を登録できません');
+    if (!canRegister(me)) throw new UserError('予約情報を登録できません');
     return classifyFor(ctx.store.practices(), me, reservations ?? []);
   },
 
@@ -340,7 +340,7 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
       if (patch.end !== undefined) next.end = normalizeTime(patch.end) ?? fail('終了時刻が不正です');
       if (minutes(next.end) <= minutes(next.start)) fail('終了時刻は開始時刻より後にしてください');
       if (patch.room !== undefined) next.room = String(patch.room).trim();
-      if (patch.fee !== undefined) next.fee = nonNegative(patch.fee) ?? fail('料金が不正です');
+      if (patch.fee !== undefined) next.fee = nonNegative(patch.fee) ?? fail('スタジオ代が不正です');
       if (patch.max !== undefined) next.max = positiveOrNull(patch.max);
       if (patch.min !== undefined) next.min = positiveOrNull(patch.min);
       if (patch.feeOverride !== undefined) next.feeOverride = positiveOrNull(patch.feeOverride);
@@ -364,8 +364,8 @@ const handlers: { [A in ApiAction]: Handler<A> } = {
   recruitPractice(ctx, me, { id, groups }) {
     const p = getPracticeOrThrow(ctx, id);
     requireEditable(me, p);
-    if (!isActive(p)) throw new UserError('募集中の練習だけ募集を送れます');
-    if (p.date < toJstDate(ctx.now())) throw new UserError('終わった練習には募集を送れません');
+    if (!isActive(p)) throw new UserError('募集中の予約情報だけ募集を送れます');
+    if (p.date < toJstDate(ctx.now())) throw new UserError('終了した予約情報には募集を送れません');
     const known = new Set(ctx.store.settings().groups.map((g) => g.id));
     // 同じグループに二重に流さない
     const targets = [...new Set(groups ?? [])].filter((g) => known.has(g) && !p.groups.includes(g));

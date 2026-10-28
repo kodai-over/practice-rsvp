@@ -198,6 +198,6 @@ export function yen(n: number): string {
 
 /** 読み取ったうち対象外として除いた予約の件数を1文にする（なければ空文字） */
 export function skippedNote({ pastCount, duplicateCount = 0 }: { pastCount: number; duplicateCount?: number }): string {
-  const parts = [duplicateCount > 0 && `登録済みの予約${duplicateCount}件`, pastCount > 0 && `終了した予約${pastCount}件`].filter(Boolean);
+  const parts = [duplicateCount > 0 && `登録済みの予約情報${duplicateCount}件`, pastCount > 0 && `終了した予約情報${pastCount}件`].filter(Boolean);
   return parts.length ? `${parts.join('・')}は除きました。` : '';
 }

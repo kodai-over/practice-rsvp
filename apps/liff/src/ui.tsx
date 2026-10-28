@@ -207,6 +207,8 @@ export function StatusBadge({ v }: { v: { practice: { status: string } } | Pract
 }
 
 const ANSWER_MARK: Record<Answer, string> = { 行く: '○', 保留: '△', 行かない: '✕' };
+/** 画面に出す回答の名前（シートの値は「保留」のまま、画面では「未定」と出す） */
+export const ANSWER_LABEL: Record<Answer, string> = { 行く: '行く', 保留: '未定', 行かない: '行かない' };
 
 /** 出欠。文字は出さず、日本の出欠表どおり ○ △ ✕ の記号だけで選ぶ */
 export function RsvpButtons({
@@ -226,14 +228,14 @@ export function RsvpButtons({
   const closed = status === '中止' || status === '終了';
   const full = status === '満員' && value !== '行く';
   return (
-    <div class={`rsvp${solo ? ' solo' : ''}`} role="radiogroup" aria-label="出欠">
+    <div class={`rsvp${solo ? ' solo' : ''}`} role="radiogroup" aria-label="回答">
       {(['行く', '保留', '行かない'] as const).map((a) => (
         <button
           role="radio"
           class={a === '行く' ? 'yes' : a === '保留' ? 'maybe' : 'no'}
           aria-checked={value === a}
-          aria-label={a === '行く' && full ? '満員' : a}
-          title={a}
+          aria-label={a === '行く' && full ? '満員' : ANSWER_LABEL[a]}
+          title={ANSWER_LABEL[a]}
           disabled={busy || closed || (a === '行く' && full)}
           onClick={() => value !== a && onAnswer(a)}
         >
@@ -312,10 +314,9 @@ export function BusyOverlay({ message, note }: { message: string; note?: string 
   );
 }
 
-/** 一覧のチケットの金額。合計だけを出す（1人あたりは練習の画面で） */
+/** 一覧のチケットの金額。スタジオ代だけを出す（1人あたりは詳細の画面で） */
 export const Fee = ({ v }: { v: PracticeView }) => (
   <span class="fee">
-    <small>計</small>
     {yen(v.practice.fee)}
   </span>
 );

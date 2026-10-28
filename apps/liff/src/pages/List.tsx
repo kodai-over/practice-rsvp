@@ -68,8 +68,8 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
         <Spinner />
       ) : shown.length === 0 ? (
         <div class="empty">
-          <div>{tab === 'todo' ? '未定の練習はありません' : tab === 'mine' ? '行く練習はありません' : '登録されている予約情報はありません。'}</div>
-          {tab === 'all' && <p class="note">入っているグループの練習が出ないときは、そのグループの募集メッセージの「RSVP」から一度開いてください</p>}
+          <div>{tab === 'todo' ? '未定の予約情報はありません。' : tab === 'mine' ? '行く予約情報はありません。' : '登録されている予約情報はありません。'}</div>
+          {tab === 'all' && <p class="note">所属グループの予約情報が出ないときは、そのグループの募集メッセージの「RSVP」から一度開いてください</p>}
           {tab === 'all' && <p class="note">スタジオの予約は「募集」の右上の＋から登録できます</p>}
         </div>
       ) : (

@@ -3,7 +3,7 @@ import { DEFAULT_STUDIOS, isAdmin, type ActAs, type CancelRule, type FeeDays, ty
 import { api, setActAs } from '../api';
 import { Avatar, Icon, Spinner, TopBar, go, useApp, useRunner } from '../ui';
 
-const ACT_AS_LABEL: Record<ActAs, string> = { self: '自分（管理者）', member: '自分（一般メンバー）', test: '確認用の予約者「admin」' };
+const ACT_AS_LABEL: Record<ActAs, string> = { self: '自分（管理者）', member: '自分（一般）', test: '確認用アカウント「admin」' };
 
 /** 管理者が、参加者からの見え方を確かめるための切り替え */
 function ActAsSwitch() {
@@ -22,7 +22,7 @@ function ActAsSwitch() {
       <div class="section-title">見え方の確認</div>
       <section class="card">
         <div class="muted" style={{ marginBottom: 8 }}>
-          「一般メンバー」では、入っているグループの練習だけが見えます。「admin」（予約者）で予約を登録して募集し、自分に切り替えると、参加者からの見え方を確かめられます。「admin」で募集すると本当にグループに届くので、テスト用のグループに送ってください。アプリを閉じると自分（管理者）に戻ります。
+          「一般」では、所属グループの予約情報だけが見えます。「admin」（予約者）で予約情報を登録して募集し、自分に切り替えると、参加者からの見え方を確かめられます。「admin」で募集すると本当にグループに届くので、テスト用のグループに送ってください。アプリを閉じると自分（管理者）に戻ります。
         </div>
         <div class="toggles">
           {(['self', 'member', 'test'] as ActAs[]).map((v) => (
@@ -146,7 +146,7 @@ export function AdminPage() {
 
       <div class="section-title">メンバー</div>
       <div class="muted" style={{ marginBottom: 8 }}>
-        練習が見えるのは、予約した人・募集したグループに入っている人・出欠を答えた人・管理者です。「入っている」はグループでの発言・ボタン・カードから開いたことで自動で付きます（外しても、そのグループでまた発言すると付き直ります）
+        予約情報が見えるのは、予約者・送り先グループに所属している人・回答した人・管理者です。「所属」はグループでの発言・ボタン・カードから開いたことで自動で付きます（外しても、そのグループでまた発言すると付き直ります）
       </div>
       {members == null ? (
         <Spinner />
@@ -169,7 +169,7 @@ export function AdminPage() {
                     disabled={busy}
                     onChange={(e) => saveMember(m.userId, { groups: e.currentTarget.checked ? [...m.groups, g.id] : m.groups.filter((x) => x !== g.id) })}
                   />
-                  {g.name}に入っている
+                  {g.name}に所属
                 </label>
             ))}
             {me.groups.map((g) => (
@@ -182,7 +182,7 @@ export function AdminPage() {
                       saveMember(m.userId, { defaultGroups: e.currentTarget.checked ? [...m.defaultGroups, g.id] : m.defaultGroups.filter((x) => x !== g.id) })
                     }
                   />
-                  {g.name}に募集
+                  {g.name}をふだんの送り先にする
                 </label>
             ))}
           </section>
@@ -191,7 +191,7 @@ export function AdminPage() {
 
       <StudioEditor studios={studios} onChange={setStudios} />
 
-      <div class="section-title">標準料金（30分あたり）</div>
+      <div class="section-title">スタジオ代の料金表（30分あたり）</div>
       <section class="card">
         <div class="muted" style={{ marginBottom: 10 }}>
           登録時にスタジオ代を自動で入れます。部屋が空欄＝全部屋、時間が空欄＝終日
@@ -289,7 +289,7 @@ function StudioEditor({ studios, onChange }: { studios: StudioDef[]; onChange: (
           <div key={i} style={{ borderTop: i ? '1px solid var(--line)' : 'none', paddingTop: i ? 10 : 0, marginTop: i ? 10 : 0 }}>
             <div class="row" style={{ marginBottom: 6 }}>
               <input type="text" class="grow" placeholder="スタジオ名（正式名称）" value={st.name} onInput={(e) => setStudio(i, { name: e.currentTarget.value })} />
-              <button class="btn small danger" onClick={() => confirm(`${st.name || 'このスタジオ'}を一覧から消しますか？`) && onChange(studios.filter((_, j) => j !== i))}>
+              <button class="btn small danger" onClick={() => confirm(`${st.name || 'このスタジオ'}を一覧から削除しますか？`) && onChange(studios.filter((_, j) => j !== i))}>
                 削除
               </button>
             </div>

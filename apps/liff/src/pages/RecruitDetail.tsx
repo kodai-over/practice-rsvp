@@ -8,9 +8,9 @@ import { EditForm, PracticePass, usePractice } from './Detail';
 export function RecruitDetailPage({ id }: { id: string }) {
   const { me, deletePractice } = useApp();
   const { v, loading, busy, update } = usePractice(id);
-  if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty">練習が見つかりません</div>}</>;
+  if (!v) return <><TopBar back />{loading ? <Spinner /> : <div class="empty">予約情報が見つかりません</div>}</>;
   const guests = [...v.going, ...v.maybe, ...v.notGoing].filter((a) => a.kind === 'ゲスト');
-  const remove = (a: AttendeeView) => update(() => api('removeAttendance', { id, participant: a.participant }), '取り消しました');
+  const remove = (a: AttendeeView) => update(() => api('removeAttendance', { id, participant: a.participant }), '削除しました');
 
   return (
     <>
@@ -37,7 +37,7 @@ export function RecruitDetailPage({ id }: { id: string }) {
                 <Avatar name={a.name} guest />
                 <span>{a.name}</span>
                 {a.canRemove && (
-                  <button class="x" aria-label={`${a.name}さんを取り消す`} onClick={() => confirm(`${a.name}さんを取り消しますか？`) && remove(a)}>
+                  <button class="x" aria-label={`${a.name}さんを削除`} onClick={() => confirm(`${a.name}さんを削除しますか？`) && remove(a)}>
                     <Icon name="x" size={14} />
                   </button>
                 )}
@@ -105,7 +105,7 @@ function RecruitForm({ v, onSend, busy }: { v: PracticeView; onSend: (groups: st
           <div class="toggles">
             {me.groups.map((g) =>
               sent(g.id) || !v.canEdit ? (
-                <button class="toggle" disabled aria-label={`${g.name}（${sent(g.id) ? '募集済み' : '未募集'}）`}>
+                <button class="toggle" disabled aria-label={`${g.name}（${sent(g.id) ? '募集済' : '未募集'}）`}>
                   {sent(g.id) && <Icon name="check" size={16} />}
                   {g.name}
                 </button>
@@ -120,7 +120,7 @@ function RecruitForm({ v, onSend, busy }: { v: PracticeView; onSend: (groups: st
               ),
             )}
           </div>
-          {!v.canEdit && <p class="note">送れるのは登録した人と管理者です</p>}
+          {!v.canEdit && <p class="note">送れるのは予約者と管理者です</p>}
           {canSend && (
             <button
               class="btn primary block"
@@ -155,7 +155,7 @@ function JoinLink({ url }: { url: string }) {
       <div class="sec-head">
         <Icon name="link" size={18} />
         参加リンク
-        <span class="muted">LINEなしで出欠</span>
+        <span class="muted">LINEなしで回答</span>
       </div>
       <div class="copy-row">
         <code>{url.replace(/^https?:\/\//, '')}</code>
