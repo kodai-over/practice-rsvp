@@ -177,12 +177,12 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
     return true;
   };
 
-  const onFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const onFiles = async (files: File[]) => {
+    if (files.length === 0) return;
     // 多すぎるときは読み取らない（Bot と同じ。どれを読んだか分からなくなり、読み直すと先の結果も消えるため）
     if (files.length > MAX_SCREENSHOTS) return toast(`スクショは${MAX_SCREENSHOTS}枚までにしてください。`, true);
     setPhase('reading');
-    const images = await run(() => Promise.all([...files].map(shrink)));
+    const images = await run(() => Promise.all(files.map(shrink)));
     if (images) await parse({ images });
     else setPhase(null);
   };
@@ -241,10 +241,14 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
             accept="image/*"
             multiple
             onChange={(e) => {
-              onFiles(e.currentTarget.files);
-              // 同じスクショを選び直しても読み取れるように空にする
+              // 先に取り出してから空にする（空にすると選んだ一覧も消える）。空にするのは、同じスクショを選び直しても読み取れるように
+              const files = [...(e.currentTarget.files ?? [])];
               e.currentTarget.value = '';
-            }} disabled={busy} aria-label="予約画面のスクショから入力" />
+              onFiles(files);
+            }}
+            disabled={busy}
+            aria-label="予約画面のスクショから入力"
+          />
           <Icon name="camera" size={22} />
           <span>スクショから</span>
         </label>
@@ -253,7 +257,7 @@ export function RegisterPage({ draftId, recruit = false }: { draftId: string | n
           <span>文章から</span>
         </button>
       </div>
-      <p class="note">スクショは一度に{MAX_SCREENSHOTS}枚まで選べます</p>
+      <p class="note">一度に読み取れるスクショは{MAX_SCREENSHOTS}枚までです</p>
 
       {textOpen && (
         <div class="card">
