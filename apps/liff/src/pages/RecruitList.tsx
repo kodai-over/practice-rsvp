@@ -44,13 +44,7 @@ export function RecruitListPage() {
       {list == null ? (
         <Spinner />
       ) : list.length === 0 ? (
-        <div class="empty">
-          登録した練習はありません
-          <button class="btn primary" onClick={() => go('/register')}>
-            <Icon name="plus" size={18} />
-            登録
-          </button>
-        </div>
+        <div class="empty">登録されている予約情報はありません。</div>
       ) : (
         list.map((v) => (
           <SwipeRow

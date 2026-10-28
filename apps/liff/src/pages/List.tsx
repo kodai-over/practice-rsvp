@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { canRegister, labelDate, type Answer, type PracticeView } from '@studio-attendance/shared';
+import { labelDate, type Answer, type PracticeView } from '@studio-attendance/shared';
 import { api } from '../api';
 import { AvatarStack, FRESH_MS, Fee, Icon, RsvpButtons, Spinner, StatusBadge, Stub, Syncing, Tabs, go, place, useApp, useRunner } from '../ui';
 
@@ -68,14 +68,9 @@ export function ListPage({ initialTab }: { initialTab?: string | null }) {
         <Spinner />
       ) : shown.length === 0 ? (
         <div class="empty">
-          <div>{tab === 'todo' ? '未定の練習はありません' : tab === 'mine' ? '行く練習はありません' : '練習はありません'}</div>
+          <div>{tab === 'todo' ? '未定の練習はありません' : tab === 'mine' ? '行く練習はありません' : '登録されている予約情報はありません。'}</div>
           {tab === 'all' && <p class="note">入っているグループの練習が出ないときは、そのグループの募集メッセージの「RSVP」から一度開いてください</p>}
-          {tab === 'all' && canRegister(me.member) && (
-            <button class="btn primary" onClick={() => go('/register')}>
-              <Icon name="plus" size={18} />
-              登録
-            </button>
-          )}
+          {tab === 'all' && <p class="note">スタジオの予約は「募集」の右上の＋から登録できます</p>}
         </div>
       ) : (
         shown.map((v) => <PracticeCard key={v.practice.id} v={v} busy={pending.has(v.practice.id)} onAnswer={(a) => answer(v.practice.id, a)} />)
